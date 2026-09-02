@@ -358,6 +358,20 @@ A summary passes if it:
 
 Criteria 1, 2 and 5 are mechanically checkable. Criterion 4 is enforced by pre-redaction and post-validation. Criterion 3 needs human review.
 
+### Measured 2026-09-02 (first full Tier 0 capture)
+
+| | |
+|---|---|
+| Entities captured | 1,192 (Posts and Threads; Channels and Forums use their topic) |
+| API calls | 2,384 — exactly 2 per Entity, 24% of the 10,000-per-10-minutes ceiling |
+| Wall time, first run | **~30 minutes.** Paced by Discord's per-route rate limits, not the global ceiling |
+| Wall time, later runs | **0 calls.** An Entity whose newest message has not moved is skipped |
+| Messages stored | 92,248 |
+| Message text | **7.67 MB** (bytes, not characters) |
+| SQLite on disk | **23 MB** — the figure the volume must hold |
+
+**Corpus facts worth keeping:** 31 of 1,102 Posts (2.8%) have had their starter message deleted in Discord — they carry `description_status: absent` and have no first post to sample. 1,847 of the captured messages are from bots and must be dropped at selection time; 1,349 distinct authors appear across the corpus, which is the raw material for the participant-diversity rule.
+
 ### Discovery: what to measure
 
 1. **Actual token distribution** across the real corpus — percentiles, not a mean. The mean is dominated by the Formula 1 entry and tells you nothing.
