@@ -105,6 +105,8 @@ describe("buildCatalog", () => {
         description_status: "present" as const,
         topic: "gaming chat",
         applied_tags: [],
+        last_message_id: null,
+        last_activity_at: null,
         summary_generated: null,
         summary_override: "Where the Rocket League lot live.",
       },
@@ -197,5 +199,55 @@ describe("output stability", () => {
 
     expect(JSON.stringify(a.catalog)).toBe(JSON.stringify(b.catalog));
     expect(a.catalog.map((e) => e.id)).toEqual(["111", "222", "333"]);
+  });
+});
+
+describe("activity timestamps", () => {
+  it("derives the activity time from the snowflake rather than fetching it", async () => {
+    // Discord IDs embed their creation time above the low 22 bits, so this is
+    // exact and costs no API call.
+    const { catalog } = await buildCatalog({
+      discord: fixtureDiscord({
+        channels: [
+          {
+            id: "111",
+            name: "gaming",
+            type: ChannelType.GuildText,
+            lastMessageId: "1301175316332417094",
+          },
+        ],
+      }),
+      guildId: GUILD_ID,
+    });
+    expect(catalog[0]?.last_message_id).toBe("1301175316332417094");
+    // Verified against the documented Discord epoch (2015-01-01Z) by building
+    // a snowflake for a known instant and round-tripping it, rather than by
+    // restating what the implementation happens to produce.
+    expect(catalog[0]?.last_activity_at).toBe("2024-10-30T13:26:10.082Z");
+  });
+
+  it("round-trips a snowflake built for a known instant", async () => {
+    const known = Date.UTC(2023, 4, 19, 2, 0, 0, 0);
+    const built = ((BigInt(known) - 1420070400000n) << 22n).toString();
+    const { catalog } = await buildCatalog({
+      discord: fixtureDiscord({
+        channels: [
+          { id: "111", name: "c", type: ChannelType.GuildText, lastMessageId: built },
+        ],
+      }),
+      guildId: GUILD_ID,
+    });
+    expect(catalog[0]?.last_activity_at).toBe(new Date(known).toISOString());
+  });
+
+  it("reports no activity for an Entity nobody has posted in", async () => {
+    const { catalog } = await buildCatalog({
+      discord: fixtureDiscord({
+        channels: [{ id: "111", name: "quiet", type: ChannelType.GuildText }],
+      }),
+      guildId: GUILD_ID,
+    });
+    expect(catalog[0]?.last_message_id).toBeNull();
+    expect(catalog[0]?.last_activity_at).toBeNull();
   });
 });

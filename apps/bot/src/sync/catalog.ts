@@ -33,6 +33,13 @@ export interface Entity {
   topic: string | null;
   /** From the Forum's tag set — mod-authored ground truth. Posts only. */
   applied_tags: string[];
+  /** Newest message. Null if nothing has been posted. */
+  last_message_id: string | null;
+  /**
+   * Derived from the snowflake, not fetched: Discord IDs embed their creation
+   * time, so this costs nothing and is exact.
+   */
+  last_activity_at: string | null;
   /** Overwritten by the sync every run. Null until Phase 2 generates one. */
   summary_generated: string | null;
   /**
@@ -42,6 +49,14 @@ export interface Entity {
    */
   summary_override: string | null;
 }
+
+/** Discord snowflakes embed a millisecond timestamp above the low 22 bits. */
+const DISCORD_EPOCH = 1420070400000;
+
+export const snowflakeTime = (id: string | null | undefined): string | null => {
+  if (!id || !/^\d{17,20}$/.test(id)) return null;
+  return new Date(Number(BigInt(id) >> 22n) + DISCORD_EPOCH).toISOString();
+};
 
 const byId = (a: { id: string }, b: { id: string }) =>
   a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
@@ -194,6 +209,8 @@ export const buildCatalog = async (deps: {
           : "absent",
       topic,
       applied_tags: [],
+      last_message_id: c.lastMessageId ?? null,
+      last_activity_at: snowflakeTime(c.lastMessageId),
       summary_generated: null,
       summary_override: overrides.get(c.id) ?? null,
     };
@@ -215,6 +232,8 @@ export const buildCatalog = async (deps: {
       description_status: first ? "present" : "absent",
       topic: first,
       applied_tags: t.appliedTags,
+      last_message_id: t.lastMessageId ?? null,
+      last_activity_at: snowflakeTime(t.lastMessageId),
       summary_generated: null,
       summary_override: overrides.get(t.id) ?? null,
     };

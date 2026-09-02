@@ -18,6 +18,8 @@ export interface RawChannel {
   type: number;
   /** Channel topic. The best identity source for a Channel, and free. */
   topic?: string | null;
+  /** Newest message, or null if never posted in. Its snowflake carries the time. */
+  lastMessageId?: string | null;
   /** Whether the bot can see this Channel at all. False means excluded. */
   visible: boolean;
   /**
@@ -50,6 +52,16 @@ export interface RawThread {
    * so this costs one un-paginated call. Verified 2026-09-01.
    */
   firstPost: string | null;
+  lastMessageId?: string | null;
+}
+
+export interface RawCapturedMessage {
+  id: string;
+  authorId: string;
+  authorIsBot: boolean;
+  content: string;
+  createdAt: string;
+  window: "head" | "tail";
 }
 
 /** A guild role as Discord returns it. */
@@ -85,6 +97,11 @@ export interface DiscordReadPort {
    */
   listThreads: (parentIds: string[]) => Promise<RawThread[]>;
   listRoles: () => Promise<RawRole[]>;
+  /**
+   * Head and tail message windows for one Entity. Two calls. Only ever asked
+   * for Entities whose content the bot may read — see Tier 0.
+   */
+  captureWindows: (entityId: string) => Promise<RawCapturedMessage[]>;
   /**
    * Whether the application has the Message Content intent. It gates content
    * over REST as well as the gateway, so without it the sync produces empty

@@ -3,6 +3,7 @@ import { Routes } from "discord-api-types/v10";
 import type {
   DiscordReadPort,
   RawChannel,
+  RawCapturedMessage,
   RawRole,
   RawThread,
 } from "./ports.ts";
@@ -22,6 +23,7 @@ interface RawDiscordThread {
   name: string;
   parent_id?: string | null;
   applied_tags?: string[];
+  last_message_id?: string | null;
   thread_metadata?: { archive_timestamp?: string };
 }
 
@@ -30,6 +32,7 @@ export interface RawGuildChannel {
   name: string;
   type: number;
   topic?: string | null;
+  last_message_id?: string | null;
   permission_overwrites?: Overwrite[];
 }
 
@@ -197,6 +200,7 @@ export const discordRest = (config: {
         name: c.name,
         type: c.type,
         topic: c.topic ?? null,
+        lastMessageId: c.last_message_id ?? null,
         visible: canView(c, ctx),
         memberVisible: memberCtx ? canView(c, memberCtx) : canView(c, ctx),
         contentReadable: canReadHistory(c, ctx),
@@ -263,6 +267,7 @@ export const discordRest = (config: {
             name: t.name,
             parentId: t.parent_id ?? "",
             appliedTags: t.applied_tags ?? [],
+            lastMessageId: t.last_message_id ?? null,
             firstPost,
           };
         }),
@@ -275,6 +280,42 @@ export const discordRest = (config: {
         name: r.name,
         color: r.color ?? 0,
       }));
+    },
+
+    captureWindows: async (entityId: string): Promise<RawCapturedMessage[]> => {
+      type Msg = {
+        id: string;
+        author?: { id?: string; bot?: boolean };
+        content?: string;
+        timestamp?: string;
+      };
+      const fetchWindow = async (query: string) =>
+        (await rest.get(`/channels/${entityId}/messages?${query}` as never)) as Msg[];
+
+      // Head: the opening exchanges, which is where a thread's identity comes
+      // from. `after=0`, NOT `after=${entityId}` — a Post's starter message has
+      // the same id as the Post, so `after=id` excludes the very first post,
+      // and in a Post over 100 messages long it then appears in neither window.
+      // Tail: what is happening now. Two calls, no pagination.
+      const [head, tail] = await Promise.all([
+        fetchWindow("after=0&limit=100"),
+        fetchWindow("limit=100"),
+      ]);
+
+      const shape = (m: Msg, window: "head" | "tail"): RawCapturedMessage => ({
+        id: m.id,
+        authorId: m.author?.id ?? "",
+        authorIsBot: m.author?.bot === true,
+        content: m.content ?? "",
+        createdAt: m.timestamp ?? "",
+        window,
+      });
+      // Head wins on overlap: a short Entity returns the same messages twice,
+      // and the opening is the more meaningful label.
+      const byId = new Map<string, RawCapturedMessage>();
+      for (const m of tail) byId.set(m.id, shape(m, "tail"));
+      for (const m of head) byId.set(m.id, shape(m, "head"));
+      return [...byId.values()];
     },
 
     hasMessageContentIntent: async (): Promise<boolean> => {

@@ -12,6 +12,8 @@ const entity = (id: string, name = "x"): Entity => ({
   description_status: "present",
   topic: "something",
   applied_tags: [],
+  last_message_id: null,
+  last_activity_at: null,
   summary_generated: null,
   summary_override: null,
 });
