@@ -1,0 +1,34 @@
+name: CI
+
+# Every push, including the bot's content commits. This is the safety net that
+# makes pushing straight to main safe: a bad commit fails here, and whatever is
+# deployed keeps serving the last good version. Without it, "deploy only on
+# green" is a claim rather than a mechanism.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Catalog is valid JSON and structurally sound
+        # The bot writes these. A malformed Catalog must fail here rather than
+        # reach the site, and it is the one artifact no unit test covers
+        # because it is data, not code.
+        run: node scripts/check-content.mjs
