@@ -53,9 +53,16 @@ export const buildCatalog = async (deps: {
   discord: DiscordReadPort;
   guildId: string;
   previous?: Entity[];
+  /** Entities that are visible and readable but are not destinations. */
+  exclusions?: Set<string>;
   /** Where to report conditions a human needs to act on. Defaults to silence. */
   warn?: (message: string) => void;
-}): Promise<{ catalog: Entity[]; roleManifest: RoleManifestEntry[] }> => {
+}): Promise<{
+  catalog: Entity[];
+  roleManifest: RoleManifestEntry[];
+  /** IDs that were configured for exclusion AND actually matched something. */
+  exclusionsApplied: string[];
+}> => {
   if (!(await deps.discord.hasMessageContentIntent())) {
     throw new Error(
       "Message Content intent is not enabled for this application. It gates " +
@@ -75,15 +82,41 @@ export const buildCatalog = async (deps: {
     ChannelType.GuildAnnouncement,
     ChannelType.GuildForum,
   ];
-  const containers = (await deps.discord.listChannels()).filter(
+  const excluded = deps.exclusions ?? new Set<string>();
+  const allChannels = await deps.discord.listChannels();
+
+  // A Channel is a standing text channel that is not a Forum. Categories are
+  // headers and voice channels are not readable — neither is a Catalog Entity.
+
+  // The Catalog describes what a Member can reach. Anything a Member can see
+  // and the bot cannot is silently missing from it, so surface it as an alarm
+  // rather than letting the Catalog quietly shrink.
+  //
+  // Only container types count. Categories, voice channels and stats-bot
+  // channels are never Entities, and warning about them buries the real gaps
+  // in noise — which is how an alarm gets ignored.
+  for (const c of allChannels)
+    if (containerTypes.includes(c.type) && c.memberVisible && !c.visible)
+      deps.warn?.(
+        `[visibility] "${c.name}" (${c.id}) is visible to Members but not to ` +
+          `the bot, so it is missing from the Catalog.`,
+      );
+
+  // Pre-exclusion: a `<#id>` in someone else's description may point at an
+  // excluded Entity, and publishing `#unknown-channel` for it would be the
+  // very defect this normalisation exists to prevent. Excluded means "not a
+  // destination", not "secret".
+  const visibleContainers = allChannels.filter(
     (c) => c.visible && containerTypes.includes(c.type),
   );
+  const containers = visibleContainers.filter((c) => !excluded.has(c.id));
 
   // Threads are only enumerated from containers whose content is readable. A
   // withheld Forum must never have its Posts read.
-  const threads = await deps.discord.listThreads(
+  const allThreads = await deps.discord.listThreads(
     containers.filter((c) => c.contentReadable).map((c) => c.id),
   );
+  const threads = allThreads.filter((t) => !excluded.has(t.id));
   const containerType = new Map(containers.map((c) => [c.id, c.type]));
 
   // One entry per name, carrying every ID that name maps to. Duplicate-named
@@ -135,8 +168,8 @@ export const buildCatalog = async (deps: {
   // real mentions publishing as `#unknown-channel`.
   const names: NameLookup = {
     channels: new Map([
-      ...containers.map((c) => [c.id, c.name] as const),
-      ...threads.map((t) => [t.id, t.name] as const),
+      ...visibleContainers.map((c) => [c.id, c.name] as const),
+      ...allThreads.map((t) => [t.id, t.name] as const),
     ]),
     roles: new Map(
       roleManifest.flatMap((r) => r.ids.map((id) => [id, r.name] as const)),
@@ -197,5 +230,9 @@ export const buildCatalog = async (deps: {
       byId,
     ),
     roleManifest,
+    exclusionsApplied: [
+      ...visibleContainers.filter((c) => excluded.has(c.id)).map((c) => c.id),
+      ...allThreads.filter((t) => excluded.has(t.id)).map((t) => t.id),
+    ].sort(),
   };
 };

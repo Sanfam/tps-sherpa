@@ -9758,18 +9758,6 @@
     "summary_override": null
   },
   {
-    "id": "1237140236836802661",
-    "type": "channel",
-    "name": "🛂︱verification",
-    "url": "https://discord.com/channels/1055290132250501135/1237140236836802661",
-    "parent_id": null,
-    "description_status": "absent",
-    "topic": null,
-    "applied_tags": [],
-    "summary_generated": null,
-    "summary_override": null
-  },
-  {
     "id": "1237870275727462590",
     "type": "post",
     "name": "V Rising",
@@ -10835,18 +10823,6 @@
       "1088173967233273877",
       "1088173812866105415"
     ],
-    "summary_generated": null,
-    "summary_override": null
-  },
-  {
-    "id": "1271178147689402448",
-    "type": "channel",
-    "name": "verification-chat-7",
-    "url": "https://discord.com/channels/1055290132250501135/1271178147689402448",
-    "parent_id": null,
-    "description_status": "absent",
-    "topic": null,
-    "applied_tags": [],
     "summary_generated": null,
     "summary_override": null
   },
@@ -14675,18 +14651,6 @@
     "summary_override": null
   },
   {
-    "id": "1406317937995808798",
-    "type": "thread",
-    "name": "Nog geen idee",
-    "url": "https://discord.com/channels/1055290132250501135/1406317937995808798",
-    "parent_id": "1271178147689402448",
-    "description_status": "absent",
-    "topic": null,
-    "applied_tags": [],
-    "summary_generated": null,
-    "summary_override": null
-  },
-  {
     "id": "1406744332664569857",
     "type": "post",
     "name": "New world",
@@ -15973,18 +15937,6 @@
       "1088174004344471603",
       "1088173776350498908"
     ],
-    "summary_generated": null,
-    "summary_override": null
-  },
-  {
-    "id": "1441296819874299996",
-    "type": "thread",
-    "name": "Hello 👋 👋👋Dm me now to check out the newly 2025 exclusive mega files of any kinds and teen group",
-    "url": "https://discord.com/channels/1055290132250501135/1441296819874299996",
-    "parent_id": "1271178147689402448",
-    "description_status": "absent",
-    "topic": null,
-    "applied_tags": [],
     "summary_generated": null,
     "summary_override": null
   },
@@ -17491,18 +17443,6 @@
     "summary_override": null
   },
   {
-    "id": "1525249898621178008",
-    "type": "thread",
-    "name": "hi",
-    "url": "https://discord.com/channels/1055290132250501135/1525249898621178008",
-    "parent_id": "1271178147689402448",
-    "description_status": "absent",
-    "topic": null,
-    "applied_tags": [],
-    "summary_generated": null,
-    "summary_override": null
-  },
-  {
     "id": "1527714540907925705",
     "type": "post",
     "name": "Star City",
@@ -17784,18 +17724,6 @@
     "applied_tags": [
       "1185020056283926640"
     ],
-    "summary_generated": null,
-    "summary_override": null
-  },
-  {
-    "id": "1544502247587582033",
-    "type": "channel",
-    "name": "bot-tests",
-    "url": "https://discord.com/channels/1055290132250501135/1544502247587582033",
-    "parent_id": null,
-    "description_status": "absent",
-    "topic": null,
-    "applied_tags": [],
     "summary_generated": null,
     "summary_override": null
   }

@@ -7,9 +7,10 @@ import type {
 
 export const fixtureDiscord = (data: {
   channels: Array<
-    Omit<RawChannel, "contentReadable" | "visible"> & {
+    Omit<RawChannel, "contentReadable" | "visible" | "memberVisible"> & {
       contentReadable?: boolean;
       visible?: boolean;
+      memberVisible?: boolean;
     }
   >;
   threads?: RawThread[];
@@ -20,6 +21,7 @@ export const fixtureDiscord = (data: {
     data.channels.map((c) => ({
       ...c,
       visible: c.visible ?? true,
+      memberVisible: c.memberVisible ?? c.visible ?? true,
       contentReadable: c.contentReadable ?? true,
     })),
   listThreads: async (parentIds) =>

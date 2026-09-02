@@ -11,6 +11,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { buildCatalog, type Entity } from "./catalog.ts";
 import { discordRest } from "./discord-adapter.ts";
+import { parseExclusions } from "./exclusions.ts";
 
 const token = process.env["DISCORD_BOT_TOKEN"];
 const guildId = process.env["DISCORD_GUILD_ID"];
@@ -23,6 +24,7 @@ const contentPath = (rel: string) =>
   resolve(import.meta.dirname, "../../../../content", rel);
 const CATALOG_PATH = contentPath("index/data.json");
 const ROLES_PATH = contentPath("config/roles.json");
+const EXCLUSIONS_PATH = contentPath("config/index-flags.json");
 
 /** Overrides are human-authored and must survive every sync. */
 const readPrevious = async (): Promise<Entity[]> => {
@@ -34,11 +36,23 @@ const readPrevious = async (): Promise<Entity[]> => {
 };
 
 const previous = await readPrevious();
-const { catalog, roleManifest } = await buildCatalog({
-  discord: discordRest({ token, guildId }),
+// A missing file means no exclusions. Any OTHER read failure must not be
+// swallowed: silently becoming "exclude nothing" would republish exactly what
+// the file exists to hide.
+const exclusionSource = await readFile(EXCLUSIONS_PATH, "utf8").catch(
+  (error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  },
+);
+const exclusions = parseExclusions(exclusionSource);
+const warn = (m: string) => console.warn(m);
+const { catalog, roleManifest, exclusionsApplied } = await buildCatalog({
+  discord: discordRest({ token, guildId, warn }),
   guildId,
   previous,
-  warn: (m) => console.warn(m),
+  exclusions,
+  warn,
 });
 
 /** Returns true if the file already held exactly this content. */
@@ -66,5 +80,12 @@ console.log(`  Entities:  ${catalog.length}`);
 console.log(`  present:   ${byStatus["present"] ?? 0}`);
 console.log(`  absent:    ${byStatus["absent"] ?? 0}`);
 console.log(`  withheld:  ${byStatus["withheld"] ?? 0}`);
+// Applied, not configured: a stale or mistyped ID would otherwise read as a
+// working exclusion while the Entity keeps publishing.
+console.log(
+  `  excluded by config: ${exclusionsApplied.length} applied of ${exclusions.size} configured`,
+);
+for (const id of [...exclusions].filter((id) => !exclusionsApplied.includes(id)))
+  console.warn(`[exclusions] configured id ${id} matched no Entity.`);
 console.log(`  overrides carried forward: ${catalog.filter((e) => e.summary_override).length}`);
 console.log(unchanged ? "  UNCHANGED — nothing to commit" : "  changed");

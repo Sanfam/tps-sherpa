@@ -95,6 +95,9 @@ const effective = (
   return p;
 };
 
+/** The glossary's `Member`: the role that unlocks the community. */
+const MEMBER_ROLE_NAME = "Member";
+
 const GATEWAY_MESSAGE_CONTENT = 1 << 18;
 const GATEWAY_MESSAGE_CONTENT_LIMITED = 1 << 19;
 
@@ -118,6 +121,7 @@ export const messageContentUsable = (flags: number): boolean =>
 export const discordRest = (config: {
   token: string;
   guildId: string;
+  warn?: (message: string) => void;
 }): DiscordReadPort => {
   const rest = new REST({ version: "10" }).setToken(config.token);
 
@@ -144,14 +148,16 @@ export const discordRest = (config: {
         rest.get(Routes.user("@me")),
       ])) as [
         RawGuildChannel[],
-        Array<{ id: string; permissions: string }>,
+        GuildRole[],
         { id: string },
       ];
       const member = (await rest.get(
         Routes.guildMember(config.guildId, me.id),
       )) as { roles: string[] };
       const byId = new Map(roles.map((r) => [r.id, r]));
-      let basePermissions = BigInt(byId.get(config.guildId)?.permissions ?? "0");
+      const everyonePerms = BigInt(byId.get(config.guildId)?.permissions ?? "0");
+
+      let basePermissions = everyonePerms;
       for (const rid of member.roles)
         basePermissions |= BigInt(byId.get(rid)?.permissions ?? "0");
       const ctx: PermissionContext = {
@@ -160,12 +166,39 @@ export const discordRest = (config: {
         memberId: me.id,
         basePermissions,
       };
+
+      // The Catalog's baseline is the `Member` role, not @everyone — here
+      // @everyone can see 11 of 105 Channels and Forums, essentially just
+      // verification plumbing. Without the role there is nothing to compare
+      // against, so the delta check goes quiet rather than reporting noise.
+      // Union every role with the name, not the first match: this guild has
+      // duplicate-named roles, and picking one arbitrarily would make the
+      // visibility alarm either silent or noisy depending on the draw.
+      const memberRoles = roles.filter((r) => r.name === MEMBER_ROLE_NAME);
+      if (memberRoles.length === 0)
+        config.warn?.(
+          `[visibility] No "${MEMBER_ROLE_NAME}" role found. The Member-versus-bot ` +
+            `visibility check is disabled, so gaps in the Catalog will not be reported.`,
+        );
+      const memberCtx: PermissionContext | null = memberRoles.length
+        ? {
+            guildId: config.guildId,
+            roleIds: memberRoles.map((r) => r.id),
+            // No member-specific overwrite applies to a hypothetical member.
+            memberId: "",
+            basePermissions: memberRoles.reduce(
+              (acc, r) => acc | BigInt(r.permissions),
+              everyonePerms,
+            ),
+          }
+        : null;
       return channels.map((c) => ({
         id: c.id,
         name: c.name,
         type: c.type,
         topic: c.topic ?? null,
         visible: canView(c, ctx),
+        memberVisible: memberCtx ? canView(c, memberCtx) : canView(c, ctx),
         contentReadable: canReadHistory(c, ctx),
       }));
     },

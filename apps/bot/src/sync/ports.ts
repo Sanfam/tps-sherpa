@@ -21,6 +21,12 @@ export interface RawChannel {
   /** Whether the bot can see this Channel at all. False means excluded. */
   visible: boolean;
   /**
+   * Whether the `Member` role can see it. This — not `@everyone` — is the
+   * Catalog's baseline: @everyone sees 11 of 105 here, essentially just
+   * verification plumbing.
+   */
+  memberVisible: boolean;
+  /**
    * Whether the bot may read message history. Visible but not readable means
    * deliberately withheld — content off-limits, not broken.
    */

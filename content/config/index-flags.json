@@ -1,0 +1,20 @@
+{
+  "//": "Entities that are visible and readable but are not places to send anyone. Matched on id; name and reason are for the human reading this file. Edited by Staff.",
+  "exclude": [
+    {
+      "id": "1237140236836802661",
+      "name": "🛂︱verification",
+      "reason": "verification plumbing, not a destination"
+    },
+    {
+      "id": "1271178147689402448",
+      "name": "verification-chat-7",
+      "reason": "verification plumbing, not a destination"
+    },
+    {
+      "id": "1544502247587582033",
+      "name": "bot-tests",
+      "reason": "bot testing channel"
+    }
+  ]
+}
