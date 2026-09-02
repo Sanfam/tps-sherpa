@@ -81,7 +81,9 @@ So reader gating is ours, and **that is precisely what makes the CMS swappable.*
 - **Git is the content bus.** The bot commits; the CMS commits; Astro reads. No content database.
 - **One monorepo** containing bot, site, content, and docs.
 - **A small, disposable session database** on the Astro service (Better Auth's requirement). Not shared with the bot, not backed up.
-- **Bot state is SQLite + Litestream → R2.** Bot-side only.
+- **Bot state is SQLite, bot-side only — and not all of it is backed up.** *(Refined 2026-09-01.)* Two kinds:
+  - **Rebuildable cache** — Tier 0 raw text, sync bookkeeping. Lives on the service's volume with **no replication**. Losing it costs one re-crawl, and replicating raw member-authored message text off-vendor would outlive the member's own deletions, widening the narrow Tier 0 exception in exactly the direction the privacy model resists.
+  - **Durable state** — opt-outs, interest profiles, recommendation history, intro-responder terminal states. **This** is what gets Litestream → R2 and a rehearsed restore. None of it exists before Phase 3; the requirement travels with the first ticket that creates it. Losing an opt-out means re-approaching someone who asked not to be.
 - **CMS is Tina, self-hosted, backend-only**, and must not require editors to hold GitHub accounts.
 - **Sherpa history stays bot-side.** Members query it through the bot, not the site.
 - **Bot-first phasing.** Slash commands ship before the website.
@@ -108,9 +110,10 @@ So reader gating is ours, and **that is precisely what makes the CMS swappable.*
 │  • build-failure alarm       │
 └──────┬────────────────┬──────┘
        │                │
-   commits          SQLite + Litestream → R2
-   content          (Tier 0 text, profiles, history,
-       │            sync state, opt-outs — bot-only)
+   commits          SQLite (bot-only)
+   content          (Tier 0 + sync state: volume, no backup
+       │             profiles, history, opt-outs: Litestream
+       │             → R2, from Phase 3)
        ▼
 ┌───────────────┐         ┌──────────────────────┐
 │   Git repo    │◀───────▶│  Tina (self-hosted)  │
@@ -360,7 +363,7 @@ Criteria 1, 2 and 5 are mechanically checkable. Criterion 4 is enforced by pre-r
 1. **Actual token distribution** across the real corpus — percentiles, not a mean. The mean is dominated by the Formula 1 entry and tells you nothing.
 2. **Does early history actually help?** Compare first-post-only against first-post-plus-head on the entries currently rendering empty. If it does not help, the sampling model stays simple permanently.
 3. **What proportion of entities reach the refusal path?**
-4. **Tier 0 storage footprint** against the volume and Litestream budget.
+4. **Tier 0 storage footprint** against the volume. Not a backup budget — Tier 0 is not replicated.
 5. **Golden-set match quality** — see test fixtures.
 6. **Position sensitivity** — shuffle catalog order across runs. If results move, attention is the bottleneck and no amount of token reduction fixes it.
 
@@ -567,4 +570,4 @@ If two or more land, go to Postgres and stop optimizing.
 
 1. **Ownership mechanics.** Which GitHub org; which humans hold owner on GitHub, Railway, Cloudflare and the Discord application; where secrets live besides Railway's env; who takes a handoff. Deferred as organizational rather than technical — **but it has one hard deadline: the machine account credential in Phase 1.** If that is minted against a personal account, the organizational problem becomes a code problem the first time someone else needs to rotate it. Every human checkpoint above is also unassigned, and an unassigned checkpoint belongs to whoever wrote the plan.
 2. **Wiki.js inventory.** Page count, nesting depth, and whether there are assets beyond markdown. Needed to scope the Phase 6 migration. Nobody has counted.
-3. **Tier 0 storage footprint** against the Litestream budget — a Phase 2 measurement, not a decision.
+3. **Tier 0 storage footprint** against the volume — a Phase 2 measurement, not a decision. Tier 0 is a rebuildable cache and is not replicated.
