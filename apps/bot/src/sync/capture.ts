@@ -36,7 +36,8 @@ const discord = discordRest({ token, guildId });
 
 const decision = selectForCapture(catalog, store.state());
 console.log(`Catalog Entities        : ${catalog.length}`);
-console.log(`  not thread content    : ${decision.skippedNotThreadContent} (Channels and Forums — topic is their description)`);
+console.log(`  Forums (no own content): ${decision.skippedNoOwnContent}`);
+console.log(`  monitored channels     : ${decision.skippedMonitored} (extract-and-discard — never stored)`);
 // Not printed as assurance: this counter is defence in depth and reads 0 in
 // practice. The real protection is that buildCatalog never enumerates threads
 // inside a container whose content is withheld.

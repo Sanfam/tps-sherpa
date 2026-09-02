@@ -26,15 +26,45 @@ describe("selectForCapture", () => {
     expect(d.capture.map((e) => e.id)).toEqual(["1", "2"]);
   });
 
-  it("never captures Channel or Forum conversation", () => {
-    // Tier 0 covers indexed thread content only. Channel conversation stays
-    // extract-and-discard, and a Channel's description comes from its topic.
+  it("captures Channels too — they are Entities that need describing", () => {
+    const d = selectForCapture([entity({ id: "1", type: "channel" })], new Map());
+    expect(d.capture.map((e) => e.id)).toEqual(["1"]);
+  });
+
+  it("never captures a Forum, which has no messages of its own", () => {
+    const d = selectForCapture([entity({ id: "2", type: "forum" })], new Map());
+    expect(d.capture).toEqual([]);
+    expect(d.skippedNoOwnContent).toBe(1);
+  });
+
+  it("never captures a monitored channel", () => {
+    // The privacy carve-out that actually exists: a member introducing
+    // themselves is having a conversation, not authoring a description. That
+    // content is extract-and-discard and must never be stored.
     const d = selectForCapture(
-      [entity({ id: "1", type: "channel" }), entity({ id: "2", type: "forum" })],
+      [
+        entity({ id: "1", type: "channel", name: "👋︱introductions" }),
+        entity({ id: "2", type: "channel", name: "🖥︱pc-gaming" }),
+      ],
       new Map(),
     );
-    expect(d.capture).toEqual([]);
-    expect(d.skippedNotThreadContent).toBe(2);
+    expect(d.capture.map((e) => e.name)).toEqual(["🖥︱pc-gaming"]);
+    expect(d.skippedMonitored).toBe(1);
+  });
+
+  it("never captures a Thread INSIDE a monitored channel", () => {
+    // This is where the actual introductions are. Matching only on the
+    // channel's own name would capture exactly what the carve-out protects.
+    const d = selectForCapture(
+      [
+        entity({ id: "1", type: "channel", name: "👋︱introductions" }),
+        entity({ id: "2", type: "thread", name: "Jughfer intro", parent_id: "1" }),
+        entity({ id: "3", type: "thread", name: "Wingspan", parent_id: "9" }),
+      ],
+      new Map(),
+    );
+    expect(d.capture.map((e) => e.name)).toEqual(["Wingspan"]);
+    expect(d.skippedMonitored).toBe(2);
   });
 
   it("never captures a withheld Entity", () => {

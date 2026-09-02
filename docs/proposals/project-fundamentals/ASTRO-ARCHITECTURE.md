@@ -396,14 +396,31 @@ A description passes if it:
 4. **Contains no member identifiers.**
 5. **Fits the budget** — roughly 12 words in catalog form.
 
-### Privacy note
+### Privacy note — corrected 2026-09-02
 
 Tier 0 holds raw first posts and sampled replies, which sits against the
 "derived data, not transcripts" posture. The distinction stands: thread first
 posts are deliberately authored topic descriptions already published to a
-public wiki, while conversation is not. **Tier 0 covers indexed thread content
-only and must not expand to Channel conversation.** Re-capture replaces an
-Entity's stored rows, so a message deleted in Discord disappears here too.
+public wiki, while conversation is not.
+
+**Tier 0 captures Channels, Posts and Threads.** An earlier revision of this
+document read the privacy rule as banning Channel content outright. It does
+not, and that reading broke real things: Channels are Catalog Entities, and
+without their content they cannot be described, summarised for "lately", or
+matched on. Seventeen live Channels had no description precisely because of it.
+
+**The carve-out that does exist is narrower and firm: monitored channels.**
+Channels the bot watches to build member profiles — archetypally
+`👋︱introductions` — are **extract-and-discard and must never be stored**. A
+member introducing themselves is having a conversation, not authoring a
+description. This extends to **Threads inside a monitored channel**, which is
+where the introductions actually are; matching only on the channel's own name
+would capture exactly what the rule protects.
+
+Forums are skipped because they carry no messages of their own.
+
+Re-capture replaces an Entity's stored rows, so a message deleted in Discord
+disappears here too.
 
 ## Tagging
 

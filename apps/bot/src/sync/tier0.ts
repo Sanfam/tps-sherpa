@@ -20,31 +20,65 @@ export interface CaptureDecision {
   capture: Entity[];
   skippedUnchanged: number;
   skippedWithheld: number;
-  skippedNotThreadContent: number;
+  /** Forums, which have no messages of their own. */
+  skippedNoOwnContent: number;
+  /** Monitored channels. Their conversation is extract-and-discard. */
+  skippedMonitored: number;
 }
 
 /**
- * Tier 0 covers **indexed thread content only** — Posts and Threads. It must
- * not quietly expand to Channel conversation, which stays extract-and-discard
- * under the privacy model. Channels get their description from their topic,
- * which needs no capture at all.
+ * Channels the bot watches to build member profiles — archetypally
+ * `👋︱introductions`. Their conversation is **extract-and-discard** under the
+ * privacy model and must never be stored: a member introducing themselves is
+ * having a conversation, not authoring a description.
+ *
+ * This is the carve-out the privacy model actually specifies. It is not a ban
+ * on Channel content generally.
  */
-const isThreadContent = (e: Entity) => e.type === "post" || e.type === "thread";
+export const DEFAULT_MONITORED_CHANNELS = ["👋︱introductions"];
+
+/**
+ * What Tier 0 may capture: Channels, Posts and Threads.
+ *
+ * Forums are excluded because they carry no messages of their own — their
+ * content lives in their Posts. Monitored channels are excluded on privacy
+ * grounds, not because there is nothing there.
+ */
+const isCapturable = (e: Entity) =>
+  e.type === "post" || e.type === "thread" || e.type === "channel";
 
 export const selectForCapture = (
   catalog: Entity[],
   state: CaptureState,
+  options: { monitored?: readonly string[] } = {},
 ): CaptureDecision => {
+  const monitored = new Set(options.monitored ?? DEFAULT_MONITORED_CHANNELS);
+  const byId = new Map(catalog.map((e) => [e.id, e]));
+
+  // A Thread inside a monitored channel is monitored conversation too. The
+  // intro threads are where the actual introductions are, so matching only on
+  // the channel's own name would have captured exactly what the carve-out
+  // exists to protect.
+  const isMonitored = (e: Entity): boolean => {
+    if (monitored.has(e.name) || monitored.has(e.id)) return true;
+    const parent = e.parent_id ? byId.get(e.parent_id) : undefined;
+    return parent ? monitored.has(parent.name) || monitored.has(parent.id) : false;
+  };
   const decision: CaptureDecision = {
     capture: [],
     skippedUnchanged: 0,
     skippedWithheld: 0,
-    skippedNotThreadContent: 0,
+    skippedNoOwnContent: 0,
+    skippedMonitored: 0,
   };
 
   for (const entity of catalog) {
-    if (!isThreadContent(entity)) {
-      decision.skippedNotThreadContent++;
+    if (isMonitored(entity)) {
+      decision.skippedMonitored++;
+      continue;
+    }
+    if (!isCapturable(entity)) {
+      decision.skippedNoOwnContent++;
       continue;
     }
     // Defence in depth, not the live guard. The real protection is upstream:
