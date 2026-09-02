@@ -2,7 +2,7 @@ import { ChannelType } from "./ports.ts";
 import type {
   DiscordReadPort,
   RawChannel,
-  RawRole,
+  RoleManifestEntry,
   RawThread,
 } from "./ports.ts";
 
@@ -59,7 +59,7 @@ export const buildCatalog = async (deps: {
   previous?: Entity[];
   /** Where to report conditions a human needs to act on. Defaults to silence. */
   warn?: (message: string) => void;
-}): Promise<{ catalog: Entity[]; roleManifest: RawRole[] }> => {
+}): Promise<{ catalog: Entity[]; roleManifest: RoleManifestEntry[] }> => {
   if (!(await deps.discord.hasMessageContentIntent())) {
     throw new Error(
       "Message Content intent is not enabled for this application. It gates " +
@@ -134,26 +134,48 @@ export const buildCatalog = async (deps: {
   // Editors pick a role by name; Access gates store the ID. Regenerating the
   // manifest each run means a rename updates the display name while every
   // gate keeps working, and a deleted role simply stops matching.
-  const roleManifest = (await deps.discord.listRoles())
+  // One entry per name, carrying every ID that name maps to. Duplicate-named
+  // roles are an artifact of past bot behaviour and are interchangeable, so a
+  // gate on the name must match a member holding any of them.
+  // Grouped on name AND colour. Identical on both is treated as the same
+  // role; that is the safeguard against merging two genuinely different roles
+  // that happen to share a name.
+  const grouped = new Map<string, { name: string; color: number; ids: string[] }>();
+  for (const r of await deps.discord.listRoles()) {
     // @everyone is excluded deliberately. Its id equals the guild id and it
     // never appears in a member's `roles` array, so a page gated on it would
     // lock out every reader — including full Members.
-    .filter((r) => r.id !== deps.guildId)
-    .map((r) => ({ id: r.id, name: r.name }))
-    .sort(byId);
+    if (r.id === deps.guildId) continue;
+    const key = `${r.name}\u0000${r.color}`;
+    const existing = grouped.get(key);
+    if (existing) existing.ids.push(r.id);
+    else grouped.set(key, { name: r.name, color: r.color, ids: [r.id] });
+  }
 
-  // Two roles sharing a name give an editor two indistinguishable options in
-  // a name-labelled picker, and picking the wrong one is an invisible
-  // wrong-audience gate. Only a human renaming them in Discord fixes it.
-  const byName = new Map<string, string[]>();
-  for (const r of roleManifest)
-    byName.set(r.name, [...(byName.get(r.name) ?? []), r.id]);
-  for (const [name, ids] of byName)
-    if (ids.length > 1)
+  const roleManifest = [...grouped.values()]
+    .map((e) => ({ name: e.name, color: e.color, ids: [...e.ids].sort() }))
+    .sort((a, b) =>
+      a.name < b.name ? -1 : a.name > b.name ? 1 : a.color - b.color,
+    );
+
+  const nameCounts = new Map<string, number>();
+  for (const e of roleManifest)
+    nameCounts.set(e.name, (nameCounts.get(e.name) ?? 0) + 1);
+
+  for (const entry of roleManifest) {
+    if (entry.ids.length > 1)
       deps.warn?.(
-        `[roles] ${ids.length} roles share the name "${name}" (${ids.join(", ")}). ` +
-          `An editor cannot tell them apart when setting Access.`,
+        `[roles] "${entry.name}" maps to ${entry.ids.length} role IDs ` +
+          `(${entry.ids.join(", ")}); same name and colour, so aggregated into ` +
+          `one gate. Deleting the redundant roles in Discord would be tidier.`,
       );
+    if ((nameCounts.get(entry.name) ?? 0) > 1)
+      deps.warn?.(
+        `[roles] "${entry.name}" exists with more than one colour and was NOT ` +
+          `aggregated. An editor cannot tell these apart in a name-labelled ` +
+          `picker — rename one in Discord.`,
+      );
+  }
 
   return {
     // Sorted by ID: Discord does not promise a stable order, and an unsorted

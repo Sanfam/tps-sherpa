@@ -124,7 +124,12 @@ export const discordRest = (config: {
   // Fetched once per sync. Two fetches opened a window where a role created
   // or deleted between them made the permission context and the committed
   // manifest disagree.
-  type GuildRole = { id: string; name: string; permissions: string };
+  type GuildRole = {
+    id: string;
+    name: string;
+    permissions: string;
+    color: number;
+  };
   let rolesOnce: Promise<GuildRole[]> | undefined;
   const guildRoles = (): Promise<GuildRole[]> =>
     (rolesOnce ??= rest.get(Routes.guildRoles(config.guildId)) as Promise<
@@ -232,7 +237,11 @@ export const discordRest = (config: {
     },
 
     listRoles: async (): Promise<RawRole[]> => {
-      return (await guildRoles()).map((r) => ({ id: r.id, name: r.name }));
+      return (await guildRoles()).map((r) => ({
+        id: r.id,
+        name: r.name,
+        color: r.color ?? 0,
+      }));
     },
 
     hasMessageContentIntent: async (): Promise<boolean> => {

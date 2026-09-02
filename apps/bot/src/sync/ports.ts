@@ -46,10 +46,29 @@ export interface RawThread {
   firstPost: string | null;
 }
 
-/** A guild role, as the manifest records it. */
+/** A guild role as Discord returns it. */
 export interface RawRole {
   id: string;
   name: string;
+  /** Discord's integer colour. 0 means "no colour set". */
+  color: number;
+}
+
+/**
+ * One manifest entry per role NAME, carrying every ID that name maps to.
+ *
+ * A bot once created duplicate roles: this guild has 5 names covering 13 roles
+ * with identical permissions and colours, referenced by no channel overwrite.
+ *
+ * Roles are aggregated only when name AND colour both match. That is the
+ * safeguard: two roles that genuinely differ will almost always differ in
+ * colour, and merging those would silently widen an audience. A same-name,
+ * different-colour pair stays separate and is warned about instead.
+ */
+export interface RoleManifestEntry {
+  name: string;
+  color: number;
+  ids: string[];
 }
 
 export interface DiscordReadPort {
