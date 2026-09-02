@@ -13,7 +13,9 @@
 
 ## 1. The problem
 
-Papa Squad (TPS) is a Discord community for dads — **94 Channels and 11 Forums** *(measured 2026-09-01 against the live guild; the earlier "roughly 40 channels" estimate was low by more than 2×)*, plus ~500–600 Posts and Threads across categories like Gaming, Lifestyle & Hobbies, and Regional.
+Papa Squad (TPS) is a Discord community for dads — **94 Channels and 11 Forums** *(measured 2026-09-01 against the live guild; the earlier "roughly 40 channels" estimate was low by more than 2×)*, plus **1,195 Posts and Threads** *(measured 2026-09-01 — roughly double the "~500–600" estimate)*. **1,259 Entities in total.**
+
+Posts are concentrated: `🎮︱game-talk` alone holds **506**, then `🃏︱lifestyle-hobbies-interests` 251 and `🗳︱suggestions` 154. Of 1,259 Entities, 1,105 have a usable description, 145 do not (**11.5% — closely matching the "~10% render empty" observation in §8**), and 9 are withheld.
 
 The guild returns 127 raw channel objects in total: 93 text, 1 announcement, 15 categories, 6 voice, 1 stage, 11 Forums. Only the 94 text and announcement channels are Channels; the rest are either a different Entity type or not a place to read at all.
 
@@ -300,7 +302,7 @@ Shadow mode ≥2 weeks — output to a mod channel with the suppression reason a
 - **Message Content intent is required.** It gates content across REST *and* gateway, per Discord's docs. Thread descriptions are member-authored first posts, so this is a day-one requirement, not a Phase 3 concern. Self-toggle under 100 servers. **Enabled and working on the current application** *(verified 2026-09-01)*.
 
 **⚠️ Checking the wrong bit is an easy and costly mistake.** A self-toggled bot under 100 guilds gets `GATEWAY_MESSAGE_CONTENT_LIMITED` (bit 1 << 19), **not** `GATEWAY_MESSAGE_CONTENT` (bit 1 << 18). This application's flags are `565248` — bit 18 clear, bit 19 set — and message content is returned normally over REST. Code that tests bit 18 alone rejects every correctly configured small bot. An earlier revision of this document asserted the opposite; it was wrong.
-- A forum thread's ID **is** its starter message's ID → `GET /channels/{thread_id}/messages/{thread_id}` fetches the first post directly, no pagination. *(Verify against a real thread.)*
+- A Post's ID **is** its starter message's ID → `GET /channels/{thread_id}/messages/{thread_id}` fetches the first post directly, no pagination. **Verified 2026-09-01** against two real Posts in `🗳︱suggestions`, cross-checked against the oldest message via `after=0`. This is what keeps ingestion at ~1 call per Post.
 - `GET /guilds/{id}/members/{user_id}` works **without** the Guild Members privileged intent.
 - **No "get messages by author" endpoint exists.** This is a hard wall for the user-triggered profile audit. v1: user names ≤5 channels. v2: gateway listener maintains a message *pointer* index (locations, no content).
 - Forum channels are type 15, media type 16. Threads carry `applied_tags`.

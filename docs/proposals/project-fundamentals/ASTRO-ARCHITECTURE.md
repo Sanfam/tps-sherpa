@@ -310,7 +310,7 @@ The blast radius is a club page, in a community where everyone knows each other,
 
 ### Build this
 
-**Tier 0 capture, and nothing else.** Per entity: `GET /channels/{id}/messages?after={thread_id}&limit=100` for the head, and an unqualified `limit=100` for the tail. Two calls per entity, ~1,200 total. Store verbatim in bot-side SQLite.
+**Tier 0 capture, and nothing else.** Per entity: `GET /channels/{id}/messages?after={thread_id}&limit=100` for the head, and an unqualified `limit=100` for the tail. Two calls per entity — **~2,400 total against the measured 1,195 Posts and Threads, not the ~1,200 earlier estimated** *(measured 2026-09-01)*. Store verbatim in bot-side SQLite.
 
 **Tier 0 is the load-bearing piece.** A few megabytes of stored text means a re-sweep is a local reprocess rather than 700 Discord API calls. That decouples "regenerate the corpus" from "hit the API" — which matters every time the tagging vocabulary changes, a model is upgraded, or two prompts need A/B-ing against identical input. Without it, every prompt iteration costs a full crawl.
 
@@ -489,7 +489,7 @@ Flip shadow mode off after ≥2 weeks of reviewed output. Full spec in `PROJECT-
 
 | Do not build | Why |
 |---|---|
-| Vector store, embeddings, RAG | The catalog fits in one prompt. Retrieval is less accurate here and adds a refresh pipeline. Contingency is hierarchical matching, not vectors. |
+| Vector store, embeddings, RAG | The catalog fits in one prompt. Retrieval is less accurate here and adds a refresh pipeline. Contingency is hierarchical matching, not vectors. **⚠️ Re-check the premise: the corpus measured 1,259 Entities on 2026-09-01, roughly double the ~600 this estimate assumed, so "~15k tokens" is closer to ~31k. Still promptable, but position sensitivity is now more likely and the hierarchical-matching branch is nearer than planned.** |
 | A second OAuth provider | Design the seam; implement Discord only. |
 | Syntactic prompt compression | Degrades the subtle inference the recommender exists for. |
 | A message-content archive beyond Tier 0 indexed thread content | Monitored-channel conversation is extract-and-discard. |

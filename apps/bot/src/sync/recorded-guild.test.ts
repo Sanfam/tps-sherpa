@@ -15,30 +15,25 @@ const recorded: RawChannel[] = JSON.parse(
 const GUILD_ID = "1055290132250501135";
 
 describe("against the recorded guild", () => {
-  it("keeps only standing text Channels", async () => {
+  it("keeps visible Channels and Forums, and nothing else", async () => {
     const { catalog } = await buildCatalog({
       discord: fixtureDiscord({ channels: recorded }),
       guildId: GUILD_ID,
     });
 
     const kept = new Set(catalog.map((e) => e.id));
-    const shouldBeAbsent = recorded.filter(
-      (c) =>
-        c.type !== ChannelType.GuildText &&
-        c.type !== ChannelType.GuildAnnouncement,
-    );
+    const isContainer = (t: number) =>
+      t === ChannelType.GuildText ||
+      t === ChannelType.GuildAnnouncement ||
+      t === ChannelType.GuildForum;
+    const shouldBeAbsent = recorded.filter((c) => !isContainer(c.type));
 
     // 15 categories, 6 voice, 1 stage and 11 Forums are not Channels. Left in,
     // the categories alone would render as Entities with dead deep links.
     expect(shouldBeAbsent.length).toBeGreaterThan(0);
     expect(shouldBeAbsent.filter((c) => kept.has(c.id))).toEqual([]);
     expect(catalog).toHaveLength(
-      recorded.filter(
-        (c) =>
-          c.visible &&
-          (c.type === ChannelType.GuildText ||
-            c.type === ChannelType.GuildAnnouncement),
-      ).length,
+      recorded.filter((c) => c.visible && isContainer(c.type)).length,
     );
   });
 
@@ -55,7 +50,7 @@ describe("against the recorded guild", () => {
     // absent — the distinction is a privacy decision, not a data gap.
     const withheld = catalog.filter((e) => e.description_status === "withheld");
     expect(withheld.length).toBe(
-      recorded.filter((c) => c.visible && !c.contentReadable && [0, 5].includes(c.type)).length,
+      recorded.filter((c) => c.visible && !c.contentReadable && [0, 5, 15].includes(c.type)).length,
     );
     expect(withheld.every((e) => e.topic === null)).toBe(true);
   });
@@ -67,7 +62,7 @@ describe("against the recorded guild", () => {
     });
 
     for (const entity of catalog) {
-      expect(entity.type).toBe("channel");
+      expect(["channel", "forum"]).toContain(entity.type);
       expect(["present", "absent", "withheld"]).toContain(entity.description_status);
       expect(entity.url).toBe(
         `https://discord.com/channels/${GUILD_ID}/${entity.id}`,

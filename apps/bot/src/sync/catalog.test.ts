@@ -73,10 +73,10 @@ describe("buildCatalog", () => {
     );
   });
 
-  it("leaves out categories, voice channels and Forums, which are not Channels", async () => {
+  it("leaves out categories and voice channels, which are not Entities", async () => {
     // A category is a header and a voice channel is not somewhere you read.
-    // Both would render as browsable Entities with dead deep links. Forums are
-    // Entities, but a different type, and belong to the Forums/Posts work.
+    // Both would render as browsable Entities with dead deep links. A Forum
+    // IS an Entity, of its own type.
     const discord = fixtureDiscord({
       channels: [
         { id: "111", name: "gaming", type: ChannelType.GuildText },
@@ -89,8 +89,8 @@ describe("buildCatalog", () => {
 
     const { catalog } = await buildCatalog({ discord, guildId: GUILD_ID });
 
-    expect(catalog.map((e) => e.id)).toEqual(["111", "555"]);
-    expect(catalog.every((e) => e.type === "channel")).toBe(true);
+    expect(catalog.map((e) => e.id)).toEqual(["111", "444", "555"]);
+    expect(catalog.find((e) => e.id === "444")?.type).toBe("forum");
   });
 
   it("carries a human override through a re-sync and never writes one itself", async () => {
@@ -101,8 +101,10 @@ describe("buildCatalog", () => {
         type: "channel" as const,
         name: "gaming",
         url: `https://discord.com/channels/${GUILD_ID}/111`,
+        parent_id: null,
         description_status: "present" as const,
         topic: "gaming chat",
+        applied_tags: [],
         summary_generated: null,
         summary_override: "Where the Rocket League lot live.",
       },

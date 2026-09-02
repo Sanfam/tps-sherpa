@@ -1,6 +1,6 @@
 import { REST } from "@discordjs/rest";
 import { Routes } from "discord-api-types/v10";
-import type { DiscordReadPort, RawChannel } from "./ports.ts";
+import type { DiscordReadPort, RawChannel, RawThread } from "./ports.ts";
 
 const VIEW_CHANNEL = 1n << 10n;
 const READ_MESSAGE_HISTORY = 1n << 16n;
@@ -12,6 +12,14 @@ export interface Overwrite {
   allow: string;
   deny: string;
 }
+interface RawDiscordThread {
+  id: string;
+  name: string;
+  parent_id?: string | null;
+  applied_tags?: string[];
+  thread_metadata?: { archive_timestamp?: string };
+}
+
 export interface RawGuildChannel {
   id: string;
   name: string;
@@ -26,14 +34,22 @@ export interface RawGuildChannel {
  * the message endpoint — it has to be decided from permissions up front.
  * Verified against this guild on 2026-09-01.
  */
+export interface PermissionContext {
+  guildId: string;
+  roleIds: string[];
+  /** The bot's own user id. Member-specific overwrites target it directly. */
+  memberId: string;
+  basePermissions: bigint;
+}
+
 export const canView = (
   channel: { permission_overwrites?: Overwrite[] },
-  ctx: { guildId: string; roleIds: string[]; basePermissions: bigint },
+  ctx: PermissionContext,
 ): boolean => (effective(channel, ctx) & VIEW_CHANNEL) !== 0n;
 
 export const canReadHistory = (
   channel: { permission_overwrites?: Overwrite[] },
-  ctx: { guildId: string; roleIds: string[]; basePermissions: bigint },
+  ctx: PermissionContext,
 ): boolean => {
   const p = effective(channel, ctx);
   return (p & VIEW_CHANNEL) !== 0n && (p & READ_MESSAGE_HISTORY) !== 0n;
@@ -41,7 +57,7 @@ export const canReadHistory = (
 
 const effective = (
   channel: { permission_overwrites?: Overwrite[] },
-  ctx: { guildId: string; roleIds: string[]; basePermissions: bigint },
+  ctx: PermissionContext,
 ): bigint => {
   if ((ctx.basePermissions & ADMINISTRATOR) !== 0n) return ~0n;
   let p = ctx.basePermissions;
@@ -62,6 +78,15 @@ const effective = (
   }
   p &= ~deny;
   p |= allow;
+
+  // A member-specific overwrite (type 1) applies last and beats every role
+  // overwrite. Ignoring it computed "readable" for verification-chat-1, which
+  // Discord answers with 403 — found live on 2026-09-01.
+  const mine = ow.find((o) => o.id === ctx.memberId && o.type === 1);
+  if (mine) {
+    p &= ~BigInt(mine.deny);
+    p |= BigInt(mine.allow);
+  }
   return p;
 };
 
@@ -109,9 +134,10 @@ export const discordRest = (config: {
       let basePermissions = BigInt(byId.get(config.guildId)?.permissions ?? "0");
       for (const rid of member.roles)
         basePermissions |= BigInt(byId.get(rid)?.permissions ?? "0");
-      const ctx = {
+      const ctx: PermissionContext = {
         guildId: config.guildId,
         roleIds: member.roles,
+        memberId: me.id,
         basePermissions,
       };
       return channels.map((c) => ({
@@ -122,6 +148,72 @@ export const discordRest = (config: {
         visible: canView(c, ctx),
         contentReadable: canReadHistory(c, ctx),
       }));
+    },
+
+    listThreads: async (parentIds: string[]): Promise<RawThread[]> => {
+      const wanted = new Set(parentIds);
+      const raw = new Map<string, RawDiscordThread>();
+
+      // Active threads across the whole guild arrive in one call.
+      const active = (await rest.get(
+        Routes.guildActiveThreads(config.guildId),
+      )) as { threads: RawDiscordThread[] };
+      for (const t of active.threads)
+        if (t.parent_id && wanted.has(t.parent_id)) raw.set(t.id, t);
+
+      // Archived ones are per-parent and paginated. Roughly two thirds of this
+      // guild's Posts are archived, so this is the bulk of the work.
+      for (const parentId of parentIds) {
+        let before: string | undefined;
+        for (;;) {
+          const q = new URLSearchParams({ limit: "100" });
+          if (before) q.set("before", before);
+          // NOTE: this endpoint rejects limit=1 with NUMBER_TYPE_MIN.
+          let page: { threads: RawDiscordThread[]; has_more: boolean };
+          try {
+            page = (await rest.get(
+              `/channels/${parentId}/threads/archived/public?${q}` as never,
+            )) as { threads: RawDiscordThread[]; has_more: boolean };
+          } catch (error) {
+            // Computed permissions and Discord disagreed. Skip loudly rather
+            // than crash — and treat it as a signal, not noise.
+            if ((error as { code?: number }).code === 50001) {
+              console.warn(
+                `[permissions] computed readable but Discord denied: ${parentId}`,
+              );
+              break;
+            }
+            throw error;
+          }
+          for (const t of page.threads) raw.set(t.id, t);
+          const last = page.threads.at(-1)?.thread_metadata?.archive_timestamp;
+          if (!page.has_more || !last) break;
+          before = last;
+        }
+      }
+
+      // A Post's ID equals its starter message's ID, so the first post is one
+      // un-paginated call. Verified against real Posts on 2026-09-01.
+      return Promise.all(
+        [...raw.values()].map(async (t) => {
+          let firstPost: string | null = null;
+          try {
+            const msg = (await rest.get(
+              `/channels/${t.id}/messages/${t.id}` as never,
+            )) as { content?: string };
+            firstPost = msg.content ?? null;
+          } catch {
+            // Deleted starter message. Absent, not fatal.
+          }
+          return {
+            id: t.id,
+            name: t.name,
+            parentId: t.parent_id ?? "",
+            appliedTags: t.applied_tags ?? [],
+            firstPost,
+          };
+        }),
+      );
     },
 
     hasMessageContentIntent: async (): Promise<boolean> => {

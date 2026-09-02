@@ -764,56 +764,56 @@
     "name": "Verification",
     "type": 4,
     "topic": null,
-    "visible": true,
-    "contentReadable": true
+    "visible": false,
+    "contentReadable": false
   },
   {
     "id": "1237149653057667173",
     "name": "verification-chat-1",
     "type": 0,
     "topic": null,
-    "visible": true,
-    "contentReadable": true
+    "visible": false,
+    "contentReadable": false
   },
   {
     "id": "1237149702743523338",
     "name": "verification-chat-2",
     "type": 0,
     "topic": null,
-    "visible": true,
-    "contentReadable": true
+    "visible": false,
+    "contentReadable": false
   },
   {
     "id": "1237149723081707580",
     "name": "verification-chat-3",
     "type": 0,
     "topic": null,
-    "visible": true,
-    "contentReadable": true
+    "visible": false,
+    "contentReadable": false
   },
   {
     "id": "1237149743591718973",
     "name": "verification-chat-4",
     "type": 0,
     "topic": null,
-    "visible": true,
-    "contentReadable": true
+    "visible": false,
+    "contentReadable": false
   },
   {
     "id": "1237149761358925857",
     "name": "verification-chat-5",
     "type": 0,
     "topic": null,
-    "visible": true,
-    "contentReadable": true
+    "visible": false,
+    "contentReadable": false
   },
   {
     "id": "1237161256159285359",
     "name": "verification-chat-6",
     "type": 0,
     "topic": null,
-    "visible": true,
-    "contentReadable": true
+    "visible": false,
+    "contentReadable": false
   },
   {
     "id": "1245524771412901968",
@@ -956,8 +956,8 @@
     "name": "do-not-post-here",
     "type": 0,
     "topic": null,
-    "visible": true,
-    "contentReadable": true
+    "visible": false,
+    "contentReadable": false
   },
   {
     "id": "1524918010706530376",

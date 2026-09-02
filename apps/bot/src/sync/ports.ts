@@ -31,8 +31,28 @@ export interface RawChannel {
  * The one dependency the sync seam has on Discord. Satisfied by discord.js
  * REST in production and by `fixtureDiscord` in tests.
  */
+/** A Post inside a Forum, or a Thread inside a Channel. */
+export interface RawThread {
+  id: string;
+  name: string;
+  /** The Forum or Channel it lives in. */
+  parentId: string;
+  /** From the Forum's tag set. Mod-authored ground truth. Posts only. */
+  appliedTags: string[];
+  /**
+   * The starter message body. A Post's ID equals its starter message's ID,
+   * so this costs one un-paginated call. Verified 2026-09-01.
+   */
+  firstPost: string | null;
+}
+
 export interface DiscordReadPort {
   listChannels: () => Promise<RawChannel[]>;
+  /**
+   * Every Post and Thread inside the given parents. Parents the bot cannot
+   * read are never passed in — see the visibility filter.
+   */
+  listThreads: (parentIds: string[]) => Promise<RawThread[]>;
   /**
    * Whether the application has the Message Content intent. It gates content
    * over REST as well as the gateway, so without it the sync produces empty
