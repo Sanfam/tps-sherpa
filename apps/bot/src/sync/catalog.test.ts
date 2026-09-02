@@ -170,3 +170,30 @@ describe("description status", () => {
     expect(catalog[0]?.topic).toBeNull();
   });
 });
+
+describe("output stability", () => {
+  it("orders Entities by ID so a re-run produces identical output", async () => {
+    // Discord does not promise a stable channel order. Without sorting, a
+    // scheduled sync would commit a reordered file every run.
+    const shuffled = fixtureDiscord({
+      channels: [
+        { id: "333", name: "c", type: ChannelType.GuildText },
+        { id: "111", name: "a", type: ChannelType.GuildText },
+        { id: "222", name: "b", type: ChannelType.GuildText },
+      ],
+    });
+    const ordered = fixtureDiscord({
+      channels: [
+        { id: "111", name: "a", type: ChannelType.GuildText },
+        { id: "222", name: "b", type: ChannelType.GuildText },
+        { id: "333", name: "c", type: ChannelType.GuildText },
+      ],
+    });
+
+    const a = await buildCatalog({ discord: shuffled, guildId: GUILD_ID });
+    const b = await buildCatalog({ discord: ordered, guildId: GUILD_ID });
+
+    expect(JSON.stringify(a.catalog)).toBe(JSON.stringify(b.catalog));
+    expect(a.catalog.map((e) => e.id)).toEqual(["111", "222", "333"]);
+  });
+});

@@ -1,0 +1,642 @@
+[
+  {
+    "id": "1055290132909011037",
+    "type": "channel",
+    "name": "💬︱general",
+    "url": "https://discord.com/channels/1055290132250501135/1055290132909011037",
+    "topic": "General discussions about whatever you'd like to discuss.",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1083562929825259624",
+    "type": "channel",
+    "name": "🤰︱expecting",
+    "url": "https://discord.com/channels/1055290132250501135/1083562929825259624",
+    "topic": "Currently a non-pregnant stakeholder expecting a :baby: little one? Come share your status with the community, or ask for advice!",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1083563603451457606",
+    "type": "channel",
+    "name": "🐣︱newborn",
+    "url": "https://discord.com/channels/1055290132250501135/1083563603451457606",
+    "topic": "(0-8 weeks)\n\nHow fun is it to not sleep anymore?",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1083564023771050104",
+    "type": "channel",
+    "name": "👶︱infant",
+    "url": "https://discord.com/channels/1055290132250501135/1083564023771050104",
+    "topic": "(2-12 months)\n\nFirst teeth! Crawling! First smile!",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1083564372414173244",
+    "type": "channel",
+    "name": "🧒︱toddler",
+    "url": "https://discord.com/channels/1055290132250501135/1083564372414173244",
+    "topic": "(1-3 years) First steps! First words! First destroyed room!",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1083564538164686899",
+    "type": "channel",
+    "name": "🚸︱child",
+    "url": "https://discord.com/channels/1055290132250501135/1083564538164686899",
+    "topic": "(4-9 years) Becoming their own person! Starting school! Getting taller!",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1083564941082099782",
+    "type": "channel",
+    "name": "🤳︱tween-teen",
+    "url": "https://discord.com/channels/1055290132250501135/1083564941082099782",
+    "topic": "(10-18 years) The hardest years, plus lots of sleeping on their part.",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1083565893449166898",
+    "type": "channel",
+    "name": "welcome",
+    "url": "https://discord.com/channels/1055290132250501135/1083565893449166898",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1084293076907982919",
+    "type": "channel",
+    "name": "💬︱general-gaming",
+    "url": "https://discord.com/channels/1055290132250501135/1084293076907982919",
+    "topic": "Talk about video games in general. If you have any specific game in mind, you may wanna check the #game-talk channel instead!",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1084293386346954803",
+    "type": "channel",
+    "name": "👪︱parenting",
+    "url": "https://discord.com/channels/1055290132250501135/1084293386346954803",
+    "topic": "General discussion of the most difficult job in your life: being a parent.",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1084293546183495720",
+    "type": "channel",
+    "name": "👋︱introductions",
+    "url": "https://discord.com/channels/1055290132250501135/1084293546183495720",
+    "topic": "👋 Welcome to our community! This channel is the perfect place to introduce yourself and get to know your fellow members. Feel free to share a little bit about yourself, such as your interests, hobbies, or anything else you'd like to share. Once you've introduced yourself, don't forget to check our topics page (https://wiki.papasquad.xyz/papasquad/threads-and-channels) to find where to discuss whatever interests you!",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1084925234337026158",
+    "type": "channel",
+    "name": "🧑︱grandkids",
+    "url": "https://discord.com/channels/1055290132250501135/1084925234337026158",
+    "topic": "Some of us have been doing this \"parenting\" thing long enough to get the next achievement: grandchildren!",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1085275706738606140",
+    "type": "channel",
+    "name": "🖥︱pc-gaming",
+    "url": "https://discord.com/channels/1055290132250501135/1085275706738606140",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1085275787441221695",
+    "type": "channel",
+    "name": "🎮︱playstation-gaming",
+    "url": "https://discord.com/channels/1055290132250501135/1085275787441221695",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1087928348216414269",
+    "type": "channel",
+    "name": "🎮︱xbox-gaming",
+    "url": "https://discord.com/channels/1055290132250501135/1087928348216414269",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1087928393930133514",
+    "type": "channel",
+    "name": "🎮︱switch-gaming",
+    "url": "https://discord.com/channels/1055290132250501135/1087928393930133514",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1087991716012883990",
+    "type": "channel",
+    "name": "🕹︱retro-gaming",
+    "url": "https://discord.com/channels/1055290132250501135/1087991716012883990",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1087991922720768051",
+    "type": "channel",
+    "name": "🎲︱board-games",
+    "url": "https://discord.com/channels/1055290132250501135/1087991922720768051",
+    "topic": "Gaming! With cardboard! Or cloth! Or paper! Or little bits of plastic and metal!",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1088148380850601994",
+    "type": "channel",
+    "name": "🐲︱ttrpgs",
+    "url": "https://discord.com/channels/1055290132250501135/1088148380850601994",
+    "topic": "Table-top role playing games, aka \"devil-worshiping cults\". Come and discuss how all you need to game is a piece of paper, a pencil, and some fancy dice.",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1088156928946999398",
+    "type": "channel",
+    "name": "📢︱announcements",
+    "url": "https://discord.com/channels/1055290132250501135/1088156928946999398",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1088208169785901116",
+    "type": "channel",
+    "name": "💻︱steam-deck-and-handhelds",
+    "url": "https://discord.com/channels/1055290132250501135/1088208169785901116",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1088224017858711602",
+    "type": "channel",
+    "name": "vc-instructions",
+    "url": "https://discord.com/channels/1055290132250501135/1088224017858711602",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1088531041574211705",
+    "type": "channel",
+    "name": "🖼︱dad-jokes-and-memes",
+    "url": "https://discord.com/channels/1055290132250501135/1088531041574211705",
+    "topic": "Share your favorite memes and dad jokes!\nOver here we just call them jokes.",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1088554803933745336",
+    "type": "channel",
+    "name": "👓︱vr-gaming",
+    "url": "https://discord.com/channels/1055290132250501135/1088554803933745336",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1088559773521285201",
+    "type": "channel",
+    "name": "📆︱event-announcements",
+    "url": "https://discord.com/channels/1055290132250501135/1088559773521285201",
+    "topic": "Announcements regarding gaming events. You'll get pinged depending on which platform you assigned yourself!\n\nIf you hate getting pinged/don't care about events, mute this!",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1089976044062249060",
+    "type": "channel",
+    "name": "🛟︱self-care",
+    "url": "https://discord.com/channels/1055290132250501135/1089976044062249060",
+    "topic": null,
+    "description_status": "withheld",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1096226573180481727",
+    "type": "channel",
+    "name": "🖥︱dedicated-server-voting",
+    "url": "https://discord.com/channels/1055290132250501135/1096226573180481727",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1100811515747119205",
+    "type": "channel",
+    "name": "🆘︱mod-support",
+    "url": "https://discord.com/channels/1055290132250501135/1100811515747119205",
+    "topic": null,
+    "description_status": "withheld",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1116422505872240672",
+    "type": "channel",
+    "name": "❓︱help-faq",
+    "url": "https://discord.com/channels/1055290132250501135/1116422505872240672",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1121511095518122164",
+    "type": "channel",
+    "name": "✅︱micro-polls",
+    "url": "https://discord.com/channels/1055290132250501135/1121511095518122164",
+    "topic": "Short-term polls for various things. Everybody is welcome to vote! We value your opinion ❤️",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1125886226252177448",
+    "type": "channel",
+    "name": "🕹︱dedicated-servers",
+    "url": "https://discord.com/channels/1055290132250501135/1125886226252177448",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1128416908736213083",
+    "type": "channel",
+    "name": "📚︱wiki",
+    "url": "https://discord.com/channels/1055290132250501135/1128416908736213083",
+    "topic": "https://wiki.papasquad.xyz/",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1128731895509831724",
+    "type": "channel",
+    "name": "📺︱dad-streams",
+    "url": "https://discord.com/channels/1055290132250501135/1128731895509831724",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1130166410027466783",
+    "type": "channel",
+    "name": "🥰︱positivity",
+    "url": "https://discord.com/channels/1055290132250501135/1130166410027466783",
+    "topic": null,
+    "description_status": "withheld",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1138252672051449968",
+    "type": "channel",
+    "name": "🌈︱lgbtq-dadding",
+    "url": "https://discord.com/channels/1055290132250501135/1138252672051449968",
+    "topic": "LGBTQ+ dads, both single-parent and married, parents of LGBTQ+ kids, and allies, come here to chat with others!",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1140288159003971688",
+    "type": "channel",
+    "name": "🎯︱addiction-recovery",
+    "url": "https://discord.com/channels/1055290132250501135/1140288159003971688",
+    "topic": null,
+    "description_status": "withheld",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1141530574041927731",
+    "type": "channel",
+    "name": "😤︱venting",
+    "url": "https://discord.com/channels/1055290132250501135/1141530574041927731",
+    "topic": null,
+    "description_status": "withheld",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1151692834517303336",
+    "type": "channel",
+    "name": "🦸︱adopting",
+    "url": "https://discord.com/channels/1055290132250501135/1151692834517303336",
+    "topic": "Thinking about adopting a child? Have already adopted a child? Want to know how you can help children find good long-term homes? Come here to share advice!",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1185019472529063987",
+    "type": "channel",
+    "name": "🎶︱music",
+    "url": "https://discord.com/channels/1055290132250501135/1185019472529063987",
+    "topic": "What are you listening to these days?",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1185019630109085807",
+    "type": "channel",
+    "name": "🔖︱book-club",
+    "url": "https://discord.com/channels/1055290132250501135/1185019630109085807",
+    "topic": "The official Papa Squad Book Club, for the discerning Papa who likes to read in a group.",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1185019766776279040",
+    "type": "channel",
+    "name": "🎞︱movie-club",
+    "url": "https://discord.com/channels/1055290132250501135/1185019766776279040",
+    "topic": "The official Papa Squad Movie Club, for the Papas who like to analyse a movie to death after watching it.",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1185023105798778941",
+    "type": "channel",
+    "name": "💬︱graphic-novels-manga",
+    "url": "https://discord.com/channels/1055290132250501135/1185023105798778941",
+    "topic": "Who doesn't love a good visual web mangovel? Whether your taste is for daily one-off webcomics, for fixed-start-and-end stories told in ink and paper, or for knowing 50 years of lore just to understand that one panel on page 32 of the latest issue, come here to let others know about it!\n\nThis channel is for general discussion of any graphic novels, manga, and similar visual literature. Any series or one-shot is welcome to be discussed, but all spoilers _must_ be hidden behind spoiler tags. Put two bars, | | (without the space in between), on either side of the spoiler text to produce hidden text ||like this||.\n\nIf you want to discuss spoilers without using spoiler tags, then start a new thread for that specific book/series (or use an existing thread if there is one) in the book threads forum.\n\nIntentionally spoiling something for others is highly inconsiderate and grounds for suspension.",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1185023522892959836",
+    "type": "channel",
+    "name": "👁︱anime",
+    "url": "https://discord.com/channels/1055290132250501135/1185023522892959836",
+    "topic": "This channel is for general discussion of anime. Any series or movie or whatever is welcome to be discussed, but all spoilers _must_ be hidden behind spoiler tags. Put two bars, | | (without the space in between), on either side of the spoiler text to produce hidden text ||like this||.\n\nIf you want to discuss spoilers without using spoiler tags, then start a new thread for that specific anime (or use an existing thread if there is one) in the TV and movies threads forum.\n\nIntentionally spoiling something for others is highly inconsiderate and grounds for suspension.",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1205306188653138010",
+    "type": "channel",
+    "name": "👼︱fostering",
+    "url": "https://discord.com/channels/1055290132250501135/1205306188653138010",
+    "topic": "Raising your own kids is hard enough. Few of us are brave enough to try raising many other kids to help them get back on their feet. If you are one of these amazing people, come here to share advice and discuss how to help children in need of a home for a little while.",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1224957405994156032",
+    "type": "channel",
+    "name": "🫂︱intimacy",
+    "url": "https://discord.com/channels/1055290132250501135/1224957405994156032",
+    "topic": null,
+    "description_status": "withheld",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1237140236836802661",
+    "type": "channel",
+    "name": "🛂︱verification",
+    "url": "https://discord.com/channels/1055290132250501135/1237140236836802661",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1237149653057667173",
+    "type": "channel",
+    "name": "verification-chat-1",
+    "url": "https://discord.com/channels/1055290132250501135/1237149653057667173",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1237149702743523338",
+    "type": "channel",
+    "name": "verification-chat-2",
+    "url": "https://discord.com/channels/1055290132250501135/1237149702743523338",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1237149723081707580",
+    "type": "channel",
+    "name": "verification-chat-3",
+    "url": "https://discord.com/channels/1055290132250501135/1237149723081707580",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1237149743591718973",
+    "type": "channel",
+    "name": "verification-chat-4",
+    "url": "https://discord.com/channels/1055290132250501135/1237149743591718973",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1237149761358925857",
+    "type": "channel",
+    "name": "verification-chat-5",
+    "url": "https://discord.com/channels/1055290132250501135/1237149761358925857",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1237161256159285359",
+    "type": "channel",
+    "name": "verification-chat-6",
+    "url": "https://discord.com/channels/1055290132250501135/1237161256159285359",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1271178147689402448",
+    "type": "channel",
+    "name": "verification-chat-7",
+    "url": "https://discord.com/channels/1055290132250501135/1271178147689402448",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1283989899392974861",
+    "type": "channel",
+    "name": "🧠︱neurodivergent-adhd-autism-etc",
+    "url": "https://discord.com/channels/1055290132250501135/1283989899392974861",
+    "topic": null,
+    "description_status": "withheld",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1286665240658055269",
+    "type": "channel",
+    "name": "🤹︱twins-and-more",
+    "url": "https://discord.com/channels/1055290132250501135/1286665240658055269",
+    "topic": "A place for parents of multiples to talk.  If you have twins, triplets, more, or even multiple sets of these, discuss it here!",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1293003871538642985",
+    "type": "channel",
+    "name": "🤸︱single-parents",
+    "url": "https://discord.com/channels/1055290132250501135/1293003871538642985",
+    "topic": "Whether by choice or by circumstance, many dads are doing the parenting thing alone. If you have recently become a single dad, come here to ask for advice from those who have been doing it for a while on how to survive, how to be a good parent despite the stress, and how to enjoy being a single parent so you'll be able to look back and feel content at a hard job well done.",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1306373183196106834",
+    "type": "channel",
+    "name": "🖤︱grief-loss",
+    "url": "https://discord.com/channels/1055290132250501135/1306373183196106834",
+    "topic": null,
+    "description_status": "withheld",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1309311930703282227",
+    "type": "channel",
+    "name": "🫡︱grown-up-children",
+    "url": "https://discord.com/channels/1055290132250501135/1309311930703282227",
+    "topic": "At some point, your children will grow up, become adults (legally, anyway), and possibly even move out of your home. Come and discuss how to handle your new-found freedom and cope with your new-found loneliness.",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1381650656724652083",
+    "type": "channel",
+    "name": "✏︱activities",
+    "url": "https://discord.com/channels/1055290132250501135/1381650656724652083",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1425290043697659984",
+    "type": "channel",
+    "name": "✂️︱the-snip",
+    "url": "https://discord.com/channels/1055290132250501135/1425290043697659984",
+    "topic": null,
+    "description_status": "withheld",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1433084281017729086",
+    "type": "channel",
+    "name": "🧔‍♂️︱step-parents",
+    "url": "https://discord.com/channels/1055290132250501135/1433084281017729086",
+    "topic": "For those trying to raise kids that aren’t related by blood, but you love them just the same",
+    "description_status": "present",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1450589625608306840",
+    "type": "channel",
+    "name": "❤️︱relationships",
+    "url": "https://discord.com/channels/1055290132250501135/1450589625608306840",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1524916903280378156",
+    "type": "channel",
+    "name": "do-not-post-here",
+    "url": "https://discord.com/channels/1055290132250501135/1524916903280378156",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  },
+  {
+    "id": "1544502247587582033",
+    "type": "channel",
+    "name": "bot-tests",
+    "url": "https://discord.com/channels/1055290132250501135/1544502247587582033",
+    "topic": null,
+    "description_status": "absent",
+    "summary_generated": null,
+    "summary_override": null
+  }
+]

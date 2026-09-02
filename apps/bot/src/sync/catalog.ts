@@ -60,7 +60,11 @@ export const buildCatalog = async (deps: {
         c.type === ChannelType.GuildAnnouncement),
   );
   return {
-    catalog: channels.map((c) => ({
+    // Sorted by ID: Discord does not promise a stable order, and an unsorted
+    // Catalog would produce a reordered commit on every scheduled run.
+    catalog: [...channels]
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .map((c) => ({
       id: c.id,
       type: "channel" as const,
       name: c.name,
@@ -73,6 +77,6 @@ export const buildCatalog = async (deps: {
           : ("absent" as const),
       summary_generated: null,
       summary_override: overrides.get(c.id) ?? null,
-    })),
+      })),
   };
 };
