@@ -1,0 +1,637 @@
+[
+  {
+    "id": "1055290132909011035",
+    "name": "📃 Info",
+    "type": 4
+  },
+  {
+    "id": "1055290132909011036",
+    "name": "Voice Channels",
+    "type": 4
+  },
+  {
+    "id": "1055290132909011037",
+    "name": "💬︱general",
+    "type": 0
+  },
+  {
+    "id": "1083562729769549907",
+    "name": "👪 Parenting",
+    "type": 4
+  },
+  {
+    "id": "1083562929825259624",
+    "name": "🤰︱expecting",
+    "type": 0
+  },
+  {
+    "id": "1083563603451457606",
+    "name": "🐣︱newborn",
+    "type": 0
+  },
+  {
+    "id": "1083564023771050104",
+    "name": "👶︱infant",
+    "type": 0
+  },
+  {
+    "id": "1083564372414173244",
+    "name": "🧒︱toddler",
+    "type": 0
+  },
+  {
+    "id": "1083564538164686899",
+    "name": "🚸︱child",
+    "type": 0
+  },
+  {
+    "id": "1083564941082099782",
+    "name": "🤳︱tween-teen",
+    "type": 0
+  },
+  {
+    "id": "1083565279214313542",
+    "name": "🎮 Gaming",
+    "type": 4
+  },
+  {
+    "id": "1083565893449166898",
+    "name": "welcome",
+    "type": 0
+  },
+  {
+    "id": "1083565893449166899",
+    "name": "moderator-only",
+    "type": 0
+  },
+  {
+    "id": "1083605970829180978",
+    "name": "Admin",
+    "type": 4
+  },
+  {
+    "id": "1084293076907982919",
+    "name": "💬︱general-gaming",
+    "type": 0
+  },
+  {
+    "id": "1084293167798558791",
+    "name": "💬 General",
+    "type": 4
+  },
+  {
+    "id": "1084293386346954803",
+    "name": "👪︱parenting",
+    "type": 0
+  },
+  {
+    "id": "1084293546183495720",
+    "name": "👋︱introductions",
+    "type": 0
+  },
+  {
+    "id": "1084925234337026158",
+    "name": "🧑︱grandkids",
+    "type": 0
+  },
+  {
+    "id": "1085275706738606140",
+    "name": "🖥︱pc-gaming",
+    "type": 0
+  },
+  {
+    "id": "1085275787441221695",
+    "name": "🎮︱playstation-gaming",
+    "type": 0
+  },
+  {
+    "id": "1087928348216414269",
+    "name": "🎮︱xbox-gaming",
+    "type": 0
+  },
+  {
+    "id": "1087928393930133514",
+    "name": "🎮︱switch-gaming",
+    "type": 0
+  },
+  {
+    "id": "1087991716012883990",
+    "name": "🕹︱retro-gaming",
+    "type": 0
+  },
+  {
+    "id": "1087991922720768051",
+    "name": "🎲︱board-games",
+    "type": 0
+  },
+  {
+    "id": "1088128866033356801",
+    "name": "🗳︱suggestions",
+    "type": 15
+  },
+  {
+    "id": "1088148380850601994",
+    "name": "🐲︱ttrpgs",
+    "type": 0
+  },
+  {
+    "id": "1088156928946999398",
+    "name": "📢︱announcements",
+    "type": 5
+  },
+  {
+    "id": "1088173448112640040",
+    "name": "🎮︱game-talk",
+    "type": 15
+  },
+  {
+    "id": "1088178769124151377",
+    "name": "🖥︱pc-setup-builds",
+    "type": 0
+  },
+  {
+    "id": "1088208169785901116",
+    "name": "💻︱steam-deck-and-handhelds",
+    "type": 0
+  },
+  {
+    "id": "1088224017858711602",
+    "name": "vc-instructions",
+    "type": 0
+  },
+  {
+    "id": "1088243110284365957",
+    "name": "👮 Staff",
+    "type": 4
+  },
+  {
+    "id": "1088243283093889064",
+    "name": "👮︱staff-chat-classic",
+    "type": 0
+  },
+  {
+    "id": "1088531041574211705",
+    "name": "🖼︱dad-jokes-and-memes",
+    "type": 0
+  },
+  {
+    "id": "1088554803933745336",
+    "name": "👓︱vr-gaming",
+    "type": 0
+  },
+  {
+    "id": "1088559773521285201",
+    "name": "📆︱event-announcements",
+    "type": 0
+  },
+  {
+    "id": "1088561112468967485",
+    "name": "💂︱event-managers-chat",
+    "type": 0
+  },
+  {
+    "id": "1088656186636775435",
+    "name": "🃏︱lifestyle-hobbies-interests",
+    "type": 15
+  },
+  {
+    "id": "1089552525520273468",
+    "name": "♟-tabletop-simulator",
+    "type": 15
+  },
+  {
+    "id": "1089976044062249060",
+    "name": "🛟︱self-care",
+    "type": 0
+  },
+  {
+    "id": "1092495090238361760",
+    "name": "📂 Archive",
+    "type": 4
+  },
+  {
+    "id": "1092512172204101642",
+    "name": "🎁︱giveaways",
+    "type": 0
+  },
+  {
+    "id": "1096226573180481727",
+    "name": "🖥︱dedicated-server-voting",
+    "type": 0
+  },
+  {
+    "id": "1100805951046561892",
+    "name": "ticket-transcripts",
+    "type": 0
+  },
+  {
+    "id": "1100810523282514021",
+    "name": "ticket-notifications",
+    "type": 0
+  },
+  {
+    "id": "1100811515747119205",
+    "name": "🆘︱mod-support",
+    "type": 0
+  },
+  {
+    "id": "1100898773577777213",
+    "name": "🔢 Stats",
+    "type": 4
+  },
+  {
+    "id": "1100899828269060247",
+    "name": "🧔♂ 5346 dads",
+    "type": 2
+  },
+  {
+    "id": "1100900115276898448",
+    "name": "🌍︱regional-chat",
+    "type": 15
+  },
+  {
+    "id": "1116422505872240672",
+    "name": "❓︱help-faq",
+    "type": 0
+  },
+  {
+    "id": "1121511095518122164",
+    "name": "✅︱micro-polls",
+    "type": 0
+  },
+  {
+    "id": "1125886226252177448",
+    "name": "🕹︱dedicated-servers",
+    "type": 0
+  },
+  {
+    "id": "1128416908736213083",
+    "name": "📚︱wiki",
+    "type": 0
+  },
+  {
+    "id": "1128731895509831724",
+    "name": "📺︱dad-streams",
+    "type": 0
+  },
+  {
+    "id": "1130166410027466783",
+    "name": "🥰︱positivity",
+    "type": 0
+  },
+  {
+    "id": "1138164109301514392",
+    "name": "bot-logs",
+    "type": 0
+  },
+  {
+    "id": "1138164458045325364",
+    "name": "server-logs",
+    "type": 0
+  },
+  {
+    "id": "1138252672051449968",
+    "name": "🌈︱lgbtq-dadding",
+    "type": 0
+  },
+  {
+    "id": "1138488716332118237",
+    "name": "Destiny Notifications",
+    "type": 4
+  },
+  {
+    "id": "1138489077751099392",
+    "name": "bungie-news",
+    "type": 0
+  },
+  {
+    "id": "1138491123933925568",
+    "name": "warmind-alerts",
+    "type": 0
+  },
+  {
+    "id": "1138491435780407306",
+    "name": "reset-notifications",
+    "type": 0
+  },
+  {
+    "id": "1138491953407856771",
+    "name": "clan-completions",
+    "type": 0
+  },
+  {
+    "id": "1138492447014531112",
+    "name": "leaderboards",
+    "type": 0
+  },
+  {
+    "id": "1138528901832921169",
+    "name": "vex-incursion",
+    "type": 0
+  },
+  {
+    "id": "1140288010479472662",
+    "name": "🩹 Selfing",
+    "type": 4
+  },
+  {
+    "id": "1140288159003971688",
+    "name": "🎯︱addiction-recovery",
+    "type": 0
+  },
+  {
+    "id": "1141530574041927731",
+    "name": "😤︱venting",
+    "type": 0
+  },
+  {
+    "id": "1151692834517303336",
+    "name": "🦸︱adopting",
+    "type": 0
+  },
+  {
+    "id": "1154239524256366692",
+    "name": "🎥 Video and Broadcast",
+    "type": 4
+  },
+  {
+    "id": "1154240105817575446",
+    "name": "watch-together",
+    "type": 13
+  },
+  {
+    "id": "1161718576038821948",
+    "name": "gift-tylo",
+    "type": 0
+  },
+  {
+    "id": "1162462814376571030",
+    "name": "we-love-tylo",
+    "type": 0
+  },
+  {
+    "id": "1182697165903118447",
+    "name": "dim-builds",
+    "type": 0
+  },
+  {
+    "id": "1185019182354550794",
+    "name": "Non-games media",
+    "type": 4
+  },
+  {
+    "id": "1185019342144933938",
+    "name": "📺︱tv-movies",
+    "type": 0
+  },
+  {
+    "id": "1185019397782384670",
+    "name": "📕︱books",
+    "type": 0
+  },
+  {
+    "id": "1185019472529063987",
+    "name": "🎶︱music",
+    "type": 0
+  },
+  {
+    "id": "1185019630109085807",
+    "name": "🔖︱book-club",
+    "type": 0
+  },
+  {
+    "id": "1185019766776279040",
+    "name": "🎞︱movie-club",
+    "type": 0
+  },
+  {
+    "id": "1185019891904946176",
+    "name": "📚︱books",
+    "type": 15
+  },
+  {
+    "id": "1185023105798778941",
+    "name": "💬︱graphic-novels-manga",
+    "type": 0
+  },
+  {
+    "id": "1185023522892959836",
+    "name": "👁︱anime",
+    "type": 0
+  },
+  {
+    "id": "1185024393114570813",
+    "name": "🎬︱tv-movies",
+    "type": 15
+  },
+  {
+    "id": "1185042844591870042",
+    "name": "🌠︱star-wars",
+    "type": 15
+  },
+  {
+    "id": "1193805790541250601",
+    "name": "🛋 Hang outs",
+    "type": 4
+  },
+  {
+    "id": "1194065843789770782",
+    "name": "☕︱Coffee Lounge",
+    "type": 2
+  },
+  {
+    "id": "1194066082563104899",
+    "name": "🍵︱Tea Lounge",
+    "type": 2
+  },
+  {
+    "id": "1194066148120068176",
+    "name": "🥃︱Whisky Lounge",
+    "type": 2
+  },
+  {
+    "id": "1205306188653138010",
+    "name": "👼︱fostering",
+    "type": 0
+  },
+  {
+    "id": "1206424171668701244",
+    "name": "the-papas-and-the-trolls",
+    "type": 0
+  },
+  {
+    "id": "1224957405994156032",
+    "name": "🫂︱intimacy",
+    "type": 0
+  },
+  {
+    "id": "1237140236836802661",
+    "name": "🛂︱verification",
+    "type": 0
+  },
+  {
+    "id": "1237145423861256233",
+    "name": "verification-logs",
+    "type": 0
+  },
+  {
+    "id": "1237149452184064020",
+    "name": "Verification",
+    "type": 4
+  },
+  {
+    "id": "1237149653057667173",
+    "name": "verification-chat-1",
+    "type": 0
+  },
+  {
+    "id": "1237149702743523338",
+    "name": "verification-chat-2",
+    "type": 0
+  },
+  {
+    "id": "1237149723081707580",
+    "name": "verification-chat-3",
+    "type": 0
+  },
+  {
+    "id": "1237149743591718973",
+    "name": "verification-chat-4",
+    "type": 0
+  },
+  {
+    "id": "1237149761358925857",
+    "name": "verification-chat-5",
+    "type": 0
+  },
+  {
+    "id": "1237161256159285359",
+    "name": "verification-chat-6",
+    "type": 0
+  },
+  {
+    "id": "1245524771412901968",
+    "name": "we-love-redo",
+    "type": 0
+  },
+  {
+    "id": "1251230034619007067",
+    "name": "dpscab",
+    "type": 0
+  },
+  {
+    "id": "1254253444919726211",
+    "name": "🔊︱Join Here",
+    "type": 2
+  },
+  {
+    "id": "1257418195221090385",
+    "name": "event-planning",
+    "type": 0
+  },
+  {
+    "id": "1262255403673325638",
+    "name": "is-it-hot-in-there-or-just-me",
+    "type": 0
+  },
+  {
+    "id": "1271178147689402448",
+    "name": "verification-chat-7",
+    "type": 0
+  },
+  {
+    "id": "1283989899392974861",
+    "name": "🧠︱neurodivergent-adhd-autism-etc",
+    "type": 0
+  },
+  {
+    "id": "1286665240658055269",
+    "name": "🤹︱twins-and-more",
+    "type": 0
+  },
+  {
+    "id": "1293003871538642985",
+    "name": "🤸︱single-parents",
+    "type": 0
+  },
+  {
+    "id": "1306373183196106834",
+    "name": "🖤︱grief-loss",
+    "type": 0
+  },
+  {
+    "id": "1309311930703282227",
+    "name": "🫡︱grown-up-children",
+    "type": 0
+  },
+  {
+    "id": "1309319705374232616",
+    "name": "⭐︱hall-of-fame",
+    "type": 0
+  },
+  {
+    "id": "1381650656724652083",
+    "name": "✏︱activities",
+    "type": 0
+  },
+  {
+    "id": "1425290043697659984",
+    "name": "✂️︱the-snip",
+    "type": 0
+  },
+  {
+    "id": "1433084281017729086",
+    "name": "🧔‍♂️︱step-parents",
+    "type": 0
+  },
+  {
+    "id": "1443846859045994629",
+    "name": "automod-notifications",
+    "type": 0
+  },
+  {
+    "id": "1450589625608306840",
+    "name": "❤️︱relationships",
+    "type": 0
+  },
+  {
+    "id": "1524916903280378156",
+    "name": "do-not-post-here",
+    "type": 0
+  },
+  {
+    "id": "1524918010706530376",
+    "name": "honeypot-gottem",
+    "type": 0
+  },
+  {
+    "id": "1533322243306815568",
+    "name": "📋︱mod-candidates",
+    "type": 15
+  },
+  {
+    "id": "1534214620976254977",
+    "name": "📊︱user-monitoring",
+    "type": 15
+  },
+  {
+    "id": "1538767903116103680",
+    "name": "👮︱staff-chat",
+    "type": 0
+  },
+  {
+    "id": "1539339023628238898",
+    "name": "staff-discussions",
+    "type": 15
+  },
+  {
+    "id": "1541964482442428476",
+    "name": "5 Days until Labor Day!",
+    "type": 2
+  },
+  {
+    "id": "1544502247587582033",
+    "name": "bot-tests",
+    "type": 0
+  }
+]

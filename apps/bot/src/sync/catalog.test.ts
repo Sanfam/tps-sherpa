@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildCatalog } from "./catalog.js";
-import { fixtureDiscord } from "./fixture-discord.js";
-import { ChannelType } from "./ports.js";
+import { buildCatalog } from "./catalog.ts";
+import { fixtureDiscord } from "./fixture-discord.ts";
+import { ChannelType } from "./ports.ts";
 
 const GUILD_ID = "1088552078709891240";
 

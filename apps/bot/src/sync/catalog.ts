@@ -1,5 +1,5 @@
-import { ChannelType } from "./ports.js";
-import type { DiscordReadPort } from "./ports.js";
+import { ChannelType } from "./ports.ts";
+import type { DiscordReadPort } from "./ports.ts";
 
 export type EntityType = "channel" | "forum" | "post" | "thread";
 

@@ -1,4 +1,4 @@
-import type { DiscordReadPort, RawChannel } from "./ports.js";
+import type { DiscordReadPort, RawChannel } from "./ports.ts";
 
 export const fixtureDiscord = (data: {
   channels: RawChannel[];
