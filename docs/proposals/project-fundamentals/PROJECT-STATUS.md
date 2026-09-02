@@ -294,7 +294,9 @@ Shadow mode ≥2 weeks — output to a mod channel with the suppression reason a
 
 ### Discord API
 
-- **Message Content intent is required.** It gates content across REST *and* gateway, per Discord's docs. Thread descriptions are member-authored first posts, so this is a day-one requirement, not a Phase 3 concern. Self-toggle under 100 servers. The old script clearly had it — but **the current bot application does NOT** *(verified 2026-09-01 by reading `flags` on `/applications/@me`; `GATEWAY_MESSAGE_CONTENT`, bit 1 << 18, is unset)*. It must be enabled in the Discord developer portal before any sync that reads content. The sync refuses to run without it rather than producing silently empty descriptions.
+- **Message Content intent is required.** It gates content across REST *and* gateway, per Discord's docs. Thread descriptions are member-authored first posts, so this is a day-one requirement, not a Phase 3 concern. Self-toggle under 100 servers. **Enabled and working on the current application** *(verified 2026-09-01)*.
+
+**⚠️ Checking the wrong bit is an easy and costly mistake.** A self-toggled bot under 100 guilds gets `GATEWAY_MESSAGE_CONTENT_LIMITED` (bit 1 << 19), **not** `GATEWAY_MESSAGE_CONTENT` (bit 1 << 18). This application's flags are `565248` — bit 18 clear, bit 19 set — and message content is returned normally over REST. Code that tests bit 18 alone rejects every correctly configured small bot. An earlier revision of this document asserted the opposite; it was wrong.
 - A forum thread's ID **is** its starter message's ID → `GET /channels/{thread_id}/messages/{thread_id}` fetches the first post directly, no pagination. *(Verify against a real thread.)*
 - `GET /guilds/{id}/members/{user_id}` works **without** the Guild Members privileged intent.
 - **No "get messages by author" endpoint exists.** This is a hard wall for the user-triggered profile audit. v1: user names ≤5 channels. v2: gateway listener maintains a message *pointer* index (locations, no content).

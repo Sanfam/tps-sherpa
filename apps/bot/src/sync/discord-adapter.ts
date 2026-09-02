@@ -2,12 +2,21 @@ import { REST } from "@discordjs/rest";
 import { Routes } from "discord-api-types/v10";
 import type { DiscordReadPort, RawChannel } from "./ports.ts";
 
-/**
- * `GATEWAY_MESSAGE_CONTENT` on the application's flags. The `_LIMITED` variant
- * (1 << 19) means the intent was requested but not yet approved, which is not
- * good enough — content still comes back empty.
- */
 const GATEWAY_MESSAGE_CONTENT = 1 << 18;
+const GATEWAY_MESSAGE_CONTENT_LIMITED = 1 << 19;
+
+/**
+ * Whether the application can actually read message content.
+ *
+ * Either flag is sufficient. A bot in fewer than 100 guilds self-toggles the
+ * intent and gets `_LIMITED`; only a verified bot past that threshold gets the
+ * unqualified flag. Checking bit 18 alone rejects every correctly configured
+ * small bot — verified against this guild on 2026-09-01, where flags were
+ * 565248 (`_LIMITED` set, bit 18 clear) and message content was returned
+ * normally over REST.
+ */
+export const messageContentUsable = (flags: number): boolean =>
+  (flags & (GATEWAY_MESSAGE_CONTENT | GATEWAY_MESSAGE_CONTENT_LIMITED)) !== 0;
 
 /**
  * The live adapter. Everything Discord-shaped lives here so the sync seam
@@ -31,7 +40,7 @@ export const discordRest = (config: {
       const app = (await rest.get(Routes.currentApplication())) as {
         flags?: number;
       };
-      return ((app.flags ?? 0) & GATEWAY_MESSAGE_CONTENT) !== 0;
+      return messageContentUsable(app.flags ?? 0);
     },
   };
 };
