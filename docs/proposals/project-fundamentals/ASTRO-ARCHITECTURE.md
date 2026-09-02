@@ -1,4 +1,4 @@
-/# Build handoff: Papa Squad hub site + Papa Sherpa
+# Build handoff: Papa Squad hub site + Papa Sherpa
 
 **Audience:** an LLM-backed coding agent, or a team of them, working with substantial autonomy.
 **Date:** 2026-08-31.
