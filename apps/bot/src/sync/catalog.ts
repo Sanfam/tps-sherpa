@@ -1,3 +1,4 @@
+import { normaliseDescription, type NameLookup } from "./normalise.ts";
 import { ChannelType } from "./ports.ts";
 import type {
   DiscordReadPort,
@@ -48,11 +49,6 @@ const byId = (a: { id: string }, b: { id: string }) =>
 const deepLink = (guildId: string, entityId: string) =>
   `https://discord.com/channels/${guildId}/${entityId}`;
 
-const usable = (text: string | null | undefined): string | null => {
-  const t = (text ?? "").trim();
-  return t.length > 0 ? t : null;
-};
-
 export const buildCatalog = async (deps: {
   discord: DiscordReadPort;
   guildId: string;
@@ -90,50 +86,6 @@ export const buildCatalog = async (deps: {
   );
   const containerType = new Map(containers.map((c) => [c.id, c.type]));
 
-  const fromContainer = (c: RawChannel): Entity => {
-    const topic = c.contentReadable ? usable(c.topic) : null;
-    return {
-      id: c.id,
-      type: c.type === ChannelType.GuildForum ? "forum" : "channel",
-      name: c.name,
-      url: deepLink(deps.guildId, c.id),
-      parent_id: null,
-      description_status: !c.contentReadable
-        ? "withheld"
-        : topic
-          ? "present"
-          : "absent",
-      topic,
-      applied_tags: [],
-      summary_generated: null,
-      summary_override: overrides.get(c.id) ?? null,
-    };
-  };
-
-  const fromThread = (t: RawThread): Entity => {
-    const first = usable(t.firstPost);
-    return {
-      id: t.id,
-      // A Post lives in a Forum; a Thread lives in a Channel. Same underlying
-      // object, different Entity — only a Post carries applied_tags.
-      type:
-        containerType.get(t.parentId) === ChannelType.GuildForum
-          ? "post"
-          : "thread",
-      name: t.name,
-      url: deepLink(deps.guildId, t.id),
-      parent_id: t.parentId,
-      description_status: first ? "present" : "absent",
-      topic: first,
-      applied_tags: t.appliedTags,
-      summary_generated: null,
-      summary_override: overrides.get(t.id) ?? null,
-    };
-  };
-
-  // Editors pick a role by name; Access gates store the ID. Regenerating the
-  // manifest each run means a rename updates the display name while every
-  // gate keeps working, and a deleted role simply stops matching.
   // One entry per name, carrying every ID that name maps to. Duplicate-named
   // roles are an artifact of past bot behaviour and are interchangeable, so a
   // gate on the name must match a member holding any of them.
@@ -177,6 +129,67 @@ export const buildCatalog = async (deps: {
       );
   }
 
+
+  // Discord renders Post and Thread mentions with the same `<#id>` syntax as
+  // Channels, so the lookup must cover every Entity. Containers alone left 7
+  // real mentions publishing as `#unknown-channel`.
+  const names: NameLookup = {
+    channels: new Map([
+      ...containers.map((c) => [c.id, c.name] as const),
+      ...threads.map((t) => [t.id, t.name] as const),
+    ]),
+    roles: new Map(
+      roleManifest.flatMap((r) => r.ids.map((id) => [id, r.name] as const)),
+    ),
+  };
+
+
+  const fromContainer = (c: RawChannel): Entity => {
+    const topic = c.contentReadable
+      ? normaliseDescription(c.topic, names)
+      : null;
+    return {
+      id: c.id,
+      type: c.type === ChannelType.GuildForum ? "forum" : "channel",
+      name: c.name,
+      url: deepLink(deps.guildId, c.id),
+      parent_id: null,
+      description_status: !c.contentReadable
+        ? "withheld"
+        : topic
+          ? "present"
+          : "absent",
+      topic,
+      applied_tags: [],
+      summary_generated: null,
+      summary_override: overrides.get(c.id) ?? null,
+    };
+  };
+
+  const fromThread = (t: RawThread): Entity => {
+    const first = normaliseDescription(t.firstPost, names);
+    return {
+      id: t.id,
+      // A Post lives in a Forum; a Thread lives in a Channel. Same underlying
+      // object, different Entity — only a Post carries applied_tags.
+      type:
+        containerType.get(t.parentId) === ChannelType.GuildForum
+          ? "post"
+          : "thread",
+      name: t.name,
+      url: deepLink(deps.guildId, t.id),
+      parent_id: t.parentId,
+      description_status: first ? "present" : "absent",
+      topic: first,
+      applied_tags: t.appliedTags,
+      summary_generated: null,
+      summary_override: overrides.get(t.id) ?? null,
+    };
+  };
+
+  // Editors pick a role by name; Access gates store the ID. Regenerating the
+  // manifest each run means a rename updates the display name while every
+  // gate keeps working, and a deleted role simply stops matching.
   return {
     // Sorted by ID: Discord does not promise a stable order, and an unsorted
     // Catalog would produce a reordered commit on every scheduled run.
