@@ -307,145 +307,103 @@ The blast radius is a club page, in a community where everyone knows each other,
 
 ---
 
-## Ingestion and sampling
+## Ingestion and description sourcing
 
-**Do not build the adaptive sampler up front.** The previous revision specified a four-tier pipeline with a per-entity adaptive budget and a four-step escalation ladder, ahead of the measurement that determines whether most of it is needed. That order is backwards.
+> **⚠️ SCOPE CUT 2026-09-02, from measurement.** The tiered sampling model —
+> Tier 1/2/3, the escalation ladder, adaptive per-Entity budgets, stratified
+> probes — **is not being built.** It was designed to fill a gap that turned
+> out to be mostly not there. The reasoning is below; reopen it only against
+> new measurement, not intuition.
 
-### Build this
+### Where descriptions actually come from
 
-**Tier 0 capture, and nothing else.** Per entity: `GET /channels/{id}/messages?after={thread_id}&limit=100` for the head, and an unqualified `limit=100` for the tail. Two calls per entity — **~2,400 total against the measured 1,195 Posts and Threads, not the ~1,200 earlier estimated** *(measured 2026-09-01)*. Store verbatim in bot-side SQLite.
+In priority order. No message sampling anywhere in it.
 
-**Tier 0 is the load-bearing piece.** A few megabytes of stored text means a re-sweep is a local reprocess rather than 700 Discord API calls. That decouples "regenerate the corpus" from "hit the API" — which matters every time the tagging vocabulary changes, a model is upgraded, or two prompts need A/B-ing against identical input. Without it, every prompt iteration costs a full crawl.
+1. **Channel or Forum topic.** Free, already in the channel-list response, and
+   often genuinely good: *"(0-8 weeks) How fun is it to not sleep anymore?"*
+2. **A Post's first message.** One un-paginated call, because a Post's ID is
+   its starter message's ID.
+3. **Name plus parent.** `Wingspan` in `🎲︱board-games` is enough to find it
+   and enough to decide whether to join.
+4. **Nothing.** `description_status: absent`, stated honestly. Never invented.
 
-Then start summarization at **first-post-only** and let measurement decide what to add. Once the raw material is on disk, the escalation ladder is a local script you can run five ways in an afternoon rather than an architecture you committed to before knowing the empty-entry rate.
+### Why the sampling model was cut
 
-### Two products, two sampling windows
+Measured 2026-09-02: **1,098 of 1,253 Entities (87.6%) already have a
+description** from steps 1 and 2 alone, at zero LLM cost. The 145 that do not
+break down as:
 
-These are different fields with different cadences, models, and source material. Conflating them is the mistake to avoid.
+| | Count | Worth describing? |
+|---|---|---|
+| Ephemeral parent (micro-polls, intro threads) | 31 | No — not destinations |
+| Dead (≤5 human messages) | 33 | No — nobody is there |
+| Stale (>1 year inactive) | 37 | No |
+| **Live** | **50** | ← the whole real gap |
+
+And the 50 split so that sampling serves almost none of it:
+
+- **17 are Channels with no topic set** — `🖥︱pc-gaming`, `🎮︱xbox-gaming`,
+  `🕹︱retro-gaming`, `❤️︱relationships`, `📚︱wiki`, `❓︱help-faq` and others.
+  **The fix is a mod setting the topic in Discord**, which takes minutes and
+  helps every Discord user, not only the Index. Inferring what `🖥︱pc-gaming`
+  is about by sampling its messages would be an elaborate way to avoid asking.
+- **33 are Posts and Threads whose names already describe them** — `Wingspan`,
+  `Dune`, `Pandemic`, `Zombicide`, `Root`, `One Piece`, `Barguments` — all
+  inside a forum that supplies the rest of the context.
+
+So the sampling machinery would exist to serve at most 33 Entities that their
+own names already serve.
+
+### The gap it does leave, and why tags close it better
+
+Name-only entries give a matcher less for *semantic* queries: "I like
+worker-placement board games" will not surface `Wingspan` from the name alone.
+That is a **tagging** problem, not a sampling problem — and one Topic tag
+serves every thread in a forum at once, where a sampled description serves one.
+Spend the effort there.
+
+### Tier 0 stays
+
+Capture is retained even though nothing in this section now consumes it:
+
+- It is the raw material if this judgement turns out wrong, and re-deciding
+  costs a local reprocess rather than a 2,400-call crawl.
+- It already paid for itself by surfacing the duplicate detector below.
+- It costs one incremental run and ~23 MB of disposable volume.
+
+### Two products, two cadences
+
+Still true, and unaffected by the cut:
 
 | | **Identity summary** | **Activity summary** |
 |---|---|---|
 | Answers | "What is this place?" | "What's happening here lately?" |
 | Stability | Near-permanent | Volatile |
-| Sampled from | First post + early history | Recent history |
-| Regenerated | On first discovery; on admin re-sweep | When `last_message_id` moves |
+| Sourced from | Topic, first post, or name + parent | Recent activity |
+| Regenerated | On discovery; on admin re-sweep | When `last_message_id` moves |
 | Model | Strong | Cheap |
-| Consumed by | `/find`, catalog prompt, Index cards | "Lately" sections, landing page |
-
-A thread's identity emerges from its opening exchanges, not its title. "Dad Fits" has an empty first post; its first ten replies establish that it is about clothing.
-
-### Selection rules
-
-Applied to whatever window is sampled:
-
-- Drop bot and webhook messages
-- Drop messages below a length floor and messages that are only reactions, emoji, or attachments
-- Deduplicate near-identical messages — forty variations of "Welcome!" carry the information of one
-- Prefer **participant diversity**: ten messages from eight people describe a place better than ten from one person
-- Preserve chronological order; drift is signal
-- Cap tokens per entity, with a global ceiling as a runaway guard
-- **If confidence is still insufficient, emit an explicit "no description available" marker. Do not invent one.** These summaries feed the matching prompt, where a hallucinated topic produces confidently wrong recommendations.
 
 ### What "correct" means — testable criteria
 
-A summary passes if it:
+A description passes if it:
 
-1. **Names the topic without reference to the title.** If it only restates the name, it adds nothing to matching.
-2. **Distinguishes the entity from its siblings in the same Forum.** Double duty: if "United Kingdom" and "United Kingdom 🇬🇧" produce identical summaries, either the summary is too generic or the threads are genuine duplicates. Both outcomes are useful — the second feeds the merge queue.
+1. **Names the topic without restating the title.** If it only echoes the name,
+   it adds nothing a name search would not.
+2. **Distinguishes the Entity from its siblings.** Identical summaries for
+   "United Kingdom" and "United Kingdom 🇬🇧" mean either the summary is too
+   generic or the threads are duplicates. Both outcomes are useful.
 3. **Would let a member decide whether to join.** The operative test.
-4. **Contains no member identifiers** and no re-identifying specifics.
-5. **Fits the token budget** — roughly 12 words for the catalog form.
-
-Criteria 1, 2 and 5 are mechanically checkable. Criterion 4 is enforced by pre-redaction and post-validation. Criterion 3 needs human review.
-
-### Measured 2026-09-02 (first full Tier 0 capture)
-
-| | |
-|---|---|
-| Entities captured | 1,192 (Posts and Threads; Channels and Forums use their topic) |
-| API calls | 2,384 — exactly 2 per Entity, 24% of the 10,000-per-10-minutes ceiling |
-| Wall time, first run | **~30 minutes.** Paced by Discord's per-route rate limits, not the global ceiling |
-| Wall time, later runs | **0 calls.** An Entity whose newest message has not moved is skipped |
-| Messages stored | 92,248 |
-| Message text | **7.67 MB** (bytes, not characters) |
-| SQLite on disk | **23 MB** — the figure the volume must hold |
-
-**Corpus facts worth keeping:** 31 of 1,102 Posts (2.8%) have had their starter message deleted in Discord — they carry `description_status: absent` and have no first post to sample. 1,847 of the captured messages are from bots and must be dropped at selection time; 1,349 distinct authors appear across the corpus, which is the raw material for the participant-diversity rule.
-
-### Discovery results — measured 2026-09-02 against the real corpus
-
-Run before implementing any of Phase 2, as this section demands.
-
-**1. Whole-catalog prompt size — the anti-goal's premise, corrected.**
-
-| Form | Tokens *(est. 4 chars/token)* |
-|---|---|
-| Raw descriptions, 120 chars each | **~43,000** |
-| 12-word generated summaries | **~25,000** |
-| What the docs assumed | ~15,000 |
-
-**The "no vector store" anti-goal survives**, but on a thinner margin than
-claimed: 1.7–2.9× the original estimate. Still comfortably inside a modern
-context window, so retrieval remains the wrong trade. Re-check if the corpus
-grows another 2×, and note that generated summaries nearly halve it — an
-argument for summarising *before* matching, not only for quality.
-
-**2. Description length distribution** *(n=1,098)*: p50 **34** tokens, p75 69,
-p90 123, p95 125, max 125. Mean is 47 and misleading, which is why this is
-percentiles. **The 500-character cap binds on roughly 10%** of descriptions —
-worth revisiting if truncation is losing signal.
-
-**3. Does early history help? Yes, but less than the raw number suggests.**
-
-Of 129 `absent` Posts and Threads, **103 (80%) have at least two usable
-messages** in the head window. But sampling shows most of that text is
-mid-conversation reply, not description: *"Amazing! I'm a huge fan of retro
-games"*, *"sorry, i somehow misread your name"*. The honest read: head history
-is **worth sampling and will not rescue everything**. The escalation ladder's
-refusal path stays load-bearing, and "no description available" remains the
-right outcome for a meaningful share.
-
-**4. Corpus shape:** 92,248 messages, **2.0% from bots** (the drop-bots rule
-matters but is not dominant), **mean 8.5 distinct human authors per Entity** —
-enough for participant-diversity sampling to have material to work with.
-
-**5. Unplanned finding: near-duplicate detection has a free lexical signal.**
-
-Phase 2 assumes duplicate detection needs LLM work. It partly does not. **27
-Entities contain a message that both matches redirect phrasing** (*"we have a
-thread already"*, *"head over to"*, *"can delete this"*) **and mentions another
-Entity by `<#id>`.** Filtering to those with ≤10 messages isolates near-certain
-abandoned duplicates:
-
-> Factorio Channel (8 msgs), Pokemon Channel (2), Overwatch Channel (2),
-> Escape from Tarkov channel (2), War Thunder Channel (2), MSFS 2020 Channel
-> (2), DOTA 2 channel? (2) — **all redirected to `🎮︱game-talk`**
-
-A clear pattern: members asked for a dedicated channel for a game, were pointed
-at the forum, and the request thread was abandoned. Message count cleanly
-separates these from active threads that merely mention a redirect (Sea of
-Thieves, 200 messages; Date Night Ideas, 99).
-
-**Build this before the LLM pass.** It is a regex over Tier 0, it costs
-nothing, its output is a mod-channel post, and it finds the exact class of
-duplicate the merge queue exists for.
-
-### Discovery: what to measure
-
-1. **Actual token distribution** across the real corpus — percentiles, not a mean. The mean is dominated by the Formula 1 entry and tells you nothing.
-2. **Does early history actually help?** Compare first-post-only against first-post-plus-head on the entries currently rendering empty. If it does not help, the sampling model stays simple permanently.
-3. **What proportion of entities reach the refusal path?**
-4. **Tier 0 storage footprint** against the volume. Not a backup budget — Tier 0 is not replicated.
-5. **Golden-set match quality** — see test fixtures.
-6. **Position sensitivity** — shuffle catalog order across runs. If results move, attention is the bottleneck and no amount of token reduction fixes it.
-
-**Contingency if whole-catalog matching degrades:** hierarchical matching. Pass one over ~20 category summaries selects two or three categories; pass two runs over only the entities inside them. Cuts tokens roughly 10× *and* improves attention. This is the planned branch — not compression, which degrades exactly the subtle inference the feature exists for.
+4. **Contains no member identifiers.**
+5. **Fits the budget** — roughly 12 words in catalog form.
 
 ### Privacy note
 
-Retaining raw first posts and sampled replies sits against the "store derived data, not transcripts" posture elsewhere. The distinction is defensible but must stay explicit: thread first posts are **deliberately authored topic descriptions, already published to a public wiki**. `#introductions` chatter is ephemeral conversation nobody expected to be archived. Different artifacts, different rules. **Tier 0 covers indexed thread content only and must not quietly expand to monitored-channel conversation**, which remains extract-and-discard.
-
----
+Tier 0 holds raw first posts and sampled replies, which sits against the
+"derived data, not transcripts" posture. The distinction stands: thread first
+posts are deliberately authored topic descriptions already published to a
+public wiki, while conversation is not. **Tier 0 covers indexed thread content
+only and must not expand to Channel conversation.** Re-capture replaces an
+Entity's stored rows, so a message deleted in Discord disappears here too.
 
 ## Tagging
 
@@ -518,11 +476,19 @@ discord.js REST, emits `content/index/data.json` and `content/config/roles.json`
 
 **Measured 2026-09-01:** the guild returns 127 raw channel objects — 93 text, 1 announcement, 15 categories, 6 voice, 1 stage, 11 Forums. **94 are Channels**, not the ~40 estimated. Roughly a quarter of what the API returns is not a Catalog Entity of any kind, so the type filter is load-bearing rather than tidying.
 
-### Phase 2 — Summaries + tags
+### Phase 2 — Tags + duplicate detection
 
-Begins with a **measurement pass, not an implementation**. See Ingestion and sampling.
+The measurement pass is **done** *(2026-09-02)* and it cut the sampling model.
+See Ingestion and description sourcing. What remains, cheapest first:
 
-Then: bootstrap the Topic vocabulary, freeze it, classify. Near-duplicate detection posts candidate pairs to a **mod Discord channel** — build no queue UI. The action a mod takes (merging or renaming threads) happens in Discord regardless, so a queue anywhere else is a second place to look that cannot perform the action.
+1. **Near-duplicate detection.** A regex over Tier 0 — no model, no prompt, no
+   vocabulary decision — posting candidate pairs to a **mod Discord channel**.
+   Build no queue UI. This is the cheapest useful thing in the phase.
+2. **Ask a mod to set the 17 missing Channel topics.** No code at all, and it
+   closes the largest remaining description gap at its source.
+3. **Bootstrap the Topic vocabulary, freeze it, classify.** This is where the
+   semantic matching comes from, and it is now the phase's main work rather
+   than one item among several. The action a mod takes (merging or renaming threads) happens in Discord regardless, so a queue anywhere else is a second place to look that cannot perform the action.
 
 ### Phase 3 — Sherpa slash commands ⭐ first member-facing value
 
@@ -564,6 +530,7 @@ Flip shadow mode off after ≥2 weeks of reviewed output. Full spec in `PROJECT-
 
 | Do not build | Why |
 |---|---|
+| **Tiered/adaptive message sampling** | Cut 2026-09-02 from measurement: 87.6% of Entities already have a description from topic and first post, and of the 145 that do not, only 50 are live — 17 fixable by a mod setting a Discord topic, 33 already described by their own names. The machinery would serve at most 33 Entities that need it least. Reopen only against new measurement. |
 | Vector store, embeddings, RAG | The catalog fits in one prompt. Retrieval is less accurate here and adds a refresh pipeline. Contingency is hierarchical matching, not vectors. **⚠️ Re-check the premise: the corpus measured 1,259 Entities on 2026-09-01, roughly double the ~600 this estimate assumed, so "~15k tokens" is closer to ~31k. Still promptable, but position sensitivity is now more likely and the hierarchical-matching branch is nearer than planned.** |
 | A second OAuth provider | Design the seam; implement Discord only. |
 | Syntactic prompt compression | Degrades the subtle inference the recommender exists for. |
@@ -591,6 +558,7 @@ These cannot be automated. Reaching one means producing the artifact and waiting
 
 | Checkpoint | Phase | What the human does |
 |---|---|---|
+| **Set 17 missing Channel topics** | 2 | ~15 minutes in Discord. The largest remaining description gap, fixed at its source rather than inferred |
 | Tag vocabulary review | 2 | ~10 minutes reviewing ~20 proposed Topic tags before the vocabulary freezes |
 | Golden-set judgement | 2 | Confirms whether summaries would actually help a member decide to join |
 | Club Lead usability trial | 5 | One real Club Lead uses the CMS with no instructions |
