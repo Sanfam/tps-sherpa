@@ -13,7 +13,9 @@
 
 ## 1. The problem
 
-Papa Squad (TPS) is a Discord community for dads — roughly 40 channels and ~500–600 forum threads across categories like Gaming, Lifestyle & Hobbies, and Regional.
+Papa Squad (TPS) is a Discord community for dads — **94 Channels and 11 Forums** *(measured 2026-09-01 against the live guild; the earlier "roughly 40 channels" estimate was low by more than 2×)*, plus ~500–600 Posts and Threads across categories like Gaming, Lifestyle & Hobbies, and Regional.
+
+The guild returns 127 raw channel objects in total: 93 text, 1 announcement, 15 categories, 6 voice, 1 stage, 11 Forums. Only the 94 text and announcement channels are Channels; the rest are either a different Entity type or not a place to read at all.
 
 Discord's own search and thread discovery are poor. A wiki page at `wiki.papasquad.xyz/papasquad/threads-and-channels` indexed every channel and thread. **A script generated that page; the script has gone offline and is inaccessible.** The page is now stale and decaying.
 
@@ -292,7 +294,7 @@ Shadow mode ≥2 weeks — output to a mod channel with the suppression reason a
 
 ### Discord API
 
-- **Message Content intent is required.** It gates content across REST *and* gateway, per Discord's docs. Thread descriptions are member-authored first posts, so this is a day-one requirement, not a Phase 3 concern. Self-toggle under 100 servers. The old script clearly had it.
+- **Message Content intent is required.** It gates content across REST *and* gateway, per Discord's docs. Thread descriptions are member-authored first posts, so this is a day-one requirement, not a Phase 3 concern. Self-toggle under 100 servers. The old script clearly had it — but **the current bot application does NOT** *(verified 2026-09-01 by reading `flags` on `/applications/@me`; `GATEWAY_MESSAGE_CONTENT`, bit 1 << 18, is unset)*. It must be enabled in the Discord developer portal before any sync that reads content. The sync refuses to run without it rather than producing silently empty descriptions.
 - A forum thread's ID **is** its starter message's ID → `GET /channels/{thread_id}/messages/{thread_id}` fetches the first post directly, no pagination. *(Verify against a real thread.)*
 - `GET /guilds/{id}/members/{user_id}` works **without** the Guild Members privileged intent.
 - **No "get messages by author" endpoint exists.** This is a hard wall for the user-triggered profile audit. v1: user names ≤5 channels. v2: gateway listener maintains a message *pointer* index (locations, no content).

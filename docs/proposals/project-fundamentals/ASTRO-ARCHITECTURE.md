@@ -1,4 +1,4 @@
-# Build handoff: Papa Squad hub site + Papa Sherpa
+/# Build handoff: Papa Squad hub site + Papa Sherpa
 
 **Audience:** an LLM-backed coding agent, or a team of them, working with substantial autonomy.
 **Date:** 2026-08-31.
@@ -439,7 +439,9 @@ discord.js REST, emits `content/index/data.json` and `content/config/roles.json`
 
 **Mechanical gate:** the coverage fixture passes, all four defect fixtures pass, and the run emits a count of entities the old script missed. Coverage is the gate; layout is a free variable — do not spend time on presentation here.
 
-**Note:** the Message Content intent is required and gates content over REST as well as the gateway. Confirm it is enabled before assuming empty `content` fields are a bug in your code.
+**Note:** the Message Content intent is required and gates content over REST as well as the gateway. **It is currently NOT enabled on the bot application** *(verified 2026-09-01)* — enable it in the developer portal before any content-reading sync. The sync checks `flags` on `/applications/@me` and refuses to run without it.
+
+**Measured 2026-09-01:** the guild returns 127 raw channel objects — 93 text, 1 announcement, 15 categories, 6 voice, 1 stage, 11 Forums. **94 are Channels**, not the ~40 estimated. Roughly a quarter of what the API returns is not a Catalog Entity of any kind, so the type filter is load-bearing rather than tidying.
 
 ### Phase 2 — Summaries + tags
 
