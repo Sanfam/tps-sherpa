@@ -2,636 +2,890 @@
   {
     "id": "1055290132909011035",
     "name": "📃 Info",
-    "type": 4
+    "type": 4,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1055290132909011036",
     "name": "Voice Channels",
-    "type": 4
+    "type": 4,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1055290132909011037",
     "name": "💬︱general",
-    "type": 0
+    "type": 0,
+    "topic": "General discussions about whatever you'd like to discuss.",
+    "contentReadable": true
   },
   {
     "id": "1083562729769549907",
     "name": "👪 Parenting",
-    "type": 4
+    "type": 4,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1083562929825259624",
     "name": "🤰︱expecting",
-    "type": 0
+    "type": 0,
+    "topic": "Currently a non-pregnant stakeholder expecting a :baby: little one? Come share your status with the community, or ask for advice!",
+    "contentReadable": true
   },
   {
     "id": "1083563603451457606",
     "name": "🐣︱newborn",
-    "type": 0
+    "type": 0,
+    "topic": "(0-8 weeks)\n\nHow fun is it to not sleep anymore?",
+    "contentReadable": true
   },
   {
     "id": "1083564023771050104",
     "name": "👶︱infant",
-    "type": 0
+    "type": 0,
+    "topic": "(2-12 months)\n\nFirst teeth! Crawling! First smile!",
+    "contentReadable": true
   },
   {
     "id": "1083564372414173244",
     "name": "🧒︱toddler",
-    "type": 0
+    "type": 0,
+    "topic": "(1-3 years) First steps! First words! First destroyed room!",
+    "contentReadable": true
   },
   {
     "id": "1083564538164686899",
     "name": "🚸︱child",
-    "type": 0
+    "type": 0,
+    "topic": "(4-9 years) Becoming their own person! Starting school! Getting taller!",
+    "contentReadable": true
   },
   {
     "id": "1083564941082099782",
     "name": "🤳︱tween-teen",
-    "type": 0
+    "type": 0,
+    "topic": "(10-18 years) The hardest years, plus lots of sleeping on their part.",
+    "contentReadable": true
   },
   {
     "id": "1083565279214313542",
     "name": "🎮 Gaming",
-    "type": 4
+    "type": 4,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1083565893449166898",
     "name": "welcome",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1083565893449166899",
     "name": "moderator-only",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1083605970829180978",
     "name": "Admin",
-    "type": 4
+    "type": 4,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1084293076907982919",
     "name": "💬︱general-gaming",
-    "type": 0
+    "type": 0,
+    "topic": "Talk about video games in general. If you have any specific game in mind, you may wanna check the #game-talk channel instead!",
+    "contentReadable": true
   },
   {
     "id": "1084293167798558791",
     "name": "💬 General",
-    "type": 4
+    "type": 4,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1084293386346954803",
     "name": "👪︱parenting",
-    "type": 0
+    "type": 0,
+    "topic": "General discussion of the most difficult job in your life: being a parent.",
+    "contentReadable": true
   },
   {
     "id": "1084293546183495720",
     "name": "👋︱introductions",
-    "type": 0
+    "type": 0,
+    "topic": "👋 Welcome to our community! This channel is the perfect place to introduce yourself and get to know your fellow members. Feel free to share a little bit about yourself, such as your interests, hobbies, or anything else you'd like to share. Once you've introduced yourself, don't forget to check our topics page (https://wiki.papasquad.xyz/papasquad/threads-and-channels) to find where to discuss whatever interests you!",
+    "contentReadable": true
   },
   {
     "id": "1084925234337026158",
     "name": "🧑︱grandkids",
-    "type": 0
+    "type": 0,
+    "topic": "Some of us have been doing this \"parenting\" thing long enough to get the next achievement: grandchildren!",
+    "contentReadable": true
   },
   {
     "id": "1085275706738606140",
     "name": "🖥︱pc-gaming",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1085275787441221695",
     "name": "🎮︱playstation-gaming",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1087928348216414269",
     "name": "🎮︱xbox-gaming",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1087928393930133514",
     "name": "🎮︱switch-gaming",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1087991716012883990",
     "name": "🕹︱retro-gaming",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1087991922720768051",
     "name": "🎲︱board-games",
-    "type": 0
+    "type": 0,
+    "topic": "Gaming! With cardboard! Or cloth! Or paper! Or little bits of plastic and metal!",
+    "contentReadable": true
   },
   {
     "id": "1088128866033356801",
     "name": "🗳︱suggestions",
-    "type": 15
+    "type": 15,
+    "topic": "Have an idea/suggestion for the server? We'd love to hear it!\n\n- We'll look at all ideas\n- Please explain why you think it'd make the server a better place!\n- If you see an idea you're interested in, upvote it! Try not to post a duplicate that's already been posted\n- Feel free to comment on an idea if you have something to add. Otherwise, while nice comments are always pleasant, they might just drown the suggestions inside a thread and we may miss them",
+    "contentReadable": true
   },
   {
     "id": "1088148380850601994",
     "name": "🐲︱ttrpgs",
-    "type": 0
+    "type": 0,
+    "topic": "Table-top role playing games, aka \"devil-worshiping cults\". Come and discuss how all you need to game is a piece of paper, a pencil, and some fancy dice.",
+    "contentReadable": true
   },
   {
     "id": "1088156928946999398",
     "name": "📢︱announcements",
-    "type": 5
+    "type": 5,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1088173448112640040",
     "name": "🎮︱game-talk",
-    "type": 15
+    "type": 15,
+    "topic": "Talk about specific video games! Tell us about your favorite game and why the other dads out here should play it.\n\nWhen creating a new topic, be sure to give it the correct title of your game.  This will ensure other players can more easily find it.  \n\nSelect as many platform tags as are relevant.",
+    "contentReadable": true
   },
   {
     "id": "1088178769124151377",
     "name": "🖥︱pc-setup-builds",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1088208169785901116",
     "name": "💻︱steam-deck-and-handhelds",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1088224017858711602",
     "name": "vc-instructions",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1088243110284365957",
     "name": "👮 Staff",
-    "type": 4
+    "type": 4,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1088243283093889064",
     "name": "👮︱staff-chat-classic",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1088531041574211705",
     "name": "🖼︱dad-jokes-and-memes",
-    "type": 0
+    "type": 0,
+    "topic": "Share your favorite memes and dad jokes!\nOver here we just call them jokes.",
+    "contentReadable": true
   },
   {
     "id": "1088554803933745336",
     "name": "👓︱vr-gaming",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1088559773521285201",
     "name": "📆︱event-announcements",
-    "type": 0
+    "type": 0,
+    "topic": "Announcements regarding gaming events. You'll get pinged depending on which platform you assigned yourself!\n\nIf you hate getting pinged/don't care about events, mute this!",
+    "contentReadable": true
   },
   {
     "id": "1088561112468967485",
     "name": "💂︱event-managers-chat",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1088656186636775435",
     "name": "🃏︱lifestyle-hobbies-interests",
-    "type": 15
+    "type": 15,
+    "topic": "This is the place to go to talk about your interests.  Search through the existing topics or create your own!\n\n- Keep the clutter down! Try to search for topics before creating new ones. \n- Be Excellent to Each Other. Not everyone's interests align, but that doesn't mean we can't be friends!",
+    "contentReadable": true
   },
   {
     "id": "1089552525520273468",
     "name": "♟-tabletop-simulator",
-    "type": 15
+    "type": 15,
+    "topic": "Use this forum to coordinate all tabletop simulator games and talk!\n\nBe sure to appropriately title your post as to help others more easily find it.",
+    "contentReadable": true
   },
   {
     "id": "1089976044062249060",
     "name": "🛟︱self-care",
-    "type": 0
+    "type": 0,
+    "topic": "It’s never bad to ask for help. The pressures of fatherhood are pretty intense, especially for dads experiencing it for the first time in the hospital or right after. This is a safe and judgment-free zone, please treat everyone with love and respect. Please respect one another's privacy and allow everyone to voice their struggles.",
+    "contentReadable": false
   },
   {
     "id": "1092495090238361760",
     "name": "📂 Archive",
-    "type": 4
+    "type": 4,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1092512172204101642",
     "name": "🎁︱giveaways",
-    "type": 0
+    "type": 0,
+    "topic": "If you'd like to enter a giveaway, react to the message posted by the bot.\n\nIf you'd like to donate a key, please keep the following rules in mind:\n- The key must be a Steam key OR a console key (Xbox/PS5/Switch)\n- Open a ticket with staff. Please hold on to the key, you will message the winner directly",
+    "contentReadable": false
   },
   {
     "id": "1096226573180481727",
     "name": "🖥︱dedicated-server-voting",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1100805951046561892",
     "name": "ticket-transcripts",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1100810523282514021",
     "name": "ticket-notifications",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1100811515747119205",
     "name": "🆘︱mod-support",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1100898773577777213",
     "name": "🔢 Stats",
-    "type": 4
+    "type": 4,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1100899828269060247",
     "name": "🧔♂ 5346 dads",
-    "type": 2
+    "type": 2,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1100900115276898448",
     "name": "🌍︱regional-chat",
-    "type": 15
+    "type": 15,
+    "topic": "Talk with other regional dads! When creating a thread, make sure to select the most appropriate time zone to help other dads find it!",
+    "contentReadable": true
   },
   {
     "id": "1116422505872240672",
     "name": "❓︱help-faq",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1121511095518122164",
     "name": "✅︱micro-polls",
-    "type": 0
+    "type": 0,
+    "topic": "Short-term polls for various things. Everybody is welcome to vote! We value your opinion ❤️",
+    "contentReadable": true
   },
   {
     "id": "1125886226252177448",
     "name": "🕹︱dedicated-servers",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1128416908736213083",
     "name": "📚︱wiki",
-    "type": 0
+    "type": 0,
+    "topic": "https://wiki.papasquad.xyz/",
+    "contentReadable": true
   },
   {
     "id": "1128731895509831724",
     "name": "📺︱dad-streams",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1130166410027466783",
     "name": "🥰︱positivity",
-    "type": 0
+    "type": 0,
+    "topic": "Share your good news, gratitude, and good vibes here!",
+    "contentReadable": false
   },
   {
     "id": "1138164109301514392",
     "name": "bot-logs",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1138164458045325364",
     "name": "server-logs",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1138252672051449968",
     "name": "🌈︱lgbtq-dadding",
-    "type": 0
+    "type": 0,
+    "topic": "LGBTQ+ dads, both single-parent and married, parents of LGBTQ+ kids, and allies, come here to chat with others!",
+    "contentReadable": true
   },
   {
     "id": "1138488716332118237",
     "name": "Destiny Notifications",
-    "type": 4
+    "type": 4,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1138489077751099392",
     "name": "bungie-news",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1138491123933925568",
     "name": "warmind-alerts",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1138491435780407306",
     "name": "reset-notifications",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1138491953407856771",
     "name": "clan-completions",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1138492447014531112",
     "name": "leaderboards",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1138528901832921169",
     "name": "vex-incursion",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1140288010479472662",
     "name": "🩹 Selfing",
-    "type": 4
+    "type": 4,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1140288159003971688",
     "name": "🎯︱addiction-recovery",
-    "type": 0
+    "type": 0,
+    "topic": "Come here to get support with or support others in recovering on addiction to anything (alcohol, smoking, food, social media, etc.).",
+    "contentReadable": false
   },
   {
     "id": "1141530574041927731",
     "name": "😤︱venting",
-    "type": 0
+    "type": 0,
+    "topic": "Come here to let off some steam. Others might listen or they might not, but at least that steam will be free!",
+    "contentReadable": false
   },
   {
     "id": "1151692834517303336",
     "name": "🦸︱adopting",
-    "type": 0
+    "type": 0,
+    "topic": "Thinking about adopting a child? Have already adopted a child? Want to know how you can help children find good long-term homes? Come here to share advice!",
+    "contentReadable": true
   },
   {
     "id": "1154239524256366692",
     "name": "🎥 Video and Broadcast",
-    "type": 4
+    "type": 4,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1154240105817575446",
     "name": "watch-together",
-    "type": 13
+    "type": 13,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1161718576038821948",
     "name": "gift-tylo",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1162462814376571030",
     "name": "we-love-tylo",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1182697165903118447",
     "name": "dim-builds",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1185019182354550794",
     "name": "Non-games media",
-    "type": 4
+    "type": 4,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1185019342144933938",
     "name": "📺︱tv-movies",
-    "type": 0
+    "type": 0,
+    "topic": "This channel is for general discussion of television programmes and movies. Any TV and movie is welcome to be discussed, but all spoilers _must_ be hidden behind spoiler tags. Put two bars, | | (without the space in between), on either side of the spoiler text to produce hidden text ||like this||.\n\nIf you want to discuss spoilers without using spoiler tags, then start a new thread for that specific series/movie (or use an existing thread if there is one) in the TV and movies threads forum.\n\nIntentionally spoiling something for others is highly inconsiderate and grounds for suspension.",
+    "contentReadable": false
   },
   {
     "id": "1185019397782384670",
     "name": "📕︱books",
-    "type": 0
+    "type": 0,
+    "topic": "This channel is for general discussion of any books. Any book and book series is welcome to be discussed, but all spoilers _must_ be hidden behind spoiler tags. Put two bars, | | (without the space in between), on either side of the spoiler text to produce hidden text ||like this||.\n\nIf you want to discuss spoilers without using spoiler tags, then start a new thread for that specific book/series (or use an existing thread if there is one) in the book threads forum.\n\nIntentionally spoiling something for others is highly inconsiderate and grounds for suspension.",
+    "contentReadable": false
   },
   {
     "id": "1185019472529063987",
     "name": "🎶︱music",
-    "type": 0
+    "type": 0,
+    "topic": "What are you listening to these days?",
+    "contentReadable": true
   },
   {
     "id": "1185019630109085807",
     "name": "🔖︱book-club",
-    "type": 0
+    "type": 0,
+    "topic": "The official Papa Squad Book Club, for the discerning Papa who likes to read in a group.",
+    "contentReadable": true
   },
   {
     "id": "1185019766776279040",
     "name": "🎞︱movie-club",
-    "type": 0
+    "type": 0,
+    "topic": "The official Papa Squad Movie Club, for the Papas who like to analyse a movie to death after watching it.",
+    "contentReadable": true
   },
   {
     "id": "1185019891904946176",
     "name": "📚︱books",
-    "type": 15
+    "type": 15,
+    "topic": "If you like books, with or without words, on paper or in electrons, then you might just be in the right place!\n\nIf you want to discuss books _in general_, then drop in to the general discussion thread right here: https://discord.com/channels/1055290132250501135/1186057931775541298 In this thread, we try to avoid spoiling things for others. Please be considerate and if something you want to say is likely to be a spoiler, then consider using spoiler tags (https://support.discord.com/hc/en-us/articles/360022320632-Spoiler-Tags-) to hide it for people who don't want to see it. Don't forget to add some context before or after the spoiler so people know to avoid it if they need to! ||Otherwise, how would they know the black block is a spoiler and not the world's funniest joke?||\n\nIf you want to discuss a specific book (series or otherwise) in detail, then you can also use a separate thread. We already have many existing threads, and we ask that you use one of those if it exists. If not, then please don't hesitate to create a new one! You can do so by starting a new thread right here. Name your thread following this pattern: \"[Book or series title] - [Author]\". For example, \"Middle-earth - J. R. R. Tolkien\" or \"The Carpet People - Terry Pratchett\" or \"Exiles - Melanie Rawn\". Consider adding a cover or poster for the book to your post starting the thread by clicking the image placeholder on the right and uploading one. In the book (series) specific threads we don't explicitly allow or ban spoilers, but beware that others may be posting spoilers. If you do not want spoilers for the topic of the thread, it is safer to avoid reading the thread. However we leave it to you to decide if you want to take the risk.",
+    "contentReadable": true
   },
   {
     "id": "1185023105798778941",
     "name": "💬︱graphic-novels-manga",
-    "type": 0
+    "type": 0,
+    "topic": "Who doesn't love a good visual web mangovel? Whether your taste is for daily one-off webcomics, for fixed-start-and-end stories told in ink and paper, or for knowing 50 years of lore just to understand that one panel on page 32 of the latest issue, come here to let others know about it!\n\nThis channel is for general discussion of any graphic novels, manga, and similar visual literature. Any series or one-shot is welcome to be discussed, but all spoilers _must_ be hidden behind spoiler tags. Put two bars, | | (without the space in between), on either side of the spoiler text to produce hidden text ||like this||.\n\nIf you want to discuss spoilers without using spoiler tags, then start a new thread for that specific book/series (or use an existing thread if there is one) in the book threads forum.\n\nIntentionally spoiling something for others is highly inconsiderate and grounds for suspension.",
+    "contentReadable": true
   },
   {
     "id": "1185023522892959836",
     "name": "👁︱anime",
-    "type": 0
+    "type": 0,
+    "topic": "This channel is for general discussion of anime. Any series or movie or whatever is welcome to be discussed, but all spoilers _must_ be hidden behind spoiler tags. Put two bars, | | (without the space in between), on either side of the spoiler text to produce hidden text ||like this||.\n\nIf you want to discuss spoilers without using spoiler tags, then start a new thread for that specific anime (or use an existing thread if there is one) in the TV and movies threads forum.\n\nIntentionally spoiling something for others is highly inconsiderate and grounds for suspension.",
+    "contentReadable": true
   },
   {
     "id": "1185024393114570813",
     "name": "🎬︱tv-movies",
-    "type": 15
+    "type": 15,
+    "topic": "If you like television or movies or all the other easily-transmittable visual media, then have we got the place for you!\n\nIf you want to discuss television, movies, and so on _in general_, then drop in to the general discussion thread right here: https://discord.com/channels/1055290132250501135/1186058312014381176 In this thread, we try to avoid spoiling things for others. Please be considerate and if something you want to say is likely to be a spoiler, then consider using spoiler tags (https://support.discord.com/hc/en-us/articles/360022320632-Spoiler-Tags-) to hide it for people who don't want to see it. Don't forget to add some context before or after the spoiler so people know to avoid it if they need to! ||Otherwise, how would they know the black block is a spoiler and not the world's funniest joke?||\n\nIf you want to discuss a specific television series or movie (series or otherwise) in detail, then you can also use a separate thread. We already have many existing threads, and we ask that you use one of those if it exists. If not, then please don't hesitate to create a new one! You can do so by starting a new thread right here. Name your thread following this pattern: [Series or movie title]. For example, \"Battlestar Galactica (modern)\" or \"Star Trek (all of it)\" or \"The Bourne Whatever\". Consider adding a poster for the series or movie to your post starting the thread by clicking the image placeholder on the right and uploading one. In the series/movie specific threads we don't explicitly allow or ban spoilers, but beware that others may be posting spoilers. If you do not want spoilers for the topic of the thread, it is safer to avoid reading the thread. However we leave it to you to decide if you want to take the risk.",
+    "contentReadable": true
   },
   {
     "id": "1185042844591870042",
     "name": "🌠︱star-wars",
-    "type": 15
+    "type": 15,
+    "topic": "This forum is specifically for Star Wars discussion. Use the general discussion thread to talk about Star Wars in general, but _do not post spoilers_ (or hide them behind spoiler tags). If you want to discuss details of a particular movie or series or book and not hide the entire discussion behind a black block, start a series/movie/book-specific thread for it (if there isn't one already).\n\nRemember, posting unhidden spoilers in the general discussion thread intentionally is grounds for suspension.",
+    "contentReadable": false
   },
   {
     "id": "1193805790541250601",
     "name": "🛋 Hang outs",
-    "type": 4
+    "type": 4,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1194065843789770782",
     "name": "☕︱Coffee Lounge",
-    "type": 2
+    "type": 2,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1194066082563104899",
     "name": "🍵︱Tea Lounge",
-    "type": 2
+    "type": 2,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1194066148120068176",
     "name": "🥃︱Whisky Lounge",
-    "type": 2
+    "type": 2,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1205306188653138010",
     "name": "👼︱fostering",
-    "type": 0
+    "type": 0,
+    "topic": "Raising your own kids is hard enough. Few of us are brave enough to try raising many other kids to help them get back on their feet. If you are one of these amazing people, come here to share advice and discuss how to help children in need of a home for a little while.",
+    "contentReadable": true
   },
   {
     "id": "1206424171668701244",
     "name": "the-papas-and-the-trolls",
-    "type": 0
+    "type": 0,
+    "topic": "Although it has been established that The Papa Squad is not on the Internet (because everyone here is too polite to each other), sometimes the Internet leaks in. In this channel, we document the results. If you have a screenshot of a troll from this server, let the staff know and we'll get it documented here for everyone to see for all eternity*!\n\nThe most entertaining trolls may make it to the Papa Squad Wiki! https://wiki.papasquad.xyz/en/papasquad/trolls\n\n*Definition of eternity may vary.",
+    "contentReadable": false
   },
   {
     "id": "1224957405994156032",
     "name": "🫂︱intimacy",
-    "type": 0
+    "type": 0,
+    "topic": "This channel is for discussing intimacy in your relationship with your significant other, or lack thereof. Come and ask for advice for post-birth intimacy, or share your own experiences with how to show your love for your partner even though they're currently more interested in not being woken up four times a night by a screaming baby. Please remember that while this channel should be considered NSFW and explicit discussion is allowed, it is not a place to share pornographic content.",
+    "contentReadable": false
   },
   {
     "id": "1237140236836802661",
     "name": "🛂︱verification",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1237145423861256233",
     "name": "verification-logs",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1237149452184064020",
     "name": "Verification",
-    "type": 4
+    "type": 4,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1237149653057667173",
     "name": "verification-chat-1",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1237149702743523338",
     "name": "verification-chat-2",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1237149723081707580",
     "name": "verification-chat-3",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1237149743591718973",
     "name": "verification-chat-4",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1237149761358925857",
     "name": "verification-chat-5",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1237161256159285359",
     "name": "verification-chat-6",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1245524771412901968",
     "name": "we-love-redo",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1251230034619007067",
     "name": "dpscab",
-    "type": 0
+    "type": 0,
+    "topic": "Destiny Papa Squad Clan Admin Bunch",
+    "contentReadable": false
   },
   {
     "id": "1254253444919726211",
     "name": "🔊︱Join Here",
-    "type": 2
+    "type": 2,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1257418195221090385",
     "name": "event-planning",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1262255403673325638",
     "name": "is-it-hot-in-there-or-just-me",
-    "type": 0
+    "type": 0,
+    "topic": "Automated heat level reports",
+    "contentReadable": false
   },
   {
     "id": "1271178147689402448",
     "name": "verification-chat-7",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1283989899392974861",
     "name": "🧠︱neurodivergent-adhd-autism-etc",
-    "type": 0
+    "type": 0,
+    "topic": "Neurodivergent (ADHD, autism, etc.) support. There are uncountable ways that you or someone you know (including your children) can be neurodivergent, and every person has their own unique set of support needs. If you'd like to share the experience and methods for surviving (or benefiting from!) your or someone you know's neurodivergence, drop in here.",
+    "contentReadable": false
   },
   {
     "id": "1286665240658055269",
     "name": "🤹︱twins-and-more",
-    "type": 0
+    "type": 0,
+    "topic": "A place for parents of multiples to talk.  If you have twins, triplets, more, or even multiple sets of these, discuss it here!",
+    "contentReadable": true
   },
   {
     "id": "1293003871538642985",
     "name": "🤸︱single-parents",
-    "type": 0
+    "type": 0,
+    "topic": "Whether by choice or by circumstance, many dads are doing the parenting thing alone. If you have recently become a single dad, come here to ask for advice from those who have been doing it for a while on how to survive, how to be a good parent despite the stress, and how to enjoy being a single parent so you'll be able to look back and feel content at a hard job well done.",
+    "contentReadable": true
   },
   {
     "id": "1306373183196106834",
     "name": "🖤︱grief-loss",
-    "type": 0
+    "type": 0,
+    "topic": "Support for those grieving the loss of a child or experiencing deep personal loss. A space to share memories, feelings, and find understanding in difficult times.",
+    "contentReadable": false
   },
   {
     "id": "1309311930703282227",
     "name": "🫡︱grown-up-children",
-    "type": 0
+    "type": 0,
+    "topic": "At some point, your children will grow up, become adults (legally, anyway), and possibly even move out of your home. Come and discuss how to handle your new-found freedom and cope with your new-found loneliness.",
+    "contentReadable": true
   },
   {
     "id": "1309319705374232616",
     "name": "⭐︱hall-of-fame",
-    "type": 0
+    "type": 0,
+    "topic": "Celebrate our crème de la crème! Our αφρόκρεμα-afrókrema! Our सर्वोत्तम से भी उत्तम!\nAny message in the server with 3+ :star: will be posted here automatically.",
+    "contentReadable": false
   },
   {
     "id": "1381650656724652083",
     "name": "✏︱activities",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1425290043697659984",
     "name": "✂️︱the-snip",
-    "type": 0
+    "type": 0,
+    "topic": "Discuss anything vasectomy-related. Snip snap snip snap!",
+    "contentReadable": false
   },
   {
     "id": "1433084281017729086",
     "name": "🧔‍♂️︱step-parents",
-    "type": 0
+    "type": 0,
+    "topic": "For those trying to raise kids that aren’t related by blood, but you love them just the same",
+    "contentReadable": true
   },
   {
     "id": "1443846859045994629",
     "name": "automod-notifications",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1450589625608306840",
     "name": "❤️︱relationships",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1524916903280378156",
     "name": "do-not-post-here",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   },
   {
     "id": "1524918010706530376",
     "name": "honeypot-gottem",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1533322243306815568",
     "name": "📋︱mod-candidates",
-    "type": 15
+    "type": 15,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1534214620976254977",
     "name": "📊︱user-monitoring",
-    "type": 15
+    "type": 15,
+    "topic": "This forum is a shared space for documenting notable member activity that may benefit from additional awareness, follow-up, or coordinated support. Entries should focus on observable behavior, activity patterns, significant changes, unresolved interactions, verification needs, or other circumstances relevant to moderation. The purpose is not solely to identify bad actors, but to maintain a context-based awareness list that helps moderators recognize patterns, share relevant information, and respond consistently and appropriately.\n\n**Available Tags:**\n\n* **Escalation Risk:** Activity or behavior suggests the situation may worsen or require higher-level review\n* **Behavioral Pattern:** Repeated conduct, conflict, boundary issues, or rule-related activity\n* **Activity Change:** A notable or unexpected change in participation, tone, frequency, or behavior\n* **Concerning Interaction:** A specific exchange or incident warrants additional awareness\n* **Wellness Concern:** Observed activity suggests that a member may need support or a welfare check\n* **Needs Follow-Up:** A pending issue, request, report, or conversation requires further attention\n* **Verification Needed:** Claims, identity, circumstances, or reported information should be checked\n* **Monitor Activity:** No immediate action is required, but continued observation is appropriate\n* **Support Needed:** The member has expressed or demonstrated a need for guidance, resources, or accommodation\n* **Do Not Engage Alone:** Staff should coordinate before contacting or responding to the member\n* **Resolved:** The concern has been addressed and no further monitoring is currently needed",
+    "contentReadable": false
   },
   {
     "id": "1538767903116103680",
     "name": "👮︱staff-chat",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1539339023628238898",
     "name": "staff-discussions",
-    "type": 15
+    "type": 15,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1541964482442428476",
     "name": "5 Days until Labor Day!",
-    "type": 2
+    "type": 2,
+    "topic": null,
+    "contentReadable": false
   },
   {
     "id": "1544502247587582033",
     "name": "bot-tests",
-    "type": 0
+    "type": 0,
+    "topic": null,
+    "contentReadable": true
   }
 ]

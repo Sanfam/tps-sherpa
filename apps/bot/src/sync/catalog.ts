@@ -9,6 +9,18 @@ export interface Entity {
   type: EntityType;
   name: string;
   url: string;
+  /**
+   * present  - a description was derived
+   * absent   - readable, but nothing usable to describe it with
+   * withheld - deliberately listed without content, and never sampled
+   *
+   * `withheld` must stay distinct from `absent`. Collapse them and a privacy
+   * decision looks like a bug, and someone eventually "fixes" it by granting
+   * the bot history.
+   */
+  description_status: "present" | "absent" | "withheld";
+  /** Channel topic, verbatim. Enrichment from message samples comes later. */
+  topic: string | null;
   /** Overwritten by the sync every run. Null until Phase 2 generates one. */
   summary_generated: string | null;
   /**
@@ -51,6 +63,12 @@ export const buildCatalog = async (deps: {
       type: "channel" as const,
       name: c.name,
       url: deepLink(deps.guildId, c.id),
+      topic: c.contentReadable ? ((c.topic ?? "").trim() || null) : null,
+      description_status: !c.contentReadable
+        ? ("withheld" as const)
+        : (c.topic ?? "").trim()
+          ? ("present" as const)
+          : ("absent" as const),
       summary_generated: null,
       summary_override: overrides.get(c.id) ?? null,
     })),

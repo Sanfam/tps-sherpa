@@ -16,6 +16,13 @@ export interface RawChannel {
   id: string;
   name: string;
   type: number;
+  /** Channel topic. The best identity source for a Channel, and free. */
+  topic?: string | null;
+  /**
+   * Whether the bot may read this Channel's message history. False means
+   * deliberately withheld (visible, content off-limits) — not broken.
+   */
+  contentReadable: boolean;
 }
 
 /**

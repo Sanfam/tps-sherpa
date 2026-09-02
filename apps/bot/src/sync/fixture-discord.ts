@@ -1,9 +1,10 @@
 import type { DiscordReadPort, RawChannel } from "./ports.ts";
 
 export const fixtureDiscord = (data: {
-  channels: RawChannel[];
+  channels: Array<Omit<RawChannel, "contentReadable"> & { contentReadable?: boolean }>;
   messageContentIntent?: boolean;
 }): DiscordReadPort => ({
-  listChannels: async () => data.channels,
+  listChannels: async () =>
+    data.channels.map((c) => ({ ...c, contentReadable: c.contentReadable ?? true })),
   hasMessageContentIntent: async () => data.messageContentIntent ?? true,
 });

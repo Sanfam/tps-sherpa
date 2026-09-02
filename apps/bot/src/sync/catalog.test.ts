@@ -101,6 +101,8 @@ describe("buildCatalog", () => {
         type: "channel" as const,
         name: "gaming",
         url: `https://discord.com/channels/${GUILD_ID}/111`,
+        description_status: "present" as const,
+        topic: "gaming chat",
         summary_generated: null,
         summary_override: "Where the Rocket League lot live.",
       },
@@ -131,5 +133,40 @@ describe("buildCatalog", () => {
     await expect(buildCatalog({ discord, guildId: GUILD_ID })).rejects.toThrow(
       /Message Content intent/i,
     );
+  });
+});
+
+describe("description status", () => {
+  const at = (overrides: Partial<Parameters<typeof fixtureDiscord>[0]["channels"][0]>) =>
+    fixtureDiscord({
+      channels: [
+        { id: "111", name: "c", type: ChannelType.GuildText, ...overrides },
+      ],
+    });
+
+  it("marks a Channel with a topic as present", async () => {
+    const { catalog } = await buildCatalog({
+      discord: at({ topic: "Talk about specific video games!" }),
+      guildId: GUILD_ID,
+    });
+    expect(catalog[0]?.description_status).toBe("present");
+    expect(catalog[0]?.topic).toBe("Talk about specific video games!");
+  });
+
+  it("marks a readable Channel with nothing to say as absent", async () => {
+    const { catalog } = await buildCatalog({ discord: at({ topic: "  " }), guildId: GUILD_ID });
+    expect(catalog[0]?.description_status).toBe("absent");
+    expect(catalog[0]?.topic).toBeNull();
+  });
+
+  it("marks a Channel whose content is off-limits as withheld, never absent", async () => {
+    // Deliberate: the bot can see 🩹 Selfing channels exist but gets zero
+    // messages. That is a privacy decision, not a missing description.
+    const { catalog } = await buildCatalog({
+      discord: at({ topic: "a topic that exists", contentReadable: false }),
+      guildId: GUILD_ID,
+    });
+    expect(catalog[0]?.description_status).toBe("withheld");
+    expect(catalog[0]?.topic).toBeNull();
   });
 });
