@@ -46,6 +46,12 @@ export interface RawThread {
   firstPost: string | null;
 }
 
+/** A guild role, as the manifest records it. */
+export interface RawRole {
+  id: string;
+  name: string;
+}
+
 export interface DiscordReadPort {
   listChannels: () => Promise<RawChannel[]>;
   /**
@@ -53,6 +59,7 @@ export interface DiscordReadPort {
    * read are never passed in — see the visibility filter.
    */
   listThreads: (parentIds: string[]) => Promise<RawThread[]>;
+  listRoles: () => Promise<RawRole[]>;
   /**
    * Whether the application has the Message Content intent. It gates content
    * over REST as well as the gateway, so without it the sync produces empty

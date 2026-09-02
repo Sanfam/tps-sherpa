@@ -19,10 +19,10 @@ if (!token || !guildId) {
   process.exit(1);
 }
 
-const CATALOG_PATH = resolve(
-  import.meta.dirname,
-  "../../../../content/index/data.json",
-);
+const contentPath = (rel: string) =>
+  resolve(import.meta.dirname, "../../../../content", rel);
+const CATALOG_PATH = contentPath("index/data.json");
+const ROLES_PATH = contentPath("config/roles.json");
 
 /** Overrides are human-authored and must survive every sync. */
 const readPrevious = async (): Promise<Entity[]> => {
@@ -34,23 +34,34 @@ const readPrevious = async (): Promise<Entity[]> => {
 };
 
 const previous = await readPrevious();
-const { catalog } = await buildCatalog({
+const { catalog, roleManifest } = await buildCatalog({
   discord: discordRest({ token, guildId }),
   guildId,
   previous,
+  warn: (m) => console.warn(m),
 });
 
-await mkdir(dirname(CATALOG_PATH), { recursive: true });
-const serialised = JSON.stringify(catalog, null, 2) + "\n";
-const unchanged = serialised === (await readFile(CATALOG_PATH, "utf8").catch(() => ""));
-await writeFile(CATALOG_PATH, serialised);
+/** Returns true if the file already held exactly this content. */
+const writeIfChanged = async (path: string, value: unknown): Promise<boolean> => {
+  await mkdir(dirname(path), { recursive: true });
+  const serialised = JSON.stringify(value, null, 2) + "\n";
+  const before = await readFile(path, "utf8").catch(() => "");
+  if (serialised === before) return true;
+  await writeFile(path, serialised);
+  return false;
+};
+
+const catalogUnchanged = await writeIfChanged(CATALOG_PATH, catalog);
+const rolesUnchanged = await writeIfChanged(ROLES_PATH, roleManifest);
+const unchanged = catalogUnchanged && rolesUnchanged;
 
 const byStatus = catalog.reduce<Record<string, number>>((acc, e) => {
   acc[e.description_status] = (acc[e.description_status] ?? 0) + 1;
   return acc;
 }, {});
 
-console.log(`Catalog written: ${CATALOG_PATH}`);
+console.log(`Catalog: ${CATALOG_PATH}`);
+console.log(`Roles:   ${ROLES_PATH} (${roleManifest.length} roles)`);
 console.log(`  Entities:  ${catalog.length}`);
 console.log(`  present:   ${byStatus["present"] ?? 0}`);
 console.log(`  absent:    ${byStatus["absent"] ?? 0}`);

@@ -1,0 +1,618 @@
+[
+  {
+    "id": "1083558261300670524",
+    "name": "Pacific Time"
+  },
+  {
+    "id": "1083558721029943316",
+    "name": "Mountain Time"
+  },
+  {
+    "id": "1083558814906851338",
+    "name": "Central Time"
+  },
+  {
+    "id": "1083558871374766170",
+    "name": "Eastern Time"
+  },
+  {
+    "id": "1083561349713502208",
+    "name": "🧒 One kid"
+  },
+  {
+    "id": "1083561444320223302",
+    "name": "🧒🧒 Two kids"
+  },
+  {
+    "id": "1083561487664152586",
+    "name": "🧒🧒🧒 Three kids"
+  },
+  {
+    "id": "1083561544639578163",
+    "name": "🧒🧒🧒🧒 Four kids and above"
+  },
+  {
+    "id": "1083561824617762917",
+    "name": "🤰 Expecting"
+  },
+  {
+    "id": "1084963067470823477",
+    "name": "DISBOARD.org"
+  },
+  {
+    "id": "1085271838088777799",
+    "name": "💻 Computer"
+  },
+  {
+    "id": "1085271995966570676",
+    "name": "🎮 PS5"
+  },
+  {
+    "id": "1085272076484620389",
+    "name": "🎮 Xbox"
+  },
+  {
+    "id": "1085272130784075886",
+    "name": "🎮 Switch"
+  },
+  {
+    "id": "1086069251015721086",
+    "name": "Top.gg"
+  },
+  {
+    "id": "1087786443402911826",
+    "name": "Europe West"
+  },
+  {
+    "id": "1087787362760798208",
+    "name": "Europe East"
+  },
+  {
+    "id": "1088152406220611705",
+    "name": "Japan"
+  },
+  {
+    "id": "1088152599812907091",
+    "name": "Australia"
+  },
+  {
+    "id": "1088219791266951201",
+    "name": "PartyBeast"
+  },
+  {
+    "id": "1088235389757685892",
+    "name": "Server Booster"
+  },
+  {
+    "id": "1088241964559913081",
+    "name": "Staff"
+  },
+  {
+    "id": "1088557679322075156",
+    "name": "Event Managers"
+  },
+  {
+    "id": "1088963834728951930",
+    "name": "Game Server Monitor"
+  },
+  {
+    "id": "1090353831478571017",
+    "name": "Giveaway Boat"
+  },
+  {
+    "id": "1091060208119337030",
+    "name": "Atlantic"
+  },
+  {
+    "id": "1091060337723318333",
+    "name": "Hawaii"
+  },
+  {
+    "id": "1091060398377140225",
+    "name": "New Zealand"
+  },
+  {
+    "id": "1091061244942893076",
+    "name": "South East Asia"
+  },
+  {
+    "id": "1091218996860297246",
+    "name": "🎲 Board games"
+  },
+  {
+    "id": "1092510704575205477",
+    "name": "Philanthropist"
+  },
+  {
+    "id": "1096225881585885227",
+    "name": "Premium Members"
+  },
+  {
+    "id": "1096225883443953750",
+    "name": "Kind Papa"
+  },
+  {
+    "id": "1096275961839886406",
+    "name": "Super-Kind Papa"
+  },
+  {
+    "id": "1098048802251866216",
+    "name": "Statbot"
+  },
+  {
+    "id": "1100802831121920014",
+    "name": "Tickets"
+  },
+  {
+    "id": "1115338725258436741",
+    "name": "PatchBot"
+  },
+  {
+    "id": "1117289006309318667",
+    "name": "Alaska"
+  },
+  {
+    "id": "1121144773227589772",
+    "name": "Active"
+  },
+  {
+    "id": "1121489341693308928",
+    "name": "Semi-active"
+  },
+  {
+    "id": "1121489521247260743",
+    "name": "Very active"
+  },
+  {
+    "id": "1121510732891181141",
+    "name": "EasyPoll"
+  },
+  {
+    "id": "1125189464113819780",
+    "name": "Poll creator"
+  },
+  {
+    "id": "1128729877676314738",
+    "name": "Streamcord"
+  },
+  {
+    "id": "1130012157099135027",
+    "name": "Member"
+  },
+  {
+    "id": "1130608014123077655",
+    "name": "Dyno"
+  },
+  {
+    "id": "1131301180228771931",
+    "name": "Destiny Player"
+  },
+  {
+    "id": "1136377326960136232",
+    "name": "Loreo"
+  },
+  {
+    "id": "1137170858125828098",
+    "name": "Charlemagne"
+  },
+  {
+    "id": "1138528756806471690",
+    "name": "Asher Mir"
+  },
+  {
+    "id": "1138685862868168717",
+    "name": "Marvin"
+  },
+  {
+    "id": "1139528405281415321",
+    "name": "Crayon"
+  },
+  {
+    "id": "1143306428120055859",
+    "name": "[Cosmetic] Teal"
+  },
+  {
+    "id": "1143306555006124042",
+    "name": "[Cosmetic] Green"
+  },
+  {
+    "id": "1143306607120363680",
+    "name": "[Cosmetic] Blue"
+  },
+  {
+    "id": "1143306642130214913",
+    "name": "[Cosmetic] Purple"
+  },
+  {
+    "id": "1143306682559111198",
+    "name": "[Cosmetic] Pink"
+  },
+  {
+    "id": "1143306722165928116",
+    "name": "[Cosmetic] Yellow"
+  },
+  {
+    "id": "1143306793913679993",
+    "name": "[Cosmetic] Orange"
+  },
+  {
+    "id": "1143306836183879822",
+    "name": "[Cosmetic] Amber"
+  },
+  {
+    "id": "1143306895277441054",
+    "name": "[Cosmetic] Oreo"
+  },
+  {
+    "id": "1143311546030764103",
+    "name": "[Cosmetic] Orcoreo"
+  },
+  {
+    "id": "1143311622123835464",
+    "name": "[Cosmetic] Bluey"
+  },
+  {
+    "id": "1143311739002298419",
+    "name": "[Cosmetic] Playstation"
+  },
+  {
+    "id": "1143311894766178394",
+    "name": "[Cosmetic] Xbox"
+  },
+  {
+    "id": "1143311934381363231",
+    "name": "[Cosmetic] Switch"
+  },
+  {
+    "id": "1143311984830455930",
+    "name": "[Cosmetic] Steam"
+  },
+  {
+    "id": "1143312022549827675",
+    "name": "[Cosmetic] VR"
+  },
+  {
+    "id": "1143312080808706089",
+    "name": "[Cosmetic] Destiny"
+  },
+  {
+    "id": "1143608962349019136",
+    "name": "[Cosmetic] No icon"
+  },
+  {
+    "id": "1143609085346975835",
+    "name": "[Cosmetic] Finger guns"
+  },
+  {
+    "id": "1145768190392147988",
+    "name": "Vex Notification"
+  },
+  {
+    "id": "1146229493611106334",
+    "name": "[Cosmetic] Jar Jar"
+  },
+  {
+    "id": "1148473120089444453",
+    "name": "South America West"
+  },
+  {
+    "id": "1148473271679975514",
+    "name": "South America East"
+  },
+  {
+    "id": "1153739255470887075",
+    "name": "Wick"
+  },
+  {
+    "id": "1153740260740710473",
+    "name": "Quarantine"
+  },
+  {
+    "id": "1166171341364396153",
+    "name": "One-Time Donator"
+  },
+  {
+    "id": "1184578847778295971",
+    "name": "WordleStats"
+  },
+  {
+    "id": "1185444707384426498",
+    "name": "ECO LinkBot"
+  },
+  {
+    "id": "1219143682855534712",
+    "name": "[Cosmetic] Helldiver"
+  },
+  {
+    "id": "1224158519305961492",
+    "name": "🔥 Hyper active"
+  },
+  {
+    "id": "1248435446422310954",
+    "name": "Europe Central"
+  },
+  {
+    "id": "1267225630638866484",
+    "name": "📱 Mobile Gaming"
+  },
+  {
+    "id": "1270982081098551376",
+    "name": "Arizona Random Time"
+  },
+  {
+    "id": "1281391741076766744",
+    "name": "Thread-o-matic"
+  },
+  {
+    "id": "1315841886690218025",
+    "name": "📖 Book Club Notifications"
+  },
+  {
+    "id": "1315842047495901284",
+    "name": "💥 Boom Club Notifications"
+  },
+  {
+    "id": "1319113856987168768",
+    "name": "Magic Pussy player"
+  },
+  {
+    "id": "1360322968449978559",
+    "name": "Tickets v2"
+  },
+  {
+    "id": "1373072868937826334",
+    "name": "[Cosmetic] Rip and Tear"
+  },
+  {
+    "id": "1373072983161176115",
+    "name": "[Cosmetic] Esquie"
+  },
+  {
+    "id": "1377735393453150370",
+    "name": "[Cosmetic] Gobbo"
+  },
+  {
+    "id": "1394735595032674469",
+    "name": "[Cosmetic] Shiny green"
+  },
+  {
+    "id": "1394735721759117422",
+    "name": "[Cosmetic] Shiny blue"
+  },
+  {
+    "id": "1394735784950763771",
+    "name": "[Cosmetic] Shiny pink"
+  },
+  {
+    "id": "1394735830286729216",
+    "name": "[Cosmetic] Holographic"
+  },
+  {
+    "id": "1394738419250364636",
+    "name": "[Cosmetic] Krakanu red"
+  },
+  {
+    "id": "1405359639809495063",
+    "name": "Altair"
+  },
+  {
+    "id": "1424779161121198280",
+    "name": "🎥 Movie Club Notifications"
+  },
+  {
+    "id": "1424781676860669982",
+    "name": "🥳 Party Game Notifications"
+  },
+  {
+    "id": "1432417323708317809",
+    "name": "Moxxi"
+  },
+  {
+    "id": "1494033999495172186",
+    "name": "Joyeuse"
+  },
+  {
+    "id": "1524916901556387851",
+    "name": "Honeypot"
+  },
+  {
+    "id": "1530327223360426044",
+    "name": "1000 LB"
+  },
+  {
+    "id": "1530328344875499542",
+    "name": "Sentinel"
+  },
+  {
+    "id": "1532865037235126463",
+    "name": "Owner"
+  },
+  {
+    "id": "1534002434567966832",
+    "name": "DiscordLinked"
+  },
+  {
+    "id": "1534407891912757258",
+    "name": "Eco Everyone"
+  },
+  {
+    "id": "1534412290173173810",
+    "name": "Eco Active"
+  },
+  {
+    "id": "1534412292785963138",
+    "name": "Long Term"
+  },
+  {
+    "id": "1534738027937796119",
+    "name": "Logging"
+  },
+  {
+    "id": "1535089284393209897",
+    "name": "Campfire Cooking"
+  },
+  {
+    "id": "1535432761957949482",
+    "name": "Eco Admins"
+  },
+  {
+    "id": "1535452389472079984",
+    "name": "Mining"
+  },
+  {
+    "id": "1535527540272136192",
+    "name": "Hunting"
+  },
+  {
+    "id": "1536402817646985276",
+    "name": "Gathering"
+  },
+  {
+    "id": "1536471359721308282",
+    "name": "Embedded"
+  },
+  {
+    "id": "1536577666335899669",
+    "name": "Masonry"
+  },
+  {
+    "id": "1536735770469990553",
+    "name": "Farming"
+  },
+  {
+    "id": "1536948464313696418",
+    "name": "Shipwright"
+  },
+  {
+    "id": "1536972720686891020",
+    "name": "Carpentry"
+  },
+  {
+    "id": "1537151456585588797",
+    "name": "Milling"
+  },
+  {
+    "id": "1537163464492191744",
+    "name": "Basic Engineering"
+  },
+  {
+    "id": "1537266472697729104",
+    "name": "Smelting"
+  },
+  {
+    "id": "1537879793394258002",
+    "name": "Citizens of pankeeglen"
+  },
+  {
+    "id": "1538024858137526442",
+    "name": "Citizens of TheDopestSauceshire"
+  },
+  {
+    "id": "1538032743294697605",
+    "name": "Citizens of TheDopestSaucerock"
+  },
+  {
+    "id": "1538036637559296010",
+    "name": "Citizens of World's Beginning"
+  },
+  {
+    "id": "1538037744809287692",
+    "name": "World's Beginning Mayor"
+  },
+  {
+    "id": "1538194361555361834",
+    "name": "Tailoring"
+  },
+  {
+    "id": "1538613317097234483",
+    "name": "Blacksmith"
+  },
+  {
+    "id": "1538758603559927858",
+    "name": "Citizens of World's Beginning"
+  },
+  {
+    "id": "1538758614980759603",
+    "name": "Butchery"
+  },
+  {
+    "id": "1538790689951850666",
+    "name": "Citizens of World's Beginning"
+  },
+  {
+    "id": "1538976631648026634",
+    "name": "Butchery"
+  },
+  {
+    "id": "1538979014436462592",
+    "name": "Citizens of World's Beginning"
+  },
+  {
+    "id": "1539803537393979455",
+    "name": "Blacksmith"
+  },
+  {
+    "id": "1540528222838456350",
+    "name": "Glassworking"
+  },
+  {
+    "id": "1541142598155247658",
+    "name": "Mechanics"
+  },
+  {
+    "id": "1541282248173690934",
+    "name": "Fertilizers"
+  },
+  {
+    "id": "1541314908040200312",
+    "name": "Mechanics"
+  },
+  {
+    "id": "1541469152370364521",
+    "name": "Pottery"
+  },
+  {
+    "id": "1541473190138609724",
+    "name": "Pottery"
+  },
+  {
+    "id": "1541642295684763788",
+    "name": "Paper Milling"
+  },
+  {
+    "id": "1541901649126363259",
+    "name": "Citizens of croxisburg"
+  },
+  {
+    "id": "1541904297909035148",
+    "name": "Citizens of croxisborough"
+  },
+  {
+    "id": "1542334111891595395",
+    "name": "Forestown Mayor"
+  },
+  {
+    "id": "1542544513514602577",
+    "name": "World's End Mayor"
+  },
+  {
+    "id": "1543308142769602601",
+    "name": "Mechanics"
+  },
+  {
+    "id": "1544151679488757841",
+    "name": "Citizens of Forestown"
+  },
+  {
+    "id": "1544151682198409277",
+    "name": "Citizens of World's End"
+  },
+  {
+    "id": "1544167081665368094",
+    "name": "Abandoned"
+  },
+  {
+    "id": "1544501866828931085",
+    "name": "Papa Sherpa"
+  }
+]

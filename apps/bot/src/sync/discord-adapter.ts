@@ -1,6 +1,11 @@
 import { REST } from "@discordjs/rest";
 import { Routes } from "discord-api-types/v10";
-import type { DiscordReadPort, RawChannel, RawThread } from "./ports.ts";
+import type {
+  DiscordReadPort,
+  RawChannel,
+  RawRole,
+  RawThread,
+} from "./ports.ts";
 
 const VIEW_CHANNEL = 1n << 10n;
 const READ_MESSAGE_HISTORY = 1n << 16n;
@@ -116,11 +121,21 @@ export const discordRest = (config: {
 }): DiscordReadPort => {
   const rest = new REST({ version: "10" }).setToken(config.token);
 
+  // Fetched once per sync. Two fetches opened a window where a role created
+  // or deleted between them made the permission context and the committed
+  // manifest disagree.
+  type GuildRole = { id: string; name: string; permissions: string };
+  let rolesOnce: Promise<GuildRole[]> | undefined;
+  const guildRoles = (): Promise<GuildRole[]> =>
+    (rolesOnce ??= rest.get(Routes.guildRoles(config.guildId)) as Promise<
+      GuildRole[]
+    >);
+
   return {
     listChannels: async (): Promise<RawChannel[]> => {
       const [channels, roles, me] = (await Promise.all([
         rest.get(Routes.guildChannels(config.guildId)),
-        rest.get(Routes.guildRoles(config.guildId)),
+        guildRoles(),
         rest.get(Routes.user("@me")),
       ])) as [
         RawGuildChannel[],
@@ -214,6 +229,10 @@ export const discordRest = (config: {
           };
         }),
       );
+    },
+
+    listRoles: async (): Promise<RawRole[]> => {
+      return (await guildRoles()).map((r) => ({ id: r.id, name: r.name }));
     },
 
     hasMessageContentIntent: async (): Promise<boolean> => {

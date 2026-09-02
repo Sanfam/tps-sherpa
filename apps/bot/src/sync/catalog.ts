@@ -1,5 +1,10 @@
 import { ChannelType } from "./ports.ts";
-import type { DiscordReadPort, RawChannel, RawThread } from "./ports.ts";
+import type {
+  DiscordReadPort,
+  RawChannel,
+  RawRole,
+  RawThread,
+} from "./ports.ts";
 
 export type EntityType = "channel" | "forum" | "post" | "thread";
 
@@ -37,6 +42,9 @@ export interface Entity {
   summary_override: string | null;
 }
 
+const byId = (a: { id: string }, b: { id: string }) =>
+  a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+
 const deepLink = (guildId: string, entityId: string) =>
   `https://discord.com/channels/${guildId}/${entityId}`;
 
@@ -49,7 +57,9 @@ export const buildCatalog = async (deps: {
   discord: DiscordReadPort;
   guildId: string;
   previous?: Entity[];
-}): Promise<{ catalog: Entity[] }> => {
+  /** Where to report conditions a human needs to act on. Defaults to silence. */
+  warn?: (message: string) => void;
+}): Promise<{ catalog: Entity[]; roleManifest: RawRole[] }> => {
   if (!(await deps.discord.hasMessageContentIntent())) {
     throw new Error(
       "Message Content intent is not enabled for this application. It gates " +
@@ -121,11 +131,36 @@ export const buildCatalog = async (deps: {
     };
   };
 
+  // Editors pick a role by name; Access gates store the ID. Regenerating the
+  // manifest each run means a rename updates the display name while every
+  // gate keeps working, and a deleted role simply stops matching.
+  const roleManifest = (await deps.discord.listRoles())
+    // @everyone is excluded deliberately. Its id equals the guild id and it
+    // never appears in a member's `roles` array, so a page gated on it would
+    // lock out every reader — including full Members.
+    .filter((r) => r.id !== deps.guildId)
+    .map((r) => ({ id: r.id, name: r.name }))
+    .sort(byId);
+
+  // Two roles sharing a name give an editor two indistinguishable options in
+  // a name-labelled picker, and picking the wrong one is an invisible
+  // wrong-audience gate. Only a human renaming them in Discord fixes it.
+  const byName = new Map<string, string[]>();
+  for (const r of roleManifest)
+    byName.set(r.name, [...(byName.get(r.name) ?? []), r.id]);
+  for (const [name, ids] of byName)
+    if (ids.length > 1)
+      deps.warn?.(
+        `[roles] ${ids.length} roles share the name "${name}" (${ids.join(", ")}). ` +
+          `An editor cannot tell them apart when setting Access.`,
+      );
+
   return {
     // Sorted by ID: Discord does not promise a stable order, and an unsorted
     // Catalog would produce a reordered commit on every scheduled run.
     catalog: [...containers.map(fromContainer), ...threads.map(fromThread)].sort(
-      (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+      byId,
     ),
+    roleManifest,
   };
 };

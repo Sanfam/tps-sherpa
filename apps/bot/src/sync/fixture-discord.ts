@@ -1,4 +1,9 @@
-import type { DiscordReadPort, RawChannel, RawThread } from "./ports.ts";
+import type {
+  DiscordReadPort,
+  RawChannel,
+  RawRole,
+  RawThread,
+} from "./ports.ts";
 
 export const fixtureDiscord = (data: {
   channels: Array<
@@ -8,6 +13,7 @@ export const fixtureDiscord = (data: {
     }
   >;
   threads?: RawThread[];
+  roles?: RawRole[];
   messageContentIntent?: boolean;
 }): DiscordReadPort => ({
   listChannels: async () =>
@@ -18,5 +24,6 @@ export const fixtureDiscord = (data: {
     })),
   listThreads: async (parentIds) =>
     (data.threads ?? []).filter((t) => parentIds.includes(t.parentId)),
+  listRoles: async () => data.roles ?? [],
   hasMessageContentIntent: async () => data.messageContentIntent ?? true,
 });
