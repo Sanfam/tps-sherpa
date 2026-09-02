@@ -372,6 +372,64 @@ Criteria 1, 2 and 5 are mechanically checkable. Criterion 4 is enforced by pre-r
 
 **Corpus facts worth keeping:** 31 of 1,102 Posts (2.8%) have had their starter message deleted in Discord — they carry `description_status: absent` and have no first post to sample. 1,847 of the captured messages are from bots and must be dropped at selection time; 1,349 distinct authors appear across the corpus, which is the raw material for the participant-diversity rule.
 
+### Discovery results — measured 2026-09-02 against the real corpus
+
+Run before implementing any of Phase 2, as this section demands.
+
+**1. Whole-catalog prompt size — the anti-goal's premise, corrected.**
+
+| Form | Tokens *(est. 4 chars/token)* |
+|---|---|
+| Raw descriptions, 120 chars each | **~43,000** |
+| 12-word generated summaries | **~25,000** |
+| What the docs assumed | ~15,000 |
+
+**The "no vector store" anti-goal survives**, but on a thinner margin than
+claimed: 1.7–2.9× the original estimate. Still comfortably inside a modern
+context window, so retrieval remains the wrong trade. Re-check if the corpus
+grows another 2×, and note that generated summaries nearly halve it — an
+argument for summarising *before* matching, not only for quality.
+
+**2. Description length distribution** *(n=1,098)*: p50 **34** tokens, p75 69,
+p90 123, p95 125, max 125. Mean is 47 and misleading, which is why this is
+percentiles. **The 500-character cap binds on roughly 10%** of descriptions —
+worth revisiting if truncation is losing signal.
+
+**3. Does early history help? Yes, but less than the raw number suggests.**
+
+Of 129 `absent` Posts and Threads, **103 (80%) have at least two usable
+messages** in the head window. But sampling shows most of that text is
+mid-conversation reply, not description: *"Amazing! I'm a huge fan of retro
+games"*, *"sorry, i somehow misread your name"*. The honest read: head history
+is **worth sampling and will not rescue everything**. The escalation ladder's
+refusal path stays load-bearing, and "no description available" remains the
+right outcome for a meaningful share.
+
+**4. Corpus shape:** 92,248 messages, **2.0% from bots** (the drop-bots rule
+matters but is not dominant), **mean 8.5 distinct human authors per Entity** —
+enough for participant-diversity sampling to have material to work with.
+
+**5. Unplanned finding: near-duplicate detection has a free lexical signal.**
+
+Phase 2 assumes duplicate detection needs LLM work. It partly does not. **27
+Entities contain a message that both matches redirect phrasing** (*"we have a
+thread already"*, *"head over to"*, *"can delete this"*) **and mentions another
+Entity by `<#id>`.** Filtering to those with ≤10 messages isolates near-certain
+abandoned duplicates:
+
+> Factorio Channel (8 msgs), Pokemon Channel (2), Overwatch Channel (2),
+> Escape from Tarkov channel (2), War Thunder Channel (2), MSFS 2020 Channel
+> (2), DOTA 2 channel? (2) — **all redirected to `🎮︱game-talk`**
+
+A clear pattern: members asked for a dedicated channel for a game, were pointed
+at the forum, and the request thread was abandoned. Message count cleanly
+separates these from active threads that merely mention a redirect (Sea of
+Thieves, 200 messages; Date Night Ideas, 99).
+
+**Build this before the LLM pass.** It is a regex over Tier 0, it costs
+nothing, its output is a mod-channel post, and it finds the exact class of
+duplicate the merge queue exists for.
+
 ### Discovery: what to measure
 
 1. **Actual token distribution** across the real corpus — percentiles, not a mean. The mean is dominated by the Formula 1 entry and tells you nothing.
