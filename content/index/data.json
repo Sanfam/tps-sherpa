@@ -8,8 +8,8 @@
     "description_status": "present",
     "topic": "General discussions about whatever you'd like to discuss.",
     "applied_tags": [],
-    "last_message_id": "1544544740047978496",
-    "last_activity_at": "2026-09-02T03:09:22.281Z",
+    "last_message_id": "1544840068320202773",
+    "last_activity_at": "2026-09-02T22:42:54.028Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -64,8 +64,8 @@
     "description_status": "present",
     "topic": "(1-3 years) First steps! First words! First destroyed room!",
     "applied_tags": [],
-    "last_message_id": "1544549525534941184",
-    "last_activity_at": "2026-09-02T03:28:23.230Z",
+    "last_message_id": "1544821106043650149",
+    "last_activity_at": "2026-09-02T21:27:33.069Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -103,8 +103,8 @@
     "name": "welcome",
     "url": "https://discord.com/channels/1055290132250501135/1083565893449166898",
     "parent_id": null,
-    "description_status": "absent",
-    "topic": null,
+    "description_status": "present",
+    "topic": "Start here: the rules, and how to find your way around a server with more threads than sense.",
     "applied_tags": [],
     "last_message_id": "1319846503606648833",
     "last_activity_at": "2024-12-21T01:58:48.022Z",
@@ -120,8 +120,8 @@
     "description_status": "present",
     "topic": "Talk about video games in general. If you have any specific game in mind, you may wanna check the #game-talk channel instead!",
     "applied_tags": [],
-    "last_message_id": "1544549504240320572",
-    "last_activity_at": "2026-09-02T03:28:18.153Z",
+    "last_message_id": "1544840527462137858",
+    "last_activity_at": "2026-09-02T22:44:43.496Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -148,8 +148,8 @@
     "description_status": "present",
     "topic": "👋 Welcome to our community! This channel is the perfect place to introduce yourself and get to know your fellow members. Feel free to share a little bit about yourself, such as your interests, hobbies, or anything else you'd like to share. Once you've introduced yourself, don't forget to check our topics page (https://wiki.papasquad.xyz/papasquad/threads-and-channels) to find where to discuss whatever interests you!",
     "applied_tags": [],
-    "last_message_id": "1544541029250637874",
-    "last_activity_at": "2026-09-02T02:54:37.558Z",
+    "last_message_id": "1544800605439262780",
+    "last_activity_at": "2026-09-02T20:06:05.344Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -173,8 +173,8 @@
     "name": "🖥︱pc-gaming",
     "url": "https://discord.com/channels/1055290132250501135/1085275706738606140",
     "parent_id": null,
-    "description_status": "absent",
-    "topic": null,
+    "description_status": "present",
+    "topic": "PC gaming: what you're playing, what you're building, and which indie studio just became a publisher.",
     "applied_tags": [],
     "last_message_id": "1544558157269835876",
     "last_activity_at": "2026-09-02T04:02:41.196Z",
@@ -187,11 +187,11 @@
     "name": "🎮︱playstation-gaming",
     "url": "https://discord.com/channels/1055290132250501135/1085275787441221695",
     "parent_id": null,
-    "description_status": "absent",
-    "topic": null,
+    "description_status": "present",
+    "topic": "Everything PlayStation. Announcements, backlogs, and whether a game really counts without a revenge quest.",
     "applied_tags": [],
-    "last_message_id": "1544061569292435487",
-    "last_activity_at": "2026-08-31T19:09:25.396Z",
+    "last_message_id": "1544587993770360872",
+    "last_activity_at": "2026-09-02T06:01:14.772Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -201,11 +201,11 @@
     "name": "🎮︱xbox-gaming",
     "url": "https://discord.com/channels/1055290132250501135/1087928348216414269",
     "parent_id": null,
-    "description_status": "absent",
-    "topic": null,
+    "description_status": "present",
+    "topic": "Xbox and Game Pass. What's free this month, and why Microsoft never sends a receipt.",
     "applied_tags": [],
-    "last_message_id": "1544538070412431390",
-    "last_activity_at": "2026-09-02T02:42:52.116Z",
+    "last_message_id": "1544765549001576609",
+    "last_activity_at": "2026-09-02T17:46:47.238Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -215,11 +215,11 @@
     "name": "🎮︱switch-gaming",
     "url": "https://discord.com/channels/1055290132250501135/1087928393930133514",
     "parent_id": null,
-    "description_status": "absent",
-    "topic": null,
+    "description_status": "present",
+    "topic": "Nintendo Switch. Handheld sessions, eternal backlogs, and the games you'll finish eventually.",
     "applied_tags": [],
-    "last_message_id": "1544370380670636175",
-    "last_activity_at": "2026-09-01T15:36:31.766Z",
+    "last_message_id": "1544784656430272743",
+    "last_activity_at": "2026-09-02T19:02:42.804Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -271,11 +271,11 @@
     "name": "🕹︱retro-gaming",
     "url": "https://discord.com/channels/1055290132250501135/1087991716012883990",
     "parent_id": null,
-    "description_status": "absent",
-    "topic": null,
+    "description_status": "present",
+    "topic": "Old games and the machines that ran them. Emulation, recompiles, and hardware you last touched in fifth grade. Yes, the Nintento 64 is \"vintage\" now. Feel your age.",
     "applied_tags": [],
-    "last_message_id": "1544331903555862568",
-    "last_activity_at": "2026-09-01T13:03:38.107Z",
+    "last_message_id": "1544783631103430728",
+    "last_activity_at": "2026-09-02T18:58:38.347Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -330,8 +330,8 @@
     "description_status": "present",
     "topic": "Table-top role playing games, aka \"devil-worshiping cults\". Come and discuss how all you need to game is a piece of paper, a pencil, and some fancy dice.",
     "applied_tags": [],
-    "last_message_id": "1544525762546110604",
-    "last_activity_at": "2026-09-02T01:53:57.692Z",
+    "last_message_id": "1544729665116053706",
+    "last_activity_at": "2026-09-02T15:24:11.853Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -341,8 +341,8 @@
     "name": "📢︱announcements",
     "url": "https://discord.com/channels/1055290132250501135/1088156928946999398",
     "parent_id": null,
-    "description_status": "absent",
-    "topic": null,
+    "description_status": "present",
+    "topic": "Server news from the staff team. Rare, but worth reading.",
     "applied_tags": [],
     "last_message_id": "1542263039817027584",
     "last_activity_at": "2026-08-26T20:02:42.554Z",
@@ -816,8 +816,8 @@
       "1088173776350498908",
       "1088173812866105415"
     ],
-    "last_message_id": "1544497716967768124",
-    "last_activity_at": "2026-09-02T00:02:31.105Z",
+    "last_message_id": "1544667132892291133",
+    "last_activity_at": "2026-09-02T11:15:43.009Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -943,11 +943,11 @@
     "name": "💻︱steam-deck-and-handhelds",
     "url": "https://discord.com/channels/1055290132250501135/1088208169785901116",
     "parent_id": null,
-    "description_status": "absent",
-    "topic": null,
+    "description_status": "present",
+    "topic": "Steam Deck, Ally, and everything else you game on from the sofa. Battery-life discourse welcome.",
     "applied_tags": [],
-    "last_message_id": "1544467708534591549",
-    "last_activity_at": "2026-09-01T22:03:16.537Z",
+    "last_message_id": "1544812217264775270",
+    "last_activity_at": "2026-09-02T20:52:13.819Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -1063,8 +1063,8 @@
     "applied_tags": [
       "1088173776350498908"
     ],
-    "last_message_id": "1544547666149638254",
-    "last_activity_at": "2026-09-02T03:20:59.918Z",
+    "last_message_id": "1544839593302433913",
+    "last_activity_at": "2026-09-02T22:41:00.775Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -1091,8 +1091,8 @@
     "name": "vc-instructions",
     "url": "https://discord.com/channels/1055290132250501135/1088224017858711602",
     "parent_id": null,
-    "description_status": "absent",
-    "topic": null,
+    "description_status": "present",
+    "topic": "How temporary voice channels work. Join 🔊︱Join Here to make one, then rename it.",
     "applied_tags": [],
     "last_message_id": "1145047714380382239",
     "last_activity_at": "2023-08-26T17:30:49.066Z",
@@ -1407,8 +1407,8 @@
     "description_status": "present",
     "topic": "Share your favorite memes and dad jokes!; Over here we just call them jokes.",
     "applied_tags": [],
-    "last_message_id": "1544547466521870356",
-    "last_activity_at": "2026-09-02T03:20:12.323Z",
+    "last_message_id": "1544835393814270042",
+    "last_activity_at": "2026-09-02T22:24:19.539Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -1501,11 +1501,11 @@
     "name": "👓︱vr-gaming",
     "url": "https://discord.com/channels/1055290132250501135/1088554803933745336",
     "parent_id": null,
-    "description_status": "absent",
-    "topic": null,
+    "description_status": "present",
+    "topic": "VR gaming. Headsets, upgrades, SteamVR updates, and the inevitable motion sickness.",
     "applied_tags": [],
-    "last_message_id": "1543328913529249942",
-    "last_activity_at": "2026-08-29T18:38:06.650Z",
+    "last_message_id": "1544746436892299364",
+    "last_activity_at": "2026-09-02T16:30:50.556Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -1665,8 +1665,8 @@
     "applied_tags": [
       "1088657156582150204"
     ],
-    "last_message_id": "1541576601840521277",
-    "last_activity_at": "2026-08-24T22:35:02.987Z",
+    "last_message_id": "1544840274478370827",
+    "last_activity_at": "2026-09-02T22:43:43.180Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -1682,8 +1682,8 @@
       "1088657298110545920",
       "1088657353102082068"
     ],
-    "last_message_id": "1544353134275727551",
-    "last_activity_at": "2026-09-01T14:27:59.905Z",
+    "last_message_id": "1544837855342235698",
+    "last_activity_at": "2026-09-02T22:34:06.413Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -1803,8 +1803,8 @@
       "1088173967233273877",
       "1088173812866105415"
     ],
-    "last_message_id": "1544091351753429114",
-    "last_activity_at": "2026-08-31T21:07:46.088Z",
+    "last_message_id": "1544804617525927987",
+    "last_activity_at": "2026-09-02T20:22:01.900Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -1881,8 +1881,8 @@
     "applied_tags": [
       "1088657201754800128"
     ],
-    "last_message_id": "1544504769773838477",
-    "last_activity_at": "2026-09-02T00:30:32.625Z",
+    "last_message_id": "1544831325343719556",
+    "last_activity_at": "2026-09-02T22:08:09.540Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -2105,8 +2105,8 @@
     "description_status": "withheld",
     "topic": null,
     "applied_tags": [],
-    "last_message_id": "1544443427163209798",
-    "last_activity_at": "2026-09-01T20:26:47.407Z",
+    "last_message_id": "1544706952087732307",
+    "last_activity_at": "2026-09-02T13:53:56.645Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -2154,8 +2154,8 @@
     "description_status": "present",
     "topic": "Anyone else into it? I love wargaming but I stopped after Warhammer Old World got nuked. Just recently got back into miniatures due to D&D but itching to try a war game again",
     "applied_tags": [],
-    "last_message_id": "1544550723025506304",
-    "last_activity_at": "2026-09-02T03:33:08.734Z",
+    "last_message_id": "1544784352947339274",
+    "last_activity_at": "2026-09-02T19:01:30.448Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -2202,8 +2202,8 @@
     "applied_tags": [
       "1088657156582150204"
     ],
-    "last_message_id": "1544378249755496448",
-    "last_activity_at": "2026-09-01T16:07:47.902Z",
+    "last_message_id": "1544804247625924738",
+    "last_activity_at": "2026-09-02T20:20:33.709Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -2236,8 +2236,8 @@
       "1088173896521494579",
       "1088173776350498908"
     ],
-    "last_message_id": "1544544964397240330",
-    "last_activity_at": "2026-09-02T03:10:15.770Z",
+    "last_message_id": "1544802134648950874",
+    "last_activity_at": "2026-09-02T20:12:09.936Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -2264,8 +2264,8 @@
     "description_status": "present",
     "topic": "What’s everyone driving",
     "applied_tags": [],
-    "last_message_id": "1544322400731144212",
-    "last_activity_at": "2026-09-01T12:25:52.457Z",
+    "last_message_id": "1544831195332743249",
+    "last_activity_at": "2026-09-02T22:07:38.543Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -2340,8 +2340,8 @@
       "1088173776350498908",
       "1088173812866105415"
     ],
-    "last_message_id": "1544522491639238736",
-    "last_activity_at": "2026-09-02T01:40:57.847Z",
+    "last_message_id": "1544809784627298434",
+    "last_activity_at": "2026-09-02T20:42:33.833Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -2358,8 +2358,8 @@
       "1088173776350498908",
       "1088173812866105415"
     ],
-    "last_message_id": "1543458103012495532",
-    "last_activity_at": "2026-08-30T03:11:27.823Z",
+    "last_message_id": "1544822153734660217",
+    "last_activity_at": "2026-09-02T21:31:42.858Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -2402,8 +2402,8 @@
     "applied_tags": [
       "1088657156582150204"
     ],
-    "last_message_id": "1544120979658375309",
-    "last_activity_at": "2026-08-31T23:05:29.931Z",
+    "last_message_id": "1544759482595282997",
+    "last_activity_at": "2026-09-02T17:22:40.894Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -2418,8 +2418,8 @@
     "applied_tags": [
       "1088657156582150204"
     ],
-    "last_message_id": "1544350040959754270",
-    "last_activity_at": "2026-09-01T14:15:42.401Z",
+    "last_message_id": "1544724833021992970",
+    "last_activity_at": "2026-09-02T15:04:59.792Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -2597,8 +2597,8 @@
     "applied_tags": [
       "1088174004344471603"
     ],
-    "last_message_id": "1544529983974936587",
-    "last_activity_at": "2026-09-02T02:10:44.159Z",
+    "last_message_id": "1544836749396549763",
+    "last_activity_at": "2026-09-02T22:29:42.735Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -2643,8 +2643,8 @@
     "applied_tags": [
       "1088173776350498908"
     ],
-    "last_message_id": "1544533363925192805",
-    "last_activity_at": "2026-09-02T02:24:10.002Z",
+    "last_message_id": "1544650976986669106",
+    "last_activity_at": "2026-09-02T10:11:31.141Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -2824,8 +2824,8 @@
     "name": "🖥︱dedicated-server-voting",
     "url": "https://discord.com/channels/1055290132250501135/1096226573180481727",
     "parent_id": null,
-    "description_status": "absent",
-    "topic": null,
+    "description_status": "present",
+    "topic": "Vote on which game gets the next community dedicated server.",
     "applied_tags": [],
     "last_message_id": null,
     "last_activity_at": null,
@@ -3105,8 +3105,8 @@
     "description_status": "present",
     "topic": "Helloooooo, my biggest interest is creative writing! I didn’t see it listed yet so, figured I’d add it and hope some other dadbros like it as well. Whether it be poems, lyrics, plays, screenwriting, short stories, novels, world-building, one-liners, or journaling, let’s talk about it!; Anyone interested in that here?",
     "applied_tags": [],
-    "last_message_id": "1544425967857172573",
-    "last_activity_at": "2026-09-01T19:17:24.784Z",
+    "last_message_id": "1544737028489351358",
+    "last_activity_at": "2026-09-02T15:53:27.418Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -3212,8 +3212,8 @@
     "description_status": "present",
     "topic": "Being a new dad, I feel like my career goals have changed and my priorities are different than before the kid. Figured I would see if anyone else feels the same?; What do y’all do for work? How’s your work/life balance?",
     "applied_tags": [],
-    "last_message_id": "1544532844867620894",
-    "last_activity_at": "2026-09-02T02:22:06.249Z",
+    "last_message_id": "1544786298169069608",
+    "last_activity_at": "2026-09-02T19:09:14.225Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -3670,8 +3670,8 @@
     "description_status": "present",
     "topic": "Any and all NFL related talk can go here! What team do you pull for?",
     "applied_tags": [],
-    "last_message_id": "1544514954164572211",
-    "last_activity_at": "2026-09-02T01:11:00.773Z",
+    "last_message_id": "1544745522257207397",
+    "last_activity_at": "2026-09-02T16:27:12.490Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -3773,8 +3773,8 @@
     "applied_tags": [
       "1100903432975564930"
     ],
-    "last_message_id": "1544097948743245974",
-    "last_activity_at": "2026-08-31T21:33:58.933Z",
+    "last_message_id": "1544690288956669972",
+    "last_activity_at": "2026-09-02T12:47:43.845Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -4041,8 +4041,8 @@
     "applied_tags": [
       "1091425817852121129"
     ],
-    "last_message_id": "1544533678049202226",
-    "last_activity_at": "2026-09-02T02:25:24.895Z",
+    "last_message_id": "1544839728166338561",
+    "last_activity_at": "2026-09-02T22:41:32.929Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -4221,8 +4221,8 @@
     "description_status": "present",
     "topic": "Didn’t see a thread for this so starting one.; Who’s your team?; Who do you have for the playoffs?; How fun is the off season trade and free agent drama ?",
     "applied_tags": [],
-    "last_message_id": "1544010893472571453",
-    "last_activity_at": "2026-08-31T15:48:03.339Z",
+    "last_message_id": "1544840124255445092",
+    "last_activity_at": "2026-09-02T22:43:07.364Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -4534,8 +4534,8 @@
     "name": "❓︱help-faq",
     "url": "https://discord.com/channels/1055290132250501135/1116422505872240672",
     "parent_id": null,
-    "description_status": "absent",
-    "topic": null,
+    "description_status": "present",
+    "topic": "Answers to the questions that come up most: server how-tos, gaming, and parenting.",
     "applied_tags": [],
     "last_message_id": "1116426389118267502",
     "last_activity_at": "2023-06-08T17:59:53.365Z",
@@ -4713,8 +4713,8 @@
     "description_status": "present",
     "topic": "Didn’t see a thread for this topic. What are you hosting at home?",
     "applied_tags": [],
-    "last_message_id": "1544422016352780368",
-    "last_activity_at": "2026-09-01T19:01:42.672Z",
+    "last_message_id": "1544840096384163860",
+    "last_activity_at": "2026-09-02T22:43:00.719Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -4790,8 +4790,8 @@
     "description_status": "present",
     "topic": "Not sure if this is a popular hobby among dads, but I grew up playing TCGs and during Covid I fell back into collecting Pokémon cards. Turns out, collecting as an adult with adult money is way more fun! I’m hopeful my son enjoys it when he’s older and we can collect together.; Any other collectors, or players, of TCGs like Pokémon, Yugioh, Magic, etc? Do you share this hobby with your kids?",
     "applied_tags": [],
-    "last_message_id": "1285762734629326929",
-    "last_activity_at": "2024-09-18T00:42:04.252Z",
+    "last_message_id": "1544780165127868488",
+    "last_activity_at": "2026-09-02T18:44:51.994Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -5252,8 +5252,8 @@
     "applied_tags": [
       "1088174004344471603"
     ],
-    "last_message_id": "1543447831535288470",
-    "last_activity_at": "2026-08-30T02:30:38.912Z",
+    "last_message_id": "1544838208028942458",
+    "last_activity_at": "2026-09-02T22:35:30.500Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -5364,8 +5364,8 @@
       "1088173776350498908",
       "1088173812866105415"
     ],
-    "last_message_id": "1539826634616610886",
-    "last_activity_at": "2026-08-20T02:41:18.288Z",
+    "last_message_id": "1544739732305481819",
+    "last_activity_at": "2026-09-02T16:04:12.058Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -5737,8 +5737,8 @@
     "name": "🕹︱dedicated-servers",
     "url": "https://discord.com/channels/1055290132250501135/1125886226252177448",
     "parent_id": null,
-    "description_status": "absent",
-    "topic": null,
+    "description_status": "present",
+    "topic": "Connection details for the community's dedicated game servers.",
     "applied_tags": [],
     "last_message_id": "1125886412160520283",
     "last_activity_at": "2023-07-04T20:30:38.617Z",
@@ -5850,8 +5850,8 @@
     "applied_tags": [
       "1088657396987088936"
     ],
-    "last_message_id": "1544524254958321674",
-    "last_activity_at": "2026-09-02T01:47:58.255Z",
+    "last_message_id": "1544765849125130310",
+    "last_activity_at": "2026-09-02T17:47:58.793Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -5896,8 +5896,8 @@
     "name": "📚︱wiki",
     "url": "https://discord.com/channels/1055290132250501135/1128416908736213083",
     "parent_id": null,
-    "description_status": "absent",
-    "topic": null,
+    "description_status": "present",
+    "topic": "visit the wiki at https://wiki.papasquad.xyz/; Talk about the community wiki here! What belongs on it, what's rotting, and whether to nuke it once and for all or to instead breathe new life into it. You make the call!",
     "applied_tags": [],
     "last_message_id": "1544510901019869225",
     "last_activity_at": "2026-09-02T00:54:54.428Z",
@@ -6001,11 +6001,11 @@
     "name": "📺︱dad-streams",
     "url": "https://discord.com/channels/1055290132250501135/1128731895509831724",
     "parent_id": null,
-    "description_status": "absent",
-    "topic": null,
+    "description_status": "present",
+    "topic": "Steaming your game? Drop your channel and find someone to watch!",
     "applied_tags": [],
-    "last_message_id": "1544423838874341387",
-    "last_activity_at": "2026-09-01T19:08:57.195Z",
+    "last_message_id": "1544786527417274370",
+    "last_activity_at": "2026-09-02T19:10:08.882Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -6434,8 +6434,8 @@
       "1088173896521494579",
       "1088173776350498908"
     ],
-    "last_message_id": "1544530779499921480",
-    "last_activity_at": "2026-09-02T02:13:53.827Z",
+    "last_message_id": "1544838009478844479",
+    "last_activity_at": "2026-09-02T22:34:43.162Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -6977,8 +6977,8 @@
     "description_status": "withheld",
     "topic": null,
     "applied_tags": [],
-    "last_message_id": "1544496215821918288",
-    "last_activity_at": "2026-09-01T23:56:33.204Z",
+    "last_message_id": "1544839497601130557",
+    "last_activity_at": "2026-09-02T22:40:37.958Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -7085,8 +7085,8 @@
     "description_status": "present",
     "topic": "There's gotta be some artists on the server, right? Show us your work in progress, your sketchbooks, your gallery exhibitions! Discuss techniques and mediums or you favorite movements / artists, ask for advice, or just drop in to browse some cool doodles. Any and all art/ medium is welcome, so long as it adheres to the guidelines of the server.",
     "applied_tags": [],
-    "last_message_id": "1544462970845929564",
-    "last_activity_at": "2026-09-01T21:44:26.984Z",
+    "last_message_id": "1544798592156442624",
+    "last_activity_at": "2026-09-02T19:58:05.340Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -7171,8 +7171,8 @@
       "1091425817852121129",
       "1088657156582150204"
     ],
-    "last_message_id": "1544547789600727050",
-    "last_activity_at": "2026-09-02T03:21:29.351Z",
+    "last_message_id": "1544808174199251004",
+    "last_activity_at": "2026-09-02T20:36:09.877Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -7205,8 +7205,8 @@
       "1091425817852121129",
       "1088657353102082068"
     ],
-    "last_message_id": "1544554154507239475",
-    "last_activity_at": "2026-09-02T03:46:46.863Z",
+    "last_message_id": "1544825005697925120",
+    "last_activity_at": "2026-09-02T21:43:02.819Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -7376,8 +7376,8 @@
       "1088174004344471603",
       "1088173776350498908"
     ],
-    "last_message_id": "1544551414699794503",
-    "last_activity_at": "2026-09-02T03:35:53.642Z",
+    "last_message_id": "1544835328093978725",
+    "last_activity_at": "2026-09-02T22:24:03.870Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -8991,8 +8991,8 @@
     "description_status": "present",
     "topic": "What are you listening to these days?",
     "applied_tags": [],
-    "last_message_id": "1544423487282749471",
-    "last_activity_at": "2026-09-01T19:07:33.369Z",
+    "last_message_id": "1544756810555068466",
+    "last_activity_at": "2026-09-02T17:12:03.830Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -9063,8 +9063,8 @@
     "description_status": "present",
     "topic": "Who doesn't love a good visual web mangovel? Whether your taste is for daily one-off webcomics, for fixed-start-and-end stories told in ink and paper, or for knowing 50 years of lore just to understand that one panel on page 32 of the latest issue, come here to let others know about it!; This channel is for general discussion of any graphic novels, manga, and similar visual literature. Any series or one-shot is welcome to be discussed, but all spoilers must be hidden behind spoiler tags. Put…",
     "applied_tags": [],
-    "last_message_id": "1544419545941278760",
-    "last_activity_at": "2026-09-01T18:51:53.680Z",
+    "last_message_id": "1544781156191305858",
+    "last_activity_at": "2026-09-02T18:48:48.282Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -9077,8 +9077,8 @@
     "description_status": "present",
     "topic": "This channel is for general discussion of anime. Any series or movie or whatever is welcome to be discussed, but all spoilers must be hidden behind spoiler tags. Put two bars, | | (without the space in between), on either side of the spoiler text to produce hidden text like this.; If you want to discuss spoilers without using spoiler tags, then start a new thread for that specific anime (or use an existing thread if there is one) in the TV and movies threads forum.; Intentionally spoiling…",
     "applied_tags": [],
-    "last_message_id": "1544006710769877032",
-    "last_activity_at": "2026-08-31T15:31:26.105Z",
+    "last_message_id": "1544584912739373066",
+    "last_activity_at": "2026-09-02T05:49:00.197Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -9323,8 +9323,8 @@
     "description_status": "present",
     "topic": "General chat about TV/Movies",
     "applied_tags": [],
-    "last_message_id": "1544553139502448712",
-    "last_activity_at": "2026-09-02T03:42:44.867Z",
+    "last_message_id": "1544841068602859652",
+    "last_activity_at": "2026-09-02T22:46:52.514Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -9812,8 +9812,8 @@
       "1088174004344471603",
       "1088173776350498908"
     ],
-    "last_message_id": "1543668299244503041",
-    "last_activity_at": "2026-08-30T17:06:42.510Z",
+    "last_message_id": "1544831607037370458",
+    "last_activity_at": "2026-09-02T22:09:16.701Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -10007,8 +10007,8 @@
     "description_status": "absent",
     "topic": null,
     "applied_tags": [],
-    "last_message_id": "1544443296204718220",
-    "last_activity_at": "2026-09-01T20:26:16.184Z",
+    "last_message_id": "1544806178067062984",
+    "last_activity_at": "2026-09-02T20:28:13.962Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -10038,8 +10038,8 @@
     "description_status": "present",
     "topic": "The smoke pit.; Welcome all branches of military from wherever you are.; Of course the National Guard and Reservists too.",
     "applied_tags": [],
-    "last_message_id": "1544104080241070180",
-    "last_activity_at": "2026-08-31T21:58:20.796Z",
+    "last_message_id": "1544678389242142751",
+    "last_activity_at": "2026-09-02T12:00:26.732Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -10082,8 +10082,8 @@
     "applied_tags": [
       "1088657156582150204"
     ],
-    "last_message_id": "1544348165052825772",
-    "last_activity_at": "2026-09-01T14:08:15.150Z",
+    "last_message_id": "1544783434965061703",
+    "last_activity_at": "2026-09-02T18:57:51.584Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -10119,8 +10119,8 @@
       "1088174004344471603",
       "1088173776350498908"
     ],
-    "last_message_id": "1544532980456886292",
-    "last_activity_at": "2026-09-02T02:22:38.576Z",
+    "last_message_id": "1544714213388189778",
+    "last_activity_at": "2026-09-02T14:22:47.874Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -10362,8 +10362,8 @@
     "description_status": "present",
     "topic": "On today's episode:; James says hello - \"Hello\"; Richard forgets the acronym for America - \"USB\"; And Papa Squad gets a new TG/TGT thread!; Also for Clarkson's Farm, James May Our Man In..., and Hammond's Workshop (for those who can watch it unlike me) or the weird survival show he made on Amazon.",
     "applied_tags": [],
-    "last_message_id": "1539656430263472148",
-    "last_activity_at": "2026-08-19T15:24:58.408Z",
+    "last_message_id": "1544782037649588244",
+    "last_activity_at": "2026-09-02T18:52:18.438Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -11750,8 +11750,8 @@
     "applied_tags": [
       "1088173776350498908"
     ],
-    "last_message_id": "1544535666573180938",
-    "last_activity_at": "2026-09-02T02:33:18.996Z",
+    "last_message_id": "1544778436092887081",
+    "last_activity_at": "2026-09-02T18:37:59.760Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -11976,8 +11976,8 @@
     "applied_tags": [
       "1088657396987088936"
     ],
-    "last_message_id": "1544549987705290782",
-    "last_activity_at": "2026-09-02T03:30:13.420Z",
+    "last_message_id": "1544796488989806732",
+    "last_activity_at": "2026-09-02T19:49:43.906Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -12595,8 +12595,8 @@
       "1088174004344471603",
       "1088173776350498908"
     ],
-    "last_message_id": "1543608933514485900",
-    "last_activity_at": "2026-08-30T13:10:48.617Z",
+    "last_message_id": "1544742744801681418",
+    "last_activity_at": "2026-09-02T16:16:10.293Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -13817,8 +13817,8 @@
     "applied_tags": [
       "1088174004344471603"
     ],
-    "last_message_id": "1543110401385046026",
-    "last_activity_at": "2026-08-29T04:09:49.295Z",
+    "last_message_id": "1544798327542120469",
+    "last_activity_at": "2026-09-02T19:57:02.251Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -14323,8 +14323,8 @@
     "applied_tags": [
       "1088657396987088936"
     ],
-    "last_message_id": "1543767424841809920",
-    "last_activity_at": "2026-08-30T23:40:35.894Z",
+    "last_message_id": "1544787353816797194",
+    "last_activity_at": "2026-09-02T19:13:25.911Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -14405,8 +14405,8 @@
     "description_status": "present",
     "topic": "You asked, you begged, you brought it in to every other channel. Come here for feet pics 🦶",
     "applied_tags": [],
-    "last_message_id": "1541839694180913222",
-    "last_activity_at": "2026-08-25T16:00:29.089Z",
+    "last_message_id": "1544773171939508344",
+    "last_activity_at": "2026-09-02T18:17:04.688Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -16036,11 +16036,11 @@
     "name": "✏︱activities",
     "url": "https://discord.com/channels/1055290132250501135/1381650656724652083",
     "parent_id": null,
-    "description_status": "absent",
-    "topic": null,
+    "description_status": "present",
+    "topic": "Social games and stuff! Play around and have fun with one-shot games and activities.",
     "applied_tags": [],
-    "last_message_id": "1544545129107296277",
-    "last_activity_at": "2026-09-02T03:10:55.040Z",
+    "last_message_id": "1544779456013541502",
+    "last_activity_at": "2026-09-02T18:42:02.928Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -16212,8 +16212,8 @@
       "1088174004344471603",
       "1088173776350498908"
     ],
-    "last_message_id": "1542592678875758744",
-    "last_activity_at": "2026-08-27T17:52:34.630Z",
+    "last_message_id": "1544838322248097944",
+    "last_activity_at": "2026-09-02T22:35:57.732Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -17626,8 +17626,8 @@
     "applied_tags": [
       "1088657396987088936"
     ],
-    "last_message_id": "1544464651696349256",
-    "last_activity_at": "2026-09-01T21:51:07.730Z",
+    "last_message_id": "1544800235853975572",
+    "last_activity_at": "2026-09-02T20:04:37.228Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -18521,8 +18521,8 @@
     "name": "❤️︱relationships",
     "url": "https://discord.com/channels/1055290132250501135/1450589625608306840",
     "parent_id": null,
-    "description_status": "absent",
-    "topic": null,
+    "description_status": "present",
+    "topic": "Talk candidly about your relationships with partners: the good, the awkward, and the advice nobody wants to ask for, but everyone is looking for.",
     "applied_tags": [],
     "last_message_id": "1543696584959852745",
     "last_activity_at": "2026-08-30T18:59:06.350Z",
@@ -19131,8 +19131,8 @@
       "1088173865638826065",
       "1088174004344471603"
     ],
-    "last_message_id": "1544547190796722276",
-    "last_activity_at": "2026-09-02T03:19:06.585Z",
+    "last_message_id": "1544839139243851896",
+    "last_activity_at": "2026-09-02T22:39:12.519Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -19725,8 +19725,8 @@
     "description_status": "present",
     "topic": "This is designated to debate the appeal of fictional or non fictional characters",
     "applied_tags": [],
-    "last_message_id": "1544462047893393500",
-    "last_activity_at": "2026-09-01T21:40:46.935Z",
+    "last_message_id": "1544840706915434627",
+    "last_activity_at": "2026-09-02T22:45:26.281Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -20063,8 +20063,8 @@
       "1088174004344471603",
       "1088173776350498908"
     ],
-    "last_message_id": "1544556575824289794",
-    "last_activity_at": "2026-09-02T03:56:24.150Z",
+    "last_message_id": "1544834762596814969",
+    "last_activity_at": "2026-09-02T22:21:49.045Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -20121,8 +20121,8 @@
     "applied_tags": [
       "1088173776350498908"
     ],
-    "last_message_id": "1544453084040921269",
-    "last_activity_at": "2026-09-01T21:05:09.786Z",
+    "last_message_id": "1544792762161827840",
+    "last_activity_at": "2026-09-02T19:34:55.361Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -20176,8 +20176,8 @@
       "1088173967233273877",
       "1088173812866105415"
     ],
-    "last_message_id": "1544547542136782908",
-    "last_activity_at": "2026-09-02T03:20:30.351Z",
+    "last_message_id": "1544835691358330990",
+    "last_activity_at": "2026-09-02T22:25:30.479Z",
     "summary_generated": null,
     "summary_override": null
   },
@@ -20212,8 +20212,8 @@
       "1088173776350498908",
       "1088173812866105415"
     ],
-    "last_message_id": "1543896338163306506",
-    "last_activity_at": "2026-08-31T08:12:51.225Z",
+    "last_message_id": "1544564207100493834",
+    "last_activity_at": "2026-09-02T04:26:43.588Z",
     "summary_generated": null,
     "summary_override": null
   },
