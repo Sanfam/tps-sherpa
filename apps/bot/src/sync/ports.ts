@@ -18,9 +18,11 @@ export interface RawChannel {
   type: number;
   /** Channel topic. The best identity source for a Channel, and free. */
   topic?: string | null;
+  /** Whether the bot can see this Channel at all. False means excluded. */
+  visible: boolean;
   /**
-   * Whether the bot may read this Channel's message history. False means
-   * deliberately withheld (visible, content off-limits) — not broken.
+   * Whether the bot may read message history. Visible but not readable means
+   * deliberately withheld — content off-limits, not broken.
    */
   contentReadable: boolean;
 }

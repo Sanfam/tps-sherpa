@@ -26,11 +26,24 @@ export interface RawGuildChannel {
  * the message endpoint — it has to be decided from permissions up front.
  * Verified against this guild on 2026-09-01.
  */
+export const canView = (
+  channel: { permission_overwrites?: Overwrite[] },
+  ctx: { guildId: string; roleIds: string[]; basePermissions: bigint },
+): boolean => (effective(channel, ctx) & VIEW_CHANNEL) !== 0n;
+
 export const canReadHistory = (
   channel: { permission_overwrites?: Overwrite[] },
   ctx: { guildId: string; roleIds: string[]; basePermissions: bigint },
 ): boolean => {
-  if ((ctx.basePermissions & ADMINISTRATOR) !== 0n) return true;
+  const p = effective(channel, ctx);
+  return (p & VIEW_CHANNEL) !== 0n && (p & READ_MESSAGE_HISTORY) !== 0n;
+};
+
+const effective = (
+  channel: { permission_overwrites?: Overwrite[] },
+  ctx: { guildId: string; roleIds: string[]; basePermissions: bigint },
+): bigint => {
+  if ((ctx.basePermissions & ADMINISTRATOR) !== 0n) return ~0n;
   let p = ctx.basePermissions;
   const ow = channel.permission_overwrites ?? [];
   const everyone = ow.find((o) => o.id === ctx.guildId && o.type === 0);
@@ -49,7 +62,7 @@ export const canReadHistory = (
   }
   p &= ~deny;
   p |= allow;
-  return (p & VIEW_CHANNEL) !== 0n && (p & READ_MESSAGE_HISTORY) !== 0n;
+  return p;
 };
 
 const GATEWAY_MESSAGE_CONTENT = 1 << 18;
@@ -106,6 +119,7 @@ export const discordRest = (config: {
         name: c.name,
         type: c.type,
         topic: c.topic ?? null,
+        visible: canView(c, ctx),
         contentReadable: canReadHistory(c, ctx),
       }));
     },

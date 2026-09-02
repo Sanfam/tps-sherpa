@@ -55,7 +55,9 @@ export const buildCatalog = async (deps: {
   // type handled elsewhere — none of them belong in the Catalog as Channels.
   const channels = (await deps.discord.listChannels()).filter(
     (c) =>
-      c.type === ChannelType.GuildText || c.type === ChannelType.GuildAnnouncement,
+      c.visible &&
+      (c.type === ChannelType.GuildText ||
+        c.type === ChannelType.GuildAnnouncement),
   );
   return {
     catalog: channels.map((c) => ({

@@ -35,10 +35,29 @@ describe("against the recorded guild", () => {
     expect(catalog).toHaveLength(
       recorded.filter(
         (c) =>
-          c.type === ChannelType.GuildText ||
-          c.type === ChannelType.GuildAnnouncement,
+          c.visible &&
+          (c.type === ChannelType.GuildText ||
+            c.type === ChannelType.GuildAnnouncement),
       ).length,
     );
+  });
+
+  it("excludes Channels the bot cannot see, and withholds those it cannot read", async () => {
+    const { catalog } = await buildCatalog({
+      discord: fixtureDiscord({ channels: recorded }),
+      guildId: GUILD_ID,
+    });
+    const invisible = new Set(recorded.filter((c) => !c.visible).map((c) => c.id));
+    expect(catalog.filter((e) => invisible.has(e.id))).toEqual([]);
+
+    // 9 channels are deliberately listed without content: Papa Sherpa holds
+    // VIEW but not READ_MESSAGE_HISTORY. They must read as withheld, never
+    // absent — the distinction is a privacy decision, not a data gap.
+    const withheld = catalog.filter((e) => e.description_status === "withheld");
+    expect(withheld.length).toBe(
+      recorded.filter((c) => c.visible && !c.contentReadable && [0, 5].includes(c.type)).length,
+    );
+    expect(withheld.every((e) => e.topic === null)).toBe(true);
   });
 
   it("gives every Entity an ID-derived deep link and empty summary slots", async () => {
@@ -49,6 +68,7 @@ describe("against the recorded guild", () => {
 
     for (const entity of catalog) {
       expect(entity.type).toBe("channel");
+      expect(["present", "absent", "withheld"]).toContain(entity.description_status);
       expect(entity.url).toBe(
         `https://discord.com/channels/${GUILD_ID}/${entity.id}`,
       );
