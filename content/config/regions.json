@@ -1,0 +1,241 @@
+{
+  "_comment": "Region gazetteer. Staff-editable: add a canonical region name and the phrases that mean it. Matching is whole-word, case-insensitive, longest phrase first, over an Entity's name only. Nothing clever — if a place is missing, add it here rather than changing code.",
+  "regions": {
+    "Alabama": [
+      "alabama"
+    ],
+    "Arizona": [
+      "arizona",
+      "phoenix",
+      "tucson"
+    ],
+    "Arkansas": [
+      "arkansas"
+    ],
+    "Australia": [
+      "australia",
+      "melbourne",
+      "sydney",
+      "brisbane",
+      "perth"
+    ],
+    "California": [
+      "california",
+      "bay area",
+      "los angeles",
+      "san diego",
+      "socal",
+      "norcal"
+    ],
+    "Canada": [
+      "canada",
+      "british columbia",
+      "toronto",
+      "vancouver",
+      "ontario",
+      "alberta",
+      "montreal"
+    ],
+    "Colorado": [
+      "colorado",
+      "denver"
+    ],
+    "Delaware": [
+      "delaware"
+    ],
+    "Europe": [
+      "europe"
+    ],
+    "Finland": [
+      "finland",
+      "helsinki"
+    ],
+    "Florida": [
+      "florida",
+      "tampa",
+      "orlando",
+      "miami",
+      "jacksonville"
+    ],
+    "France": [
+      "france",
+      "paris"
+    ],
+    "Georgia": [
+      "georgia",
+      "atlanta"
+    ],
+    "Germany": [
+      "germany",
+      "deutschland",
+      "berlin",
+      "munich"
+    ],
+    "Illinois": [
+      "illinois",
+      "chicagoland",
+      "chicago"
+    ],
+    "Indiana": [
+      "indiana",
+      "indianapolis"
+    ],
+    "Ireland": [
+      "ireland",
+      "dublin"
+    ],
+    "Israel": [
+      "israel"
+    ],
+    "Japan": [
+      "japan",
+      "tokyo"
+    ],
+    "Kansas City": [
+      "kansas city",
+      "kansas"
+    ],
+    "Kentucky": [
+      "kentucky",
+      "louisville"
+    ],
+    "Luxembourg": [
+      "luxembourg"
+    ],
+    "Massachusetts": [
+      "massachusetts",
+      "boston"
+    ],
+    "Michigan": [
+      "michigan",
+      "michiganders",
+      "detroit"
+    ],
+    "Minnesota": [
+      "minnesota",
+      "twin cities",
+      "minneapolis"
+    ],
+    "Netherlands": [
+      "netherlands",
+      "holland",
+      "amsterdam"
+    ],
+    "Nevada": [
+      "nevada",
+      "las vegas",
+      "reno"
+    ],
+    "New England": [
+      "new england"
+    ],
+    "New Jersey": [
+      "new jersey",
+      "nj"
+    ],
+    "New York": [
+      "new york",
+      "nyc",
+      "long island",
+      "hudson valley",
+      "rockland county",
+      "buffalo",
+      "rochester",
+      "ny"
+    ],
+    "Nordics": [
+      "nordic",
+      "nordics",
+      "scandinavia"
+    ],
+    "North Carolina": [
+      "north carolina",
+      "charlotte",
+      "asheville",
+      "piedmont triad",
+      "raleigh",
+      "durham",
+      "nc"
+    ],
+    "Ohio": [
+      "ohio",
+      "cleveland",
+      "columbus",
+      "cincinnati"
+    ],
+    "Pacific Northwest": [
+      "pacific northwest",
+      "pnw",
+      "seattle",
+      "portland"
+    ],
+    "Pennsylvania": [
+      "pennsylvania",
+      "philadelphia",
+      "philly",
+      "pittsburgh",
+      "harrisburg"
+    ],
+    "Philippines": [
+      "philippines",
+      "manila"
+    ],
+    "Russia": [
+      "russia",
+      "russian"
+    ],
+    "Singapore": [
+      "singapore"
+    ],
+    "South Africa": [
+      "south africa"
+    ],
+    "South Carolina": [
+      "south carolina",
+      "lowcountry",
+      "charleston",
+      "greenville",
+      "sc"
+    ],
+    "Tennessee": [
+      "tennessee",
+      "nashville",
+      "memphis"
+    ],
+    "Texas": [
+      "texas",
+      "dfw",
+      "houston",
+      "austin",
+      "dallas",
+      "san antonio"
+    ],
+    "United Kingdom": [
+      "united kingdom",
+      "britain",
+      "england",
+      "scotland",
+      "wales",
+      "london"
+    ],
+    "Utah": [
+      "utah",
+      "salt lake city"
+    ],
+    "Virginia": [
+      "virginia"
+    ],
+    "Washington DC": [
+      "washington dc",
+      "washington d c"
+    ],
+    "West Virginia": [
+      "west virginia"
+    ],
+    "Wisconsin": [
+      "wisconsin",
+      "milwaukee",
+      "madison"
+    ]
+  }
+}

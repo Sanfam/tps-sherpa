@@ -33,6 +33,12 @@ export interface RawChannel {
    * deliberately withheld — content off-limits, not broken.
    */
   contentReadable: boolean;
+  /**
+   * A Forum's own tag set. `applied_tags` on a Post is a list of IDs into
+   * this, so without it the Catalog can only publish snowflakes — which is
+   * the exact defect class the render path exists to remove. Forums only.
+   */
+  availableTags?: Array<{ id: string; name: string }>;
 }
 
 /**
@@ -45,7 +51,7 @@ export interface RawThread {
   name: string;
   /** The Forum or Channel it lives in. */
   parentId: string;
-  /** From the Forum's tag set. Mod-authored ground truth. Posts only. */
+  /** IDs into the parent Forum's tag set. Resolved to names in the Catalog. */
   appliedTags: string[];
   /**
    * The starter message body. A Post's ID equals its starter message's ID,

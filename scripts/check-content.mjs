@@ -36,6 +36,12 @@ if (Array.isArray(catalog)) {
     if (e.description_status === "withheld" && e.topic !== null)
       problems.push(`${e.id}: withheld but carries a topic`);
     if (!e.url?.endsWith(`/${e.id}`)) problems.push(`${e.id}: url does not end in its own id`);
+    // Platform tags are published as mod-authored names. A snowflake here is
+    // the old script's defect wearing a new hat, and it reaches the page.
+    if (e.applied_tags?.some((t) => /^\d{17,20}$/.test(t)))
+      problems.push(`${e.id}: applied_tags contains a raw Discord id`);
+    if (!Array.isArray(e.region) || e.region.some((r) => typeof r !== "string"))
+      problems.push(`${e.id}: region is not an array of names`);
   }
   // Sorted by id, so a re-run produces no diff. An unsorted Catalog means
   // something wrote it by hand.

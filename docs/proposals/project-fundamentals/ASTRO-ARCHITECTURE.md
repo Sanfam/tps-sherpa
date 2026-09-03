@@ -438,6 +438,12 @@ Most of the proposed taxonomy is not a classification problem:
 
 **Native `applied_tags` win wherever a Post has them.** LLM tags are additive. A contradiction between the two is logged for a mod to look at, never used to overwrite mod intent.
 
+**Built and measured 2026-09-02.** All three mechanical axes are in the sync, and none of them needed a model.
+
+- **Platform.** 892 of 1,102 Posts (81%) carry mod tags, across 45 distinct names. Phase 1 had been publishing these as **raw tag snowflakes** — the leaked-identifier defect surviving into a field nobody had looked at — because `applied_tags` is a list of IDs into the Forum's own tag set. Resolving them needs `available_tags` off the Forum, now carried on the read port. A tag ID the Forum no longer defines is dropped and warned about, never published.
+- **Region.** 69 of 71 regional Posts matched against a committed gazetteer, with **zero false positives across all 1,253 Entity names**. The two misses are a joke title ("Middle Zealand") and a Post that names no place. Matching is longest-phrase-first over the name only — never the body, because a Post mentioning Houston in passing is not a Houston Post, and reading bodies is where a mechanical facet turns into a bad classifier. Two-letter abbreviations earn their place or come out: `DC` cost two comics threads and `UK` bought nothing, so both were dropped while `NC`, `SC`, `NJ` and `NY` stayed.
+- **Activity.** active 205, recent 123, quiet 302, dormant 620, never posted 3. **Not stored.** An Entity crossing a threshold is the clock moving, not the Catalog changing, so writing the bucket in would churn a commit on every scheduled run. `activityBucket()` is the single definition and callers derive on read. Format is likewise just `type`, already in the record.
+
 ### Bootstrap, then freeze
 
 **Bootstrap once.** Derive the Topic vocabulary from the full 400–600 entity corpus: consensus across 3–5 independent runs keeping only tags stable across all of them, a critique pass, then ~10 minutes of Staff review. Run it on a **stratified** sample, not the raw corpus — an unguided sweep of a gaming-heavy corpus yields fifteen gaming tags and one called "hobbies," and that skew bakes in before a human ever sees it.

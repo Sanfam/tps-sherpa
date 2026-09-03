@@ -24,9 +24,16 @@ describe("Forums, Posts and Threads", () => {
   it("puts a Post in the Catalog as a Post, carrying its Forum's applied tags", async () => {
     const { catalog } = await buildCatalog({
       discord: guild({
-        channels: [{ id: "10", name: "regional-chat", type: ChannelType.GuildForum }],
+        channels: [
+          {
+            id: "10",
+            name: "regional-chat",
+            type: ChannelType.GuildForum,
+            availableTags: [{ id: "1091425817852121129", name: "Europe" }],
+          },
+        ],
         threads: [
-          { id: "20", name: "United Kingdom", parentId: "10", appliedTags: ["europe"], firstPost: "Dads in the UK, say hello here." },
+          { id: "20", name: "United Kingdom", parentId: "10", appliedTags: ["1091425817852121129"], firstPost: "Dads in the UK, say hello here." },
         ],
       }),
       guildId: GUILD_ID,
@@ -36,7 +43,9 @@ describe("Forums, Posts and Threads", () => {
       type: "post",
       name: "United Kingdom",
       parent_id: "10",
-      applied_tags: ["europe"],
+      // The Forum's tag NAME. Discord returns an ID here; publishing that
+      // would be the old page's leaked-snowflake defect in a new field.
+      applied_tags: ["Europe"],
       description_status: "present",
     });
   });

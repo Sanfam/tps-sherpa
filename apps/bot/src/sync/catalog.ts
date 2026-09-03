@@ -1,3 +1,4 @@
+import { matchRegions, type Gazetteer } from "./facets.ts";
 import { normaliseDescription, type NameLookup } from "./normalise.ts";
 import { ChannelType } from "./ports.ts";
 import type {
@@ -31,8 +32,17 @@ export interface Entity {
   description_status: DescriptionStatus;
   /** Channel topic or Post first message. Enrichment from samples is later. */
   topic: string | null;
-  /** From the Forum's tag set — mod-authored ground truth. Posts only. */
+  /**
+   * The Platform facet: mod-authored Forum tag NAMES, resolved from the IDs
+   * Discord returns. Ground truth — never overwritten by anything derived.
+   * Posts only.
+   */
   applied_tags: string[];
+  /**
+   * The Region facet: every region this Entity's name names, from the
+   * committed gazetteer. Empty for the ~95% of Entities that name no place.
+   */
+  region: string[];
   /** Newest message. Null if nothing has been posted. */
   last_message_id: string | null;
   /**
@@ -70,6 +80,8 @@ export const buildCatalog = async (deps: {
   previous?: Entity[];
   /** Entities that are visible and readable but are not destinations. */
   exclusions?: Set<string>;
+  /** Region gazetteer. Absent means the Region facet stays empty, not wrong. */
+  regions?: Gazetteer;
   /** Where to report conditions a human needs to act on. Defaults to silence. */
   warn?: (message: string) => void;
 }): Promise<{
@@ -133,6 +145,9 @@ export const buildCatalog = async (deps: {
   );
   const threads = allThreads.filter((t) => !excluded.has(t.id));
   const containerType = new Map(containers.map((c) => [c.id, c.type]));
+  const tagSets = new Map(
+    containers.map((c) => [c.id, new Map((c.availableTags ?? []).map((t) => [t.id, t.name]))]),
+  );
 
   // One entry per name, carrying every ID that name maps to. Duplicate-named
   // roles are an artifact of past bot behaviour and are interchangeable, so a
@@ -192,6 +207,25 @@ export const buildCatalog = async (deps: {
   };
 
 
+  const regions = deps.regions ?? new Map();
+
+  // Discord hands back tag IDs; the Catalog publishes names. An unresolvable
+  // ID is dropped rather than published: a snowflake in the output is the
+  // defect the whole render path exists to prevent, and a Post silently
+  // losing a tag is the lesser failure — so it is warned about, not hidden.
+  const tagNames = (t: RawThread): string[] => {
+    const known = tagSets.get(t.parentId);
+    return t.appliedTags.flatMap((id) => {
+      const name = known?.get(id);
+      if (name) return [name];
+      deps.warn?.(
+        `[tags] "${t.name}" (${t.id}) carries tag ${id}, which its Forum's tag ` +
+          `set does not define. Dropped rather than published as a snowflake.`,
+      );
+      return [];
+    });
+  };
+
   const fromContainer = (c: RawChannel): Entity => {
     const topic = c.contentReadable
       ? normaliseDescription(c.topic, names)
@@ -209,6 +243,7 @@ export const buildCatalog = async (deps: {
           : "absent",
       topic,
       applied_tags: [],
+      region: matchRegions(c.name, regions),
       last_message_id: c.lastMessageId ?? null,
       last_activity_at: snowflakeTime(c.lastMessageId),
       summary_generated: null,
@@ -231,7 +266,8 @@ export const buildCatalog = async (deps: {
       parent_id: t.parentId,
       description_status: first ? "present" : "absent",
       topic: first,
-      applied_tags: t.appliedTags,
+      applied_tags: tagNames(t),
+      region: matchRegions(t.name, regions),
       last_message_id: t.lastMessageId ?? null,
       last_activity_at: snowflakeTime(t.lastMessageId),
       summary_generated: null,

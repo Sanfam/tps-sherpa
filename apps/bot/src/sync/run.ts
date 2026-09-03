@@ -12,6 +12,7 @@ import { dirname, resolve } from "node:path";
 import { buildCatalog, type Entity } from "./catalog.ts";
 import { discordRest } from "./discord-adapter.ts";
 import { parseExclusions } from "./exclusions.ts";
+import { activityBucket, parseGazetteer } from "./facets.ts";
 
 const token = process.env["DISCORD_BOT_TOKEN"];
 const guildId = process.env["DISCORD_GUILD_ID"];
@@ -25,6 +26,7 @@ const contentPath = (rel: string) =>
 const CATALOG_PATH = contentPath("index/data.json");
 const ROLES_PATH = contentPath("config/roles.json");
 const EXCLUSIONS_PATH = contentPath("config/index-flags.json");
+const REGIONS_PATH = contentPath("config/regions.json");
 
 /** Overrides are human-authored and must survive every sync. */
 const readPrevious = async (): Promise<Entity[]> => {
@@ -46,12 +48,22 @@ const exclusionSource = await readFile(EXCLUSIONS_PATH, "utf8").catch(
   },
 );
 const exclusions = parseExclusions(exclusionSource);
+// A missing gazetteer means no Region facet — an empty facet, not a wrong one.
+// Any OTHER read failure must still throw: silently emptying every Region on a
+// permissions error would rewrite the Catalog and look like a clean run.
+const regions = parseGazetteer(
+  await readFile(REGIONS_PATH, "utf8").catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }),
+);
 const warn = (m: string) => console.warn(m);
 const { catalog, roleManifest, exclusionsApplied } = await buildCatalog({
   discord: discordRest({ token, guildId, warn }),
   guildId,
   previous,
   exclusions,
+  regions,
   warn,
 });
 
@@ -87,5 +99,15 @@ console.log(
 );
 for (const id of [...exclusions].filter((id) => !exclusionsApplied.includes(id)))
   console.warn(`[exclusions] configured id ${id} matched no Entity.`);
+const activity = catalog.reduce<Record<string, number>>((acc, e) => {
+  const bucket = activityBucket(e.last_activity_at) ?? "never posted";
+  acc[bucket] = (acc[bucket] ?? 0) + 1;
+  return acc;
+}, {});
+// Derived on read, never stored: an Entity crossing a threshold is the clock
+// moving, not the Catalog changing, and writing it would churn every commit.
+console.log(`  activity:  ${Object.entries(activity).map(([k, n]) => `${k} ${n}`).join(", ")}`);
+console.log(`  regions:   ${catalog.filter((e) => e.region.length).length} Entities matched`);
+console.log(`  platform:  ${catalog.filter((e) => e.applied_tags.length).length} Entities tagged`);
 console.log(`  overrides carried forward: ${catalog.filter((e) => e.summary_override).length}`);
 console.log(unchanged ? "  UNCHANGED — nothing to commit" : "  changed");

@@ -34,6 +34,7 @@ export interface RawGuildChannel {
   topic?: string | null;
   last_message_id?: string | null;
   permission_overwrites?: Overwrite[];
+  available_tags?: Array<{ id: string; name: string }>;
 }
 
 /**
@@ -204,6 +205,7 @@ export const discordRest = (config: {
         visible: canView(c, ctx),
         memberVisible: memberCtx ? canView(c, memberCtx) : canView(c, ctx),
         contentReadable: canReadHistory(c, ctx),
+        availableTags: c.available_tags?.map((t) => ({ id: t.id, name: t.name })),
       }));
     },
 

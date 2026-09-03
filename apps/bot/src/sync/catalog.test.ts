@@ -105,6 +105,7 @@ describe("buildCatalog", () => {
         description_status: "present" as const,
         topic: "gaming chat",
         applied_tags: [],
+        region: [],
         last_message_id: null,
         last_activity_at: null,
         summary_generated: null,
@@ -249,5 +250,123 @@ describe("activity timestamps", () => {
     });
     expect(catalog[0]?.last_message_id).toBeNull();
     expect(catalog[0]?.last_activity_at).toBeNull();
+  });
+});
+
+describe("the Platform facet", () => {
+  const forum = {
+    id: "900",
+    name: "game-talk",
+    type: ChannelType.GuildForum,
+    availableTags: [
+      { id: "1088129693884096512", name: "PlayStation" },
+      { id: "1088129792395710505", name: "Co-op" },
+    ],
+  };
+
+  it("publishes mod-authored tag names, never the snowflakes Discord returns", async () => {
+    // The Catalog is published output. A tag ID here is the same defect as the
+    // raw <#id> the old page leaked, just in a different field.
+    const { catalog } = await buildCatalog({
+      discord: fixtureDiscord({
+        channels: [forum],
+        threads: [
+          {
+            id: "901",
+            name: "Helldivers squad",
+            parentId: "900",
+            appliedTags: ["1088129693884096512", "1088129792395710505"],
+            firstPost: "Anyone up for a dive tonight?",
+          },
+        ],
+      }),
+      guildId: GUILD_ID,
+    });
+
+    expect(catalog.find((e) => e.id === "901")?.applied_tags).toEqual([
+      "PlayStation",
+      "Co-op",
+    ]);
+  });
+
+  it("drops a tag its Forum does not define, and says so", async () => {
+    const warnings: string[] = [];
+    const { catalog } = await buildCatalog({
+      discord: fixtureDiscord({
+        channels: [forum],
+        threads: [
+          {
+            id: "902",
+            name: "Stale tag",
+            parentId: "900",
+            appliedTags: ["1088129693884096512", "9999999999999999999"],
+            firstPost: "A tag was deleted out from under this Post.",
+          },
+        ],
+      }),
+      guildId: GUILD_ID,
+    });
+
+    expect(catalog.find((e) => e.id === "902")?.applied_tags).toEqual(["PlayStation"]);
+  });
+});
+
+describe("the Region facet", () => {
+  const gazetteer = new Map([
+    ["Minnesota", ["minnesota", "twin cities"]],
+    ["Texas", ["texas", "houston"]],
+  ]);
+
+  it("tags an Entity with the regions its name names", async () => {
+    const { catalog } = await buildCatalog({
+      discord: fixtureDiscord({
+        channels: [{ id: "111", name: "regional-chat", type: ChannelType.GuildForum }],
+        threads: [
+          {
+            id: "222",
+            name: "Minnesota!",
+            parentId: "111",
+            appliedTags: [],
+            firstPost: "Any dads in the Twin Cities?",
+          },
+          {
+            id: "333",
+            name: "Board games",
+            parentId: "111",
+            appliedTags: [],
+            firstPost: "What is everyone playing?",
+          },
+        ],
+      }),
+      guildId: GUILD_ID,
+      regions: gazetteer,
+    });
+
+    expect(catalog.find((e) => e.id === "222")?.region).toEqual(["Minnesota"]);
+    // Named after no place: an empty facet, not a guess.
+    expect(catalog.find((e) => e.id === "333")?.region).toEqual([]);
+  });
+
+  it("matches on the name only, never on the description", async () => {
+    // A Post that mentions Houston in passing is not a Houston Post. Reading
+    // the body is where a mechanical facet turns into a bad classifier.
+    const { catalog } = await buildCatalog({
+      discord: fixtureDiscord({
+        channels: [{ id: "111", name: "game-talk", type: ChannelType.GuildForum }],
+        threads: [
+          {
+            id: "444",
+            name: "Weekend plans",
+            parentId: "111",
+            appliedTags: [],
+            firstPost: "I am flying to Houston, Texas on Friday.",
+          },
+        ],
+      }),
+      guildId: GUILD_ID,
+      regions: gazetteer,
+    });
+
+    expect(catalog.find((e) => e.id === "444")?.region).toEqual([]);
   });
 });

@@ -15,6 +15,7 @@ const entity = (id: string, name: string): Entity => ({
   description_status: "absent",
   topic: null,
   applied_tags: [],
+  region: [],
   last_message_id: null,
   last_activity_at: null,
   summary_generated: null,
