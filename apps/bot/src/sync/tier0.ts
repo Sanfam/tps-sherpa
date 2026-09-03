@@ -47,6 +47,28 @@ export const DEFAULT_MONITORED_CHANNELS = ["👋︱introductions"];
 const isCapturable = (e: Entity) =>
   e.type === "post" || e.type === "thread" || e.type === "channel";
 
+/**
+ * Whether an Entity's conversation is monitored, and so extract-and-discard.
+ *
+ * A Thread inside a monitored channel is monitored conversation too. The intro
+ * threads are where the actual introductions are, so matching only on the
+ * channel's own name would have captured exactly what the carve-out exists to
+ * protect.
+ *
+ * Exported because Tier 0 is not the only place this has to hold: the LLM
+ * boundary enforces the same carve-out, and a second definition of "monitored"
+ * is a second thing to keep in step.
+ */
+export const isMonitored = (
+  entity: Entity,
+  byId: Map<string, Entity>,
+  monitored: ReadonlySet<string>,
+): boolean => {
+  if (monitored.has(entity.name) || monitored.has(entity.id)) return true;
+  const parent = entity.parent_id ? byId.get(entity.parent_id) : undefined;
+  return parent ? monitored.has(parent.name) || monitored.has(parent.id) : false;
+};
+
 export const selectForCapture = (
   catalog: Entity[],
   state: CaptureState,
@@ -55,15 +77,6 @@ export const selectForCapture = (
   const monitored = new Set(options.monitored ?? DEFAULT_MONITORED_CHANNELS);
   const byId = new Map(catalog.map((e) => [e.id, e]));
 
-  // A Thread inside a monitored channel is monitored conversation too. The
-  // intro threads are where the actual introductions are, so matching only on
-  // the channel's own name would have captured exactly what the carve-out
-  // exists to protect.
-  const isMonitored = (e: Entity): boolean => {
-    if (monitored.has(e.name) || monitored.has(e.id)) return true;
-    const parent = e.parent_id ? byId.get(e.parent_id) : undefined;
-    return parent ? monitored.has(parent.name) || monitored.has(parent.id) : false;
-  };
   const decision: CaptureDecision = {
     capture: [],
     skippedUnchanged: 0,
@@ -73,7 +86,7 @@ export const selectForCapture = (
   };
 
   for (const entity of catalog) {
-    if (isMonitored(entity)) {
+    if (isMonitored(entity, byId, monitored)) {
       decision.skippedMonitored++;
       continue;
     }

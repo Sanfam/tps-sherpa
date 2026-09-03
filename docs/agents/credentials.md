@@ -22,6 +22,7 @@ Every credential gets three homes:
 |---|---|---|---|---|---|
 | `DISCORD_BOT_TOKEN` | Papa Sherpa reads the guild and (later) posts | ⚠️ local `.env` only — **not yet in Railway** | ⚠️ TODO | Never (rotate on exposure) | ⚠️ TODO |
 | `GITHUB_MACHINE_TOKEN` | The bot commits the Catalog and role manifest | ⚠️ local `.env` only — **not yet in Railway** | ⚠️ TODO | **No expiry set** *(verified 2026-09-02)* | ⚠️ TODO |
+| `LLM_API_KEY` | Every model call — tagging, summaries | ⚠️ local `.env` only (as `OPENROUTER_API_KEY`) — **not yet in Railway** | ⚠️ TODO | Provider-managed | ⚠️ TODO |
 | Discord application | Owns the bot; invisible until it is lost | Discord developer portal | n/a — account ownership | n/a | ⚠️ TODO |
 | Railway project | Hosting | n/a | n/a | n/a | ⚠️ TODO |
 | Cloudflare account | DNS, proxy, R2 | n/a | n/a | n/a | ⚠️ TODO |
