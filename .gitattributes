@@ -1,0 +1,6 @@
+# normalise.ts masks URLs with NUL sentinels — a delimiter that cannot occur in
+# real text, which is the right choice there. The cost is that git classifies
+# the file as binary: no diff, no line blame, no conflict resolution, and a
+# reviewer sees "Bin 4464 -> 4978 bytes" instead of the change. For the file
+# that owns identifier redaction, unreviewable is the wrong trade.
+*.ts diff
