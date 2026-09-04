@@ -452,6 +452,38 @@ Most of the proposed taxonomy is not a classification problem:
 
 **When the vocabulary version bumps, retag the whole corpus from Tier 0**, not from the API. That is what Tier 0 is for.
 
+#### Built 2026-09-03 — and the method needed correcting from measurement
+
+**Plain string consensus over independent derivations does not work, and the
+correction matters more than the code.** Four independent derivations of this
+corpus produced 55 distinct slugs of which **3** appeared in all four; on a
+second model, 70 of which **0** did. The runs agreed on the *concepts* —
+`tabletop-game`, `tabletop-gaming`, `tabletop-and-board-game` — and disagreed
+on the words, so unanimity was measuring naming variance and nothing else.
+Freezing the survivors would have produced a nine-tag vocabulary covering only
+parenting and gaming, with no books, film, music or region, in a corpus that
+has a Forum for each. That is the same failure the "fifteen gaming tags"
+warning describes, arriving by a different route.
+
+The pipeline that works has four stages, and each was added against a
+measurement rather than a hunch:
+
+1. **Derive** — N independent runs over the stratified sample, producing candidates.
+2. **Merge** — one call folding naming variants into concepts. Without it the ballot splits across `books-and-comic` and `books-and-reading` and unanimity drops books entirely.
+3. **Vote** — N independent rounds choosing from that one list. **Consensus is measured here**, where string identity means something.
+4. **Critique** — drops, merges and rewords the survivors. It may not add: a slug no round chose has no consensus behind it, and this is enforced in code rather than asked for in a prompt.
+
+**Stratification.** Strata are parent containers, each Channel and Forum also
+its own stratum, capped at 5. Measured: the corpus is **41.1% one gaming
+Forum** (507 of 1,235 eligible Entities); the capped sample is **4.3%**. The
+skew is reported in the proposal file rather than assumed absent.
+
+**The freeze is a file, not a flag.** The bootstrap only ever writes
+`content/config/topics.proposed.json`, marked `"status": "proposed"`, and the
+parser **refuses** to classify against anything still marked that way. Freezing
+is a person reading ~20 tags, changing one word, and committing it as
+`topics.json`. Re-running the bootstrap cannot touch the frozen file.
+
 ---
 
 ## Models and privacy
@@ -459,6 +491,10 @@ Most of the proposed taxonomy is not a classification problem:
 - **Pseudonymize in code before any model call**, not in the prompt. Validate output against the member-name cache and snowflake patterns. Use the prompt only for suppressing *re-identifying detail*, which regex cannot catch — in a readership of dozens who know each other, "a member who flies for a living" identifies one person.
 - **Best-effort, and acknowledged as such.** No model, local or hosted, should be piped fully identifying information. This cannot be guaranteed; it can be designed for.
 - **Split by job.** The bootstrap runs once and sets the vocabulary everything downstream inherits — run it on the strongest model available and eat the cost. Steady-state classification and activity summaries run cheap, off-peak.
+  - **Revised 2026-09-04 from measurement: one model, both roles, until quality is measurably short.** The seam stays — `ModelRole` and the two env vars are untouched, and re-splitting is a config change — but the benchmark gave no reason to spend on it. `deepseek/deepseek-v4-flash-0731` is the configured model for both. Benchmarked on the real derivation (117 entries in, ~20 tags out): DeepSeek was the **only** candidate to complete the pipeline at all. `qwen/qwen3.7-flash` returned `{}` twice through the retry, `z-ai/glm-5.3-flash` never returned inside fifteen minutes, and `moonshotai/kimi-k2.6` timed out at ~11x the input price. "The strongest model available" turned out to name a model that could not finish the job, so the premise needed correcting rather than the budget raising.
+  - **⚠️ The provider is the variable, not the model — and pinning the model does not pin the provider.** An earlier note here claimed the dated build was not routed across providers. That was wrong and is corrected: it is. Measured 2026-09-04, the same prompt to the same pinned model, five times: **11s, 47s, 58s, 106s, 205s**, tracking which provider the router chose, with completions ranging from 48 to 5,710 tokens. The 11s call returned a *truncated* answer, so speed was not a proxy for health either. **Every hang and every empty `{}` seen while building the Phase 2 passes traces to this**, and re-benchmarking models against it would have been measuring the router. Express the routing preference instead: `LLM_PROVIDER`, passed through verbatim, `{"sort":"throughput"}` today.
+  - **Timeouts are sized per job, not globally.** A short leash is what turns a bad route into a retry rather than a block, so the per-Entity passes keep 180s. The bootstrap sets its own 420s, because one derivation was measured at 205s *answering correctly* and the default was aborting work that would have succeeded. Raising the global default to suit the slow job is the wrong lever — it was tried at 600s and left every other call waiting ten minutes on a hang.
+  - **The bootstrap derives sequentially.** Four concurrent requests for a 2,000-token completion queue behind one another, and a `Promise.all` then loses the whole derivation to whichever one ran out of time. It runs once; wall clock is the cheapest thing it has to spend.
 - **Write to the OpenAI wire format** so a local model is a config change if the answer ever needs to be "nothing leaves the box."
 - Redaction applies to the **Index render path too**, not just LLM output. The old script leaked raw `<@732682426853359667>` and `<#1088552078709891242>` into the published page.
 
@@ -582,8 +618,8 @@ These cannot be automated. Reaching one means producing the artifact and waiting
 | Checkpoint | Phase | What the human does |
 |---|---|---|
 | **Set 17 missing Channel topics** | 2 | ~15 minutes in Discord. The largest remaining description gap, fixed at its source rather than inferred |
-| Tag vocabulary review | 2 | ~10 minutes reviewing ~20 proposed Topic tags before the vocabulary freezes |
-| Golden-set judgement | 2 | Confirms whether summaries would actually help a member decide to join |
+| Tag vocabulary review | 2 | ~10 minutes reviewing ~20 proposed Topic tags before the vocabulary freezes. **Waiting now**: read `content/config/topics.proposed.json` — it carries the tags, the corpus skew, the per-round agreement and what the critique dropped — then set `"status": "frozen"`, add `frozen_at`, and commit it as `content/config/topics.json`. Nothing classifies until you do |
+| Golden-set judgement | 2 | Confirms whether summaries would actually help a member decide to join. **Waiting now**: the `summary_generated` fields in `content/index/data.json` |
 | Club Lead usability trial | 5 | One real Club Lead uses the CMS with no instructions |
 | Shadow-mode review | 3–6 | ≥2 weeks of suppressed intro-responder output, read by mods |
 | Go-live approval | 6 | Explicit sign-off before the bot posts to `#introductions` |

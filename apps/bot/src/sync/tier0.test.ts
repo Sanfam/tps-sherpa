@@ -11,6 +11,8 @@ const entity = (over: Partial<Entity> & { id: string }): Entity => ({
   topic: "something",
   applied_tags: [],
   region: [],
+  topics: [],
+  topics_version: null,
   last_message_id: "500",
   last_activity_at: null,
   summary_generated: null,

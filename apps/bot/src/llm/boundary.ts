@@ -43,8 +43,13 @@ export interface AskRequest<T> {
   role: ModelRole;
   /** The instruction. Must ask for JSON: model prose never reaches a person. */
   system: string;
-  /** The Entity being described. Checked against the monitored carve-out. */
-  subject: Entity;
+  /**
+   * The Entity or Entities being described. Every one is checked against the
+   * monitored carve-out — the vocabulary bootstrap reasons over a whole sample
+   * at once, and a list that skipped the check for all but the first would be
+   * the carve-out failing exactly where the most text goes out.
+   */
+  subject: Entity | Entity[];
   /** Non-member text — a name, a topic, a frozen vocabulary. Redacted anyway. */
   context?: string;
   /** Member-authored text. Bots, opt-outs and identifiers are removed first. */
@@ -181,18 +186,22 @@ export const createBoundary = (deps: BoundaryDeps) => {
       // unmonitored — and the intro *threads* are where the actual
       // introductions are, which is precisely the content the carve-out
       // protects. An unresolvable parent is a broken input, not a permission.
-      const subject = request.subject;
-      if (subject.parent_id && !byId.has(subject.parent_id))
-        throw new Error(
-          `"${subject.name}" has parent ${subject.parent_id}, which is not in ` +
-            `the Catalog, so the monitored-channel check cannot be made. ` +
-            `Refusing rather than assuming it is safe.`,
-        );
-      if (isMonitored(subject, byId, monitored))
-        throw new Error(
-          `"${request.subject.name}" is monitored conversation, which is ` +
-            `extract-and-discard. It must never reach a model.`,
-        );
+      const subjects = Array.isArray(request.subject) ? request.subject : [request.subject];
+      if (subjects.length === 0)
+        throw new Error("ask() was given no subject, so no carve-out check can be made.");
+      for (const subject of subjects) {
+        if (subject.parent_id && !byId.has(subject.parent_id))
+          throw new Error(
+            `"${subject.name}" has parent ${subject.parent_id}, which is not in ` +
+              `the Catalog, so the monitored-channel check cannot be made. ` +
+              `Refusing rather than assuming it is safe.`,
+          );
+        if (isMonitored(subject, byId, monitored))
+          throw new Error(
+            `"${subject.name}" is monitored conversation, which is ` +
+              `extract-and-discard. It must never reach a model.`,
+          );
+      }
 
       if (memberNames.length === 0 && !warnedAboutNames) {
         warnedAboutNames = true;

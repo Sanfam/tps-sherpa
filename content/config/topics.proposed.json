@@ -1,0 +1,268 @@
+{
+  "version": 1,
+  "frozen_at": null,
+  "status": "proposed",
+  "topics": [
+    {
+      "slug": "babies-and-toddlers",
+      "label": "Babies & Toddlers",
+      "description": "Expecting, newborns, infants, and toddlers from 0 to 3 years, covering feeding, sleep, firsts, and early parenting; not for school-age or teen issues."
+    },
+    {
+      "slug": "films-and-tv",
+      "label": "Films, TV & Anime",
+      "description": "Movies, television, and anime, including series and streaming debates; not text-only books, manga, or comics."
+    },
+    {
+      "slug": "gaming-community",
+      "label": "Gaming & Video Games",
+      "description": "Video game discussions and community: current-generation and general game talk across PC/console, plus dedicated servers, LFG, dad streams, event votes, and gaming meetups; retro and tabletop have dedicated tags."
+    },
+    {
+      "slug": "humor-and-memes",
+      "label": "Humor & Memes",
+      "description": "Dad jokes, memes, and playful internet humor, not serious advice or current-event discussions."
+    },
+    {
+      "slug": "kids-teens",
+      "label": "Kids & Teens",
+      "description": "Parenting from early school age through teenagers, covering school, discipline, milestones, and teen issues; not infants, toddlers, or adult children."
+    },
+    {
+      "slug": "local-connections",
+      "label": "Local Connections",
+      "description": "Regional dad communities, location-based threads, and meetup discussions like NYC, UK, or Kentucky; not for subjects not tied to geography."
+    },
+    {
+      "slug": "music",
+      "label": "Music",
+      "description": "What members are listening to: albums, artists, music leagues, recommendations, and music discussions; score production and audio editing not covered."
+    },
+    {
+      "slug": "parenthood",
+      "label": "Parenthood",
+      "description": "General parenting talk and advice that spans ages and family situations, such as adopting, fostering, step-parenting, LGBTQ+ dadding, and multi-age households; specific child-stage and partner-only topics have their own tags."
+    },
+    {
+      "slug": "relationships",
+      "label": "Relationships",
+      "description": "Partner, marriage, and co-parenting relationship discussions; not parent-to-child relationship or friendship talk."
+    },
+    {
+      "slug": "retro-gaming",
+      "label": "Retro Gaming",
+      "description": "Classic, older games, vintage consoles, emulation, and re-homed titles; not current-generation releases."
+    },
+    {
+      "slug": "server-news-feedback",
+      "label": "Server News & Feedback",
+      "description": "Server welcome, rules, FAQ, wiki, announcements, suggestions, polls, and community feedback; not general game or parenting conversation."
+    },
+    {
+      "slug": "tabletop-gaming",
+      "label": "Tabletop Gaming",
+      "description": "Board games, TTRPGs, tabletop simulators, wargames, and coordinating looks-for-group sessions; not video game versions of those titles."
+    }
+  ],
+  "review": {
+    "derived_at": "2026-09-04T23:03:24.375Z",
+    "model": "deepseek/deepseek-v4-flash-0731",
+    "runs": 4,
+    "per_stratum": 5,
+    "corpus": {
+      "entities": 1235,
+      "strata": 51,
+      "largest": {
+        "stratum": "🎮︱game-talk",
+        "count": 507,
+        "share": 0.4105263157894737
+      }
+    },
+    "sample": {
+      "entities": 117,
+      "strata": 51,
+      "largest": {
+        "stratum": "💬︱general",
+        "count": 5,
+        "share": 0.042735042735042736
+      }
+    },
+    "pooled": 56,
+    "merged_to": 40,
+    "merges": [
+      "babies-and-toddlers ← babies-and-toddlers, early-years",
+      "baby-care ← baby-care, expecting-babies",
+      "grown-up-children ← adult-children, grandparenting, grown-up-children",
+      "teens ← teen-parenting, teens",
+      "parenthood ← parenthood, parenting-support",
+      "books ← books, books-literature",
+      "anime-and-comics ← anime-and-comics, comics-manga-anime",
+      "films-and-tv ← films-and-tv, movies-tv, tv-and-movie, tv-movies",
+      "food-and-cooking ← food-and-cooking, food-cooking",
+      "sports-and-fitness ← fitness-sports, sports-and-fitness, sports-fitness",
+      "humor-and-memes ← humor-and-memes, humor-memes",
+      "career-and-projects ← career-and-projects, diy-career"
+    ],
+    "agreement": [
+      {
+        "key": "babies-and-toddler",
+        "label": "Babies & Toddlers",
+        "runs": 4
+      },
+      {
+        "key": "films-and-tv",
+        "label": "Films & TV",
+        "runs": 4
+      },
+      {
+        "key": "gaming-community",
+        "label": "Gaming Community",
+        "runs": 4
+      },
+      {
+        "key": "humor-and-meme",
+        "label": "Humor & Memes",
+        "runs": 4
+      },
+      {
+        "key": "kids-teen",
+        "label": "Kids & Teens",
+        "runs": 4
+      },
+      {
+        "key": "local-connection",
+        "label": "Local Connections",
+        "runs": 4
+      },
+      {
+        "key": "music",
+        "label": "Music",
+        "runs": 4
+      },
+      {
+        "key": "parenthood",
+        "label": "Parenthood",
+        "runs": 4
+      },
+      {
+        "key": "relationship",
+        "label": "Relationships",
+        "runs": 4
+      },
+      {
+        "key": "retro-gaming",
+        "label": "Retro Gaming",
+        "runs": 4
+      },
+      {
+        "key": "server-news-feedback",
+        "label": "Server News & Feedback",
+        "runs": 4
+      },
+      {
+        "key": "tabletop-gaming",
+        "label": "Tabletop Gaming",
+        "runs": 4
+      },
+      {
+        "key": "anime-and-comic",
+        "label": "Anime & Comics",
+        "runs": 3
+      },
+      {
+        "key": "book",
+        "label": "Books",
+        "runs": 3
+      },
+      {
+        "key": "family-structure",
+        "label": "Family Structures",
+        "runs": 3
+      },
+      {
+        "key": "food-and-cooking",
+        "label": "Food & Cooking",
+        "runs": 3
+      },
+      {
+        "key": "video-game",
+        "label": "Video Games",
+        "runs": 3
+      },
+      {
+        "key": "career-and-project",
+        "label": "Career & Projects",
+        "runs": 2
+      },
+      {
+        "key": "career-business",
+        "label": "Careers & Business",
+        "runs": 2
+      },
+      {
+        "key": "hobbies-and-making",
+        "label": "Hobbies & Making",
+        "runs": 2
+      },
+      {
+        "key": "sports-and-fitness",
+        "label": "Sports & Fitness",
+        "runs": 2
+      },
+      {
+        "key": "adoption-and-fostering",
+        "label": "Adoption & Fostering",
+        "runs": 1
+      },
+      {
+        "key": "anime",
+        "label": "Anime & Manga",
+        "runs": 1
+      },
+      {
+        "key": "books-and-comic",
+        "label": "Books, Comics & Manga",
+        "runs": 1
+      },
+      {
+        "key": "console-gaming",
+        "label": "Console Gaming",
+        "runs": 1
+      },
+      {
+        "key": "diverse-familie",
+        "label": "Diverse Ways to Parent",
+        "runs": 1
+      },
+      {
+        "key": "gaming-new",
+        "label": "Gaming News",
+        "runs": 1
+      },
+      {
+        "key": "grown-up-children",
+        "label": "Grown Kids & Grandkids",
+        "runs": 1
+      },
+      {
+        "key": "pc-gaming",
+        "label": "PC Gaming",
+        "runs": 1
+      },
+      {
+        "key": "vr-gaming",
+        "label": "VR Gaming",
+        "runs": 1
+      }
+    ],
+    "dropped_by_critique": [],
+    "critique_notes": [
+      "No tags were dropped; all 12 candidate slugs are kept.",
+      "Expanded gaming-community to include current-generation and general video game discussions (previously only community activities), since the sample contains many modern game channels and titles; retro and tabletop are explicitly separated.",
+      "Expanded films-and-tv to include anime (previously excluded), matching the anime channel; books/manga/comics remain uncovered.",
+      "Reworded kids-teens to start at early school age, reserving toddler for babies-and-toddlers, avoiding overlap.",
+      "Reworded parenthood to explicitly include family situations like adoption, fostering, step-parenting, and LGBTQ+ dadding.",
+      "Gaps the vocabulary cannot cover: general/off-topic chat (e.g., general channel, food talk, VTubers), books/literature/manga/comics (e.g., book-club, comics, One Piece manga), and lifestyle/hobby/career topics (e.g., workout, electronics repair, entrepreneurs). These do not have a consensus tag, so they remain uncovered."
+    ]
+  }
+}

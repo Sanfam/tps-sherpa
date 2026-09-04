@@ -106,6 +106,8 @@ describe("buildCatalog", () => {
         topic: "gaming chat",
         applied_tags: [],
         region: [],
+        topics: [],
+        topics_version: null,
         last_message_id: null,
         last_activity_at: null,
         summary_generated: null,
@@ -368,5 +370,79 @@ describe("the Region facet", () => {
     });
 
     expect(catalog.find((e) => e.id === "444")?.region).toEqual([]);
+  });
+});
+
+describe("derived fields across syncs", () => {
+  const guild = (topic: string) =>
+    fixtureDiscord({
+      channels: [{ id: "111", name: "gaming", type: ChannelType.GuildText, topic }],
+    });
+
+  const enriched = async (topic: string) => {
+    const { catalog } = await buildCatalog({ discord: guild(topic), guildId: GUILD_ID });
+    return catalog.map((e) => ({
+      ...e,
+      summary_generated: "Where the Rocket League lot live.",
+      topics: ["gaming"],
+      topics_version: 1,
+    }));
+  };
+
+  it("keeps a generated summary and Topic tags while the Entity means the same thing", async () => {
+    // Otherwise every scheduled sync puts the whole corpus back through a
+    // model to produce the text it already had.
+    const previous = await enriched("Rocket League and friends");
+
+    const { catalog } = await buildCatalog({
+      discord: guild("Rocket League and friends"),
+      guildId: GUILD_ID,
+      previous,
+    });
+
+    expect(catalog[0]).toMatchObject({
+      summary_generated: "Where the Rocket League lot live.",
+      topics: ["gaming"],
+      topics_version: 1,
+    });
+  });
+
+  it("drops them when the description changes, so nothing advertises what it used to be", async () => {
+    const previous = await enriched("Rocket League and friends");
+
+    const { catalog } = await buildCatalog({
+      discord: guild("Now a Helldivers channel."),
+      guildId: GUILD_ID,
+      previous,
+    });
+
+    expect(catalog[0]).toMatchObject({
+      summary_generated: null,
+      topics: [],
+      topics_version: null,
+    });
+  });
+
+  it("does not regenerate on activity alone", async () => {
+    // A new message in a five-year-old Post does not change what it is about.
+    const before = fixtureDiscord({
+      channels: [
+        { id: "111", name: "gaming", type: ChannelType.GuildText, topic: "Rocket League", lastMessageId: "500" },
+      ],
+    });
+    const { catalog: first } = await buildCatalog({ discord: before, guildId: GUILD_ID });
+    const previous = first.map((e) => ({ ...e, summary_generated: "Rocket League nights." }));
+
+    const { catalog } = await buildCatalog({
+      discord: fixtureDiscord({
+        channels: [
+          { id: "111", name: "gaming", type: ChannelType.GuildText, topic: "Rocket League", lastMessageId: "999" },
+        ],
+      }),
+      guildId: GUILD_ID,
+      previous,
+    });
+
+    expect(catalog[0]?.summary_generated).toBe("Rocket League nights.");
   });
 });
