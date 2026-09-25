@@ -649,7 +649,7 @@ These cannot be automated. Reaching one means producing the artifact and waiting
 | Checkpoint | Phase | What the human does |
 |---|---|---|
 | **Set 17 missing Channel topics** | 2 | ~15 minutes in Discord. The largest remaining description gap, fixed at its source rather than inferred |
-| Tag vocabulary review | 2 | ~10 minutes reviewing ~20 proposed Topic tags before the vocabulary freezes. **Waiting now**: read `content/config/topics.proposed.json` — it carries the tags, the corpus skew, the per-round agreement and what the critique dropped — then set `"status": "frozen"`, add `frozen_at`, and commit it as `content/config/topics.json`. Nothing classifies until you do |
+| Tag vocabulary review | 2 | ~10 minutes reviewing ~20 proposed Topic tags before the vocabulary freezes. **Done 2026-09-24**: v1 frozen as `content/config/topics.json`, 19 tags — the 18 proposed plus `tabletop-gaming`, added at review because the vote on tabletop split three ways rather than rejecting it (recorded under `review.staff_edits`) |
 | Golden-set judgement | 2 | Confirms whether summaries would actually help a member decide to join. **Waiting now**: the `summary_generated` fields in `content/index/data.json` |
 | Club Lead usability trial | 5 | One real Club Lead uses the CMS with no instructions |
 | Shadow-mode review | 3–6 | ≥2 weeks of suppressed intro-responder output, read by mods |
