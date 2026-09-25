@@ -9,10 +9,18 @@ anti-goals; read them before writing code.
 
 ## Review process
 
-**Every change set is challenged by an adversarial Codex review before commit,
-and valid in-scope findings are fixed first.** Not optional. See
+**Every change set is challenged by an adversarial review from a different model
+before commit, and valid in-scope findings are fixed first.** Not optional. The
+`final-reviewer` agent (GPT-5.6 Sol) does this. See
 `docs/agents/review-process.md` for the cycle, the triage rules, and the record
 of what it has caught.
+
+## Delegation model
+
+Opus 5.5 at High effort orchestrates. Implementation, UX, architectural advice
+and final review are delegated to defined agents in `.claude/agents/` — author
+and reviewer are never the same model. See `docs/agents/delegation-model.md`
+for the roster and the routing rules.
 
 ## Agent skills
 

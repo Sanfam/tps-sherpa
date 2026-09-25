@@ -473,10 +473,41 @@ measurement rather than a hunch:
 3. **Vote** — N independent rounds choosing from that one list. **Consensus is measured here**, where string identity means something.
 4. **Critique** — drops, merges and rewords the survivors. It may not add: a slug no round chose has no consensus behind it, and this is enforced in code rather than asked for in a prompt.
 
-**Stratification.** Strata are parent containers, each Channel and Forum also
-its own stratum, capped at 5. Measured: the corpus is **41.1% one gaming
-Forum** (507 of 1,235 eligible Entities); the capped sample is **4.3%**. The
-skew is reported in the proposal file rather than assumed absent.
+**Stratification, and a correction.** Strata are parent containers, each
+Channel and Forum also its own stratum. **A uniform cap of 5 was tried first
+and is superseded**; the default is now `ceil(sqrt(size))` per stratum.
+
+The cap worked on the problem it was aimed at and created a worse one. Measured
+2026-09-04: the corpus is **41.1% one gaming Forum** (507 of 1,235 eligible
+Entities), and capping took that to **4.3%** of the sample. But capping every
+stratum equally samples the guild's *structure* rather than its *content*:
+seven tiny parenting age-stage Channels holding **17 Entities between them**
+took 14 of 117 sample slots, while one Forum holding **252** — motorcycles,
+soccer, MMA, fitness, travel, pottery, chess — took five. The vocabulary that
+came back gave **four of its twelve tags to 1.4% of the corpus and none at all
+to 20% of it**, with no books, food, sports or careers tag in a corpus that has
+a Forum for each.
+
+Square root is the standard middle: proportional sampling reproduces the skew,
+uniform sampling erases the signal, and `sqrt` lets a large stratum speak
+louder without letting it speak alone. It never returns zero, so a
+three-Entity Channel is still seen. Measured on the same corpus: sample 117 →
+151, largest stratum **4.3% → 15.2%** against its raw 41.1%, and the
+lifestyle Forum 5 slots → 16.
+
+**The 4.3% figure elsewhere in this document is superseded by 15.2%.** The
+skew is reported in the proposal file rather than assumed absent, and
+`--per-stratum N` still forces the old uniform cap for comparison.
+
+**Mandatory tags.** `parenting-and-family` and `relationships-and-self-care`
+are in the vocabulary **by decision, not by derivation** (Staff, 2026-09-05),
+and `parseVocabulary` refuses a frozen vocabulary that is missing either.
+Volume is not salience and nothing that counts Entities can tell the
+difference: parenting is 1.4% of this corpus and is what the community is
+*for*. The uniform cap gave it four tags of twelve and the square root gave it
+none of fifteen — the same knob producing opposite answers to a question it
+cannot see. Every round is told which tags are fixed, so it proposes around
+them rather than duplicating them.
 
 **The freeze is a file, not a flag.** The bootstrap only ever writes
 `content/config/topics.proposed.json`, marked `"status": "proposed"`, and the

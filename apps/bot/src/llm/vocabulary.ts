@@ -43,6 +43,65 @@ export interface Vocabulary {
   status: "proposed" | "frozen";
 }
 
+/**
+ * Tags that are in the vocabulary whatever the derivation says.
+ *
+ * **Volume is not salience, and nothing that counts Entities can tell the
+ * difference.** Parenting is 1.4% of this corpus by Entity count and is what
+ * the community is *for*; a uniform sample gave it four tags of twelve and a
+ * square-root sample gave it none of fifteen, which is the same knob producing
+ * opposite answers to a question it cannot see. That judgement is a person's,
+ * so it is made once, in code, and enforced rather than re-litigated by every
+ * future re-derivation.
+ *
+ * `supersedes` lists slugs a mandatory tag absorbs. It holds only slugs
+ * actually observed in a derivation, not everything one might imagine — a
+ * speculative list is a maintenance burden that protects against nothing.
+ */
+export const MANDATORY_TOPICS: Array<Topic & { supersedes?: string[] }> = [
+  {
+    slug: "parenting-and-family",
+    label: "Parenting & Family",
+    description:
+      "Raising children at any stage — expecting, newborns, toddlers, school age, " +
+      "teens, grown children and grandkids — and family shape: adoption, fostering, " +
+      "step-parenting, single parenting. Not the relationship with a partner.",
+    supersedes: ["parenting", "parenting-age", "family-structure", "family-structures"],
+  },
+  {
+    slug: "relationships-and-self-care",
+    label: "Relationships & Self Care",
+    description:
+      "Partners, marriage, intimacy and co-parenting as a relationship, plus a dad's " +
+      "own physical and mental health, burnout and self-care. Not raising the children.",
+    supersedes: ["relationship", "relationships", "relationships-and-intimacy"],
+  },
+];
+
+/**
+ * Puts the mandatory tags in and drops anything they absorb.
+ *
+ * Mandatory tags lead: they are the decision, and the derived ones fill in
+ * around them. A derived tag that a mandatory one supersedes is removed rather
+ * than left beside it, because two tags covering the same ground is how a
+ * classifier ends up splitting one subject at random.
+ */
+export const withMandatory = (
+  derived: Topic[],
+  mandatory: Array<Topic & { supersedes?: string[] }> = MANDATORY_TOPICS,
+): Topic[] => {
+  const absorbed = new Set(
+    mandatory.flatMap((m) => [
+      consensusKey(m.slug),
+      ...(m.supersedes ?? []).map((s) => consensusKey(s)),
+    ]),
+  );
+  return [
+    ...mandatory.map(({ supersedes: _supersedes, ...topic }) => topic),
+    ...derived.filter((t) => !absorbed.has(consensusKey(t.slug))),
+  ];
+};
+
 export const slugify = (text: string): string =>
   text
     .toLowerCase()
@@ -95,6 +154,16 @@ export const parseVocabulary = (source: string | null): Vocabulary => {
     if (!t.label || !t.description)
       throw new Error(`Topic "${t.slug}" is missing a label or description.`);
   }
+  // Mandatory means mandatory: a vocabulary frozen without one of these is
+  // rejected rather than used, because the whole point of the category is that
+  // it cannot be lost to a derivation that did not happen to produce it.
+  const missing = MANDATORY_TOPICS.filter((m) => !slugs.has(m.slug)).map((m) => m.slug);
+  if (missing.length)
+    throw new Error(
+      `Topic vocabulary is missing mandatory tag(s): ${missing.join(", ")}. ` +
+        `These are in the vocabulary by decision, not by derivation.`,
+    );
+
   return {
     version: parsed.version,
     frozen_at: parsed.frozen_at,
@@ -131,11 +200,27 @@ const skewOf = (entities: Entity[]): Skew => {
 };
 
 /**
- * A stratified sample, capped per stratum.
+ * How many Entities a stratum contributes: the square root of its size.
  *
- * An unguided sweep of this corpus is 40% one gaming Forum, which yields
- * fifteen gaming tags and one called "hobbies" — and that skew freezes in
- * before a human ever sees it. Capping is the whole defence.
+ * **A uniform cap was wrong, and the first derivation proved it.** An unguided
+ * sweep of this corpus is 40% one gaming Forum, so the cap existed to stop
+ * that Forum writing the vocabulary by itself. Capping every stratum at five
+ * did stop it — and then sampled the guild's *structure* instead of its
+ * *content*. Seven tiny parenting age-stage Channels holding 17 Entities
+ * between them took 14 of 117 sample slots, while one Forum holding 252
+ * Entities — motorcycles, soccer, fitness, travel, pottery, chess — took five.
+ * The vocabulary that came back gave four of its twelve tags to 1.4% of the
+ * corpus and none at all to 20% of it.
+ *
+ * The square root is the standard middle: proportional sampling reproduces the
+ * skew, uniform sampling erases the signal, and `sqrt` lets a large stratum
+ * speak louder without letting it speak alone. It also never returns zero, so
+ * a three-Entity Channel is still seen.
+ */
+const sqrtAllocation = (size: number): number => Math.ceil(Math.sqrt(size));
+
+/**
+ * A stratified sample.
  *
  * Picks are spread evenly across each stratum by ID rather than taken from the
  * front, because IDs are chronological and the first six Posts in a five-year-
@@ -144,9 +229,15 @@ const skewOf = (entities: Entity[]): Skew => {
  */
 export const stratify = (
   catalog: Entity[],
-  options: { perStratum?: number; exclude?: (entity: Entity) => boolean } = {},
+  options: {
+    /** A uniform cap instead of the default square root. For experiments. */
+    perStratum?: number;
+    exclude?: (entity: Entity) => boolean;
+  } = {},
 ): { sample: Entity[]; corpus: Skew; sample_skew: Skew } => {
-  const cap = options.perStratum ?? 5;
+  const allocate = options.perStratum
+    ? (size: number) => Math.min(options.perStratum!, size)
+    : sqrtAllocation;
   const eligible = catalog
     .filter((e) => !options.exclude?.(e))
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -158,7 +249,7 @@ export const stratify = (
   }
 
   const sample = [...strata.values()].flatMap((members) => {
-    const take = Math.min(cap, members.length);
+    const take = Math.min(allocate(members.length), members.length);
     return Array.from({ length: take }, (_, i) => members[Math.floor((i * members.length) / take)]!);
   });
 
@@ -237,10 +328,15 @@ export const consensus = (
  *
  * A candidate no group mentions survives on its own. Losing a tag by omission
  * would make this pass a silent filter, and it is only meant to be a merge.
+ *
+ * A group may carry its own `description`. Folding narrow candidates into a
+ * broader canonical is only a merge if the canonical's description grows to
+ * cover them — keep the original and `football ← tennis, cycling` goes to the
+ * ballot described as football alone, and tennis and cycling vanish unvoted.
  */
 export const mergeGroups = (
   pool: Topic[],
-  groups: Array<{ canonical: string; members?: string[] }>,
+  groups: Array<{ canonical: string; members?: string[]; description?: string }>,
   warn?: (message: string) => void,
 ): Topic[] => {
   const byKey = new Map(pool.map((t) => [consensusKey(t.slug), t]));
@@ -258,7 +354,11 @@ export const mergeGroups = (
     }
     const key = consensusKey(canonical.slug);
     if (consumed.has(key)) continue;
-    merged.push(canonical);
+    merged.push(
+      typeof group.description === "string" && group.description.trim()
+        ? { ...canonical, description: group.description.trim() }
+        : canonical,
+    );
     consumed.add(key);
     for (const member of group.members ?? []) {
       const found = byKey.get(consensusKey(slugify(member)));

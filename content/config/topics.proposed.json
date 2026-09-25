@@ -4,71 +4,101 @@
   "status": "proposed",
   "topics": [
     {
-      "slug": "babies-and-toddlers",
-      "label": "Babies & Toddlers",
-      "description": "Expecting, newborns, infants, and toddlers from 0 to 3 years, covering feeding, sleep, firsts, and early parenting; not for school-age or teen issues."
+      "slug": "parenting-and-family",
+      "label": "Parenting & Family",
+      "description": "Raising children at any stage — expecting, newborns, toddlers, school age, teens, grown children and grandkids — and family shape: adoption, fostering, step-parenting, single parenting. Not the relationship with a partner."
     },
     {
-      "slug": "films-and-tv",
-      "label": "Films, TV & Anime",
-      "description": "Movies, television, and anime, including series and streaming debates; not text-only books, manga, or comics."
+      "slug": "relationships-and-self-care",
+      "label": "Relationships & Self Care",
+      "description": "Partners, marriage, intimacy and co-parenting as a relationship, plus a dad's own physical and mental health, burnout and self-care. Not raising the children."
     },
     {
-      "slug": "gaming-community",
-      "label": "Gaming & Video Games",
-      "description": "Video game discussions and community: current-generation and general game talk across PC/console, plus dedicated servers, LFG, dad streams, event votes, and gaming meetups; retro and tabletop have dedicated tags."
+      "slug": "anime-and-manga",
+      "label": "Anime & Manga",
+      "description": "Anime, manga, graphic novels, and visual literature."
+    },
+    {
+      "slug": "books-and-reading",
+      "label": "Books & Reading",
+      "description": "Books of any genre, book-club selections, reading recommendations, and storytelling."
+    },
+    {
+      "slug": "content-creation-and-streaming",
+      "label": "Content Creation & Streaming",
+      "description": "Making and broadcasting media: filmmaking, video editing, livestreaming games, and creating content; not just watching media."
+    },
+    {
+      "slug": "food-and-cooking",
+      "label": "Food & Cooking",
+      "description": "Cooking, diets, plant-based eating, snacks, and anything else food-related."
+    },
+    {
+      "slug": "home-and-diy",
+      "label": "Home & DIY",
+      "description": "Home improvement, lawn and garden, backyard projects, decluttering, and do-it-yourself fixes."
     },
     {
       "slug": "humor-and-memes",
       "label": "Humor & Memes",
-      "description": "Dad jokes, memes, and playful internet humor, not serious advice or current-event discussions."
+      "description": "Dad jokes, memes, and funny content."
     },
     {
-      "slug": "kids-teens",
-      "label": "Kids & Teens",
-      "description": "Parenting from early school age through teenagers, covering school, discipline, milestones, and teen issues; not infants, toddlers, or adult children."
+      "slug": "lgbtq-and-allies",
+      "label": "LGBTQ+ & Allies",
+      "description": "Experiences and support for LGBTQ+ dads, parents of LGBTQ+ kids, and allies — not general parenting advice, which belongs under parenting-and-family."
     },
     {
-      "slug": "local-connections",
-      "label": "Local Connections",
-      "description": "Regional dad communities, location-based threads, and meetup discussions like NYC, UK, or Kentucky; not for subjects not tied to geography."
+      "slug": "local-and-regional-connections",
+      "label": "Local & Regional Connections",
+      "description": "Regional threads, timezone-specific chat, and local meetups with nearby members — not travel recommendations or vacation photos."
+    },
+    {
+      "slug": "movies-and-tv",
+      "label": "Movies & TV",
+      "description": "Watching and discussing films, TV series, and live-action adaptations, including movie-club picks; not making films or anime."
     },
     {
       "slug": "music",
       "label": "Music",
-      "description": "What members are listening to: albums, artists, music leagues, recommendations, and music discussions; score production and audio editing not covered."
+      "description": "Music, albums, and what dads are listening to."
     },
     {
-      "slug": "parenthood",
-      "label": "Parenthood",
-      "description": "General parenting talk and advice that spans ages and family situations, such as adopting, fostering, step-parenting, LGBTQ+ dadding, and multi-age households; specific child-stage and partner-only topics have their own tags."
+      "slug": "server-news-and-help",
+      "label": "Server News & Help",
+      "description": "Official announcements, rules, welcome information, help, and how-tos for using the server."
     },
     {
-      "slug": "relationships",
-      "label": "Relationships",
-      "description": "Partner, marriage, and co-parenting relationship discussions; not parent-to-child relationship or friendship talk."
+      "slug": "server-suggestions-and-feedback",
+      "label": "Server Suggestions & Feedback",
+      "description": "Ideas, requests, and feedback for improving the server — channels, bots, emoji, and policies."
     },
     {
-      "slug": "retro-gaming",
-      "label": "Retro Gaming",
-      "description": "Classic, older games, vintage consoles, emulation, and re-homed titles; not current-generation releases."
+      "slug": "social-activities-and-events",
+      "label": "Social Activities & Events",
+      "description": "Scheduled community get-togethers, game nights, watch parties, activities, and polls — not individual game discussion or hobby how-tos."
     },
     {
-      "slug": "server-news-feedback",
-      "label": "Server News & Feedback",
-      "description": "Server welcome, rules, FAQ, wiki, announcements, suggestions, polls, and community feedback; not general game or parenting conversation."
+      "slug": "sports-and-outdoors",
+      "label": "Sports & Outdoors",
+      "description": "Watching or playing sports, outdoor recreation, and exercise as leisure — not health or medical self-care, which belongs under relationships-and-self-care."
     },
     {
-      "slug": "tabletop-gaming",
-      "label": "Tabletop Gaming",
-      "description": "Board games, TTRPGs, tabletop simulators, wargames, and coordinating looks-for-group sessions; not video game versions of those titles."
+      "slug": "technology-and-gadgets",
+      "label": "Technology & Gadgets",
+      "description": "Everyday tech, software help, apps, and non-gaming gadgets like watches and EDC carries."
+    },
+    {
+      "slug": "video-games",
+      "label": "Video Games",
+      "description": "Video game titles, platforms, hardware, backlogs, gaming news, and what you're playing — not tabletop or physical games."
     }
   ],
   "review": {
-    "derived_at": "2026-09-04T23:03:24.375Z",
+    "derived_at": "2026-09-06T16:20:56.185Z",
     "model": "deepseek/deepseek-v4-flash-0731",
     "runs": 4,
-    "per_stratum": 5,
+    "allocation": "sqrt(size)",
     "corpus": {
       "entities": 1235,
       "strata": 51,
@@ -79,44 +109,57 @@
       }
     },
     "sample": {
-      "entities": 117,
+      "entities": 151,
       "strata": 51,
       "largest": {
-        "stratum": "💬︱general",
-        "count": 5,
-        "share": 0.042735042735042736
+        "stratum": "🎮︱game-talk",
+        "count": 23,
+        "share": 0.152317880794702
       }
     },
-    "pooled": 56,
-    "merged_to": 40,
+    "pooled": 54,
+    "merged_to": 33,
     "merges": [
-      "babies-and-toddlers ← babies-and-toddlers, early-years",
-      "baby-care ← baby-care, expecting-babies",
-      "grown-up-children ← adult-children, grandparenting, grown-up-children",
-      "teens ← teen-parenting, teens",
-      "parenthood ← parenthood, parenting-support",
-      "books ← books, books-literature",
-      "anime-and-comics ← anime-and-comics, comics-manga-anime",
-      "films-and-tv ← films-and-tv, movies-tv, tv-and-movie, tv-movies",
-      "food-and-cooking ← food-and-cooking, food-cooking",
-      "sports-and-fitness ← fitness-sports, sports-and-fitness, sports-fitness",
-      "humor-and-memes ← humor-and-memes, humor-memes",
-      "career-and-projects ← career-and-projects, diy-career"
+      "anime-and-manga ← anime-and-comics, anime-and-manga, anime-manga-and-comics",
+      "content-creation-and-streaming ← content-creation-and-streaming, streaming-and-creators",
+      "cars-and-vehicles ← automotive, cars-and-automotive, cars-and-vehicles",
+      "career-and-education ← career-and-education, work-and-career",
+      "money-and-finance ← money-and-benefits, money-and-finance",
+      "local-and-regional-connections ← connections-and-meetups, local-and-regional-connections, local-regional, regional-and-local",
+      "social-activities-and-events ← community-events, social-activities-and-events, social-and-events",
+      "home-and-diy ← home-and-diy, home-and-garden",
+      "humor-and-memes ← humor-and-comedy, humor-and-memes, jokes-and-memes",
+      "movies-and-tv ← movies-and-tv, tv-and-movies",
+      "server-suggestions-and-feedback ← server-feedback-and-improvement, server-suggestions-and-feedback",
+      "sports-and-outdoors ← sports-and-fitness, sports-and-outdoors",
+      "technology-and-gadgets ← gear-and-gadgets, technology-and-gadgets",
+      "video-games ← video-games, video-gaming",
+      "tabletop-gaming ← tabletop-games, tabletop-gaming"
     ],
     "agreement": [
       {
-        "key": "babies-and-toddler",
-        "label": "Babies & Toddlers",
+        "key": "anime-and-manga",
+        "label": "Anime & Manga",
         "runs": 4
       },
       {
-        "key": "films-and-tv",
-        "label": "Films & TV",
+        "key": "books-and-reading",
+        "label": "Books & Reading",
         "runs": 4
       },
       {
-        "key": "gaming-community",
-        "label": "Gaming Community",
+        "key": "content-creation-and-streaming",
+        "label": "Content Creation & Streaming",
+        "runs": 4
+      },
+      {
+        "key": "food-and-cooking",
+        "label": "Food & Cooking",
+        "runs": 4
+      },
+      {
+        "key": "home-and-diy",
+        "label": "Home & DIY",
         "runs": 4
       },
       {
@@ -125,13 +168,18 @@
         "runs": 4
       },
       {
-        "key": "kids-teen",
-        "label": "Kids & Teens",
+        "key": "lgbtq-and-allie",
+        "label": "LGBTQ+ & Allies",
         "runs": 4
       },
       {
-        "key": "local-connection",
-        "label": "Local Connections",
+        "key": "local-and-regional-connection",
+        "label": "Local & Regional Connections",
+        "runs": 4
+      },
+      {
+        "key": "movies-and-tv",
+        "label": "Movies & TV",
         "runs": 4
       },
       {
@@ -140,129 +188,87 @@
         "runs": 4
       },
       {
-        "key": "parenthood",
-        "label": "Parenthood",
+        "key": "server-news-and-help",
+        "label": "Server News & Help",
         "runs": 4
       },
       {
-        "key": "relationship",
-        "label": "Relationships",
+        "key": "server-suggestions-and-feedback",
+        "label": "Server Suggestions & Feedback",
         "runs": 4
       },
       {
-        "key": "retro-gaming",
-        "label": "Retro Gaming",
+        "key": "social-activities-and-event",
+        "label": "Social Activities & Events",
         "runs": 4
       },
       {
-        "key": "server-news-feedback",
-        "label": "Server News & Feedback",
+        "key": "sports-and-outdoor",
+        "label": "Sports & Outdoors",
         "runs": 4
       },
       {
-        "key": "tabletop-gaming",
-        "label": "Tabletop Gaming",
+        "key": "technology-and-gadget",
+        "label": "Technology & Gadgets",
         "runs": 4
-      },
-      {
-        "key": "anime-and-comic",
-        "label": "Anime & Comics",
-        "runs": 3
-      },
-      {
-        "key": "book",
-        "label": "Books",
-        "runs": 3
-      },
-      {
-        "key": "family-structure",
-        "label": "Family Structures",
-        "runs": 3
-      },
-      {
-        "key": "food-and-cooking",
-        "label": "Food & Cooking",
-        "runs": 3
       },
       {
         "key": "video-game",
         "label": "Video Games",
+        "runs": 4
+      },
+      {
+        "key": "cars-and-vehicle",
+        "label": "Cars & Vehicles",
         "runs": 3
       },
       {
-        "key": "career-and-project",
-        "label": "Career & Projects",
+        "key": "board-game",
+        "label": "Board Games",
         "runs": 2
       },
       {
-        "key": "career-business",
-        "label": "Careers & Business",
+        "key": "career-and-education",
+        "label": "Career & Education",
         "runs": 2
       },
       {
-        "key": "hobbies-and-making",
-        "label": "Hobbies & Making",
+        "key": "health-and-insurance",
+        "label": "Health & insurance",
         "runs": 2
       },
       {
-        "key": "sports-and-fitness",
-        "label": "Sports & Fitness",
+        "key": "tabletop-gaming",
+        "label": "Tabletop Gaming",
         "runs": 2
       },
       {
-        "key": "adoption-and-fostering",
-        "label": "Adoption & Fostering",
-        "runs": 1
+        "key": "tabletop-rpg",
+        "label": "Tabletop RPGs",
+        "runs": 2
       },
       {
-        "key": "anime",
-        "label": "Anime & Manga",
-        "runs": 1
+        "key": "work-and-money",
+        "label": "Work, Money & Education",
+        "runs": 2
       },
       {
-        "key": "books-and-comic",
-        "label": "Books, Comics & Manga",
-        "runs": 1
-      },
-      {
-        "key": "console-gaming",
-        "label": "Console Gaming",
-        "runs": 1
-      },
-      {
-        "key": "diverse-familie",
-        "label": "Diverse Ways to Parent",
-        "runs": 1
-      },
-      {
-        "key": "gaming-new",
-        "label": "Gaming News",
-        "runs": 1
-      },
-      {
-        "key": "grown-up-children",
-        "label": "Grown Kids & Grandkids",
-        "runs": 1
-      },
-      {
-        "key": "pc-gaming",
-        "label": "PC Gaming",
-        "runs": 1
-      },
-      {
-        "key": "vr-gaming",
-        "label": "VR Gaming",
+        "key": "pets-and-animal",
+        "label": "Pets & Animals",
         "runs": 1
       }
     ],
+    "mandatory": [
+      "parenting-and-family",
+      "relationships-and-self-care"
+    ],
+    "superseded_by_mandatory": [],
+    "critique_status": "applied",
     "dropped_by_critique": [],
+    "reworded_by_critique": [],
     "critique_notes": [
-      "No tags were dropped; all 12 candidate slugs are kept.",
-      "Expanded gaming-community to include current-generation and general video game discussions (previously only community activities), since the sample contains many modern game channels and titles; retro and tabletop are explicitly separated.",
-      "Expanded films-and-tv to include anime (previously excluded), matching the anime channel; books/manga/comics remain uncovered.",
-      "Reworded kids-teens to start at early school age, reserving toddler for babies-and-toddlers, avoiding overlap.",
-      "Reworded parenthood to explicitly include family situations like adoption, fostering, step-parenting, and LGBTQ+ dadding.",
-      "Gaps the vocabulary cannot cover: general/off-topic chat (e.g., general channel, food talk, VTubers), books/literature/manga/comics (e.g., book-club, comics, One Piece manga), and lifestyle/hobby/career topics (e.g., workout, electronics repair, entrepreneurs). These do not have a consensus tag, so they remain uncovered."
+      "No existing tag needs dropping or rewording; the candidate set is internally consistent and complements the fixed parenting/self-care tags.",
+      "One notable gap the vocabulary cannot cover: tabletop games — board games, TTRPGs, and physical/analog game discussion like Dice Throne, Pandemic, MTG, and Tabletop Simulator. video-games explicitly excludes tabletop/physical games, and social-activities-and-events only covers scheduled game nights, not individual tabletop discussion. A future dedicated tag would be needed, but I cannot add it here."
     ]
   }
 }

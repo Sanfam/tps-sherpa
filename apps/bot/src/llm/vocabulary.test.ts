@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { Entity } from "../sync/catalog.ts";
 import {
+  MANDATORY_TOPICS,
   restrictTo,
   consensus,
   consensusKey,
+  mergeGroups,
   parseVocabulary,
   stratify,
   type Topic,
+  withMandatory,
 } from "./vocabulary.ts";
 
 const entity = (over: Partial<Entity> & { id: string; name: string }): Entity => ({
@@ -89,6 +92,48 @@ describe("stratify", () => {
     );
 
     expect(twice).toEqual(once);
+  });
+
+  it("lets a large stratum speak louder than a tiny one, without letting it speak alone", () => {
+    // The failure this replaced: a uniform cap gave seven three-Entity
+    // Channels more of the sample than one Forum holding 252 Entities, and
+    // the vocabulary came back describing the guild's structure rather than
+    // its content.
+    const { sample, corpus } = stratify(skewedCatalog);
+    const share = (s: Entity[]) =>
+      s.filter((e) => e.id === "100" || e.parent_id === "100").length / s.length;
+
+    // Louder than the small strata...
+    const big = sample.filter((e) => e.id === "100" || e.parent_id === "100").length;
+    expect(big).toBeGreaterThan(sample.filter((e) => e.parent_id === "200").length);
+    // ...still quieter than its raw share of the corpus...
+    expect(share(sample)).toBeLessThan(corpus.largest.share);
+    // ...and louder than a uniform cap allowed, which is the whole change.
+    expect(share(sample)).toBeGreaterThan(share(stratify(skewedCatalog, { perStratum: 5 }).sample));
+  });
+
+  it("takes ceil(sqrt(size)) from each stratum by default", () => {
+    // Strata of 41, 5 and 1. No uniform cap produces 7, 3 and 1 — the relative
+    // weights above would all pass under a cap of 6, which is the old shape.
+    const { sample } = stratify(skewedCatalog);
+    const from = (parent: string) =>
+      sample.filter((e) => e.id === parent || e.parent_id === parent).length;
+
+    expect([from("100"), from("200"), from("300")]).toEqual([7, 3, 1]);
+  });
+
+  it("never drops a stratum entirely, however small", () => {
+    const { sample } = stratify(skewedCatalog);
+
+    expect(sample.map((e) => e.id)).toContain("300");
+  });
+
+  it("keeps every stratum even when one dwarfs the rest", () => {
+    // The invariant stratification actually promises. A cap of zero or a
+    // negative would empty a stratum silently, which is why the CLI validates.
+    const { sample } = stratify(skewedCatalog, { perStratum: 1 });
+
+    expect(sample.map((e) => e.id).sort()).toEqual(["100", "200", "300"]);
   });
 
   it("excludes what the caller says it must never see", () => {
@@ -175,12 +220,57 @@ describe("restrictTo", () => {
   });
 });
 
+describe("mergeGroups", () => {
+  const pool = [topic("football"), topic("tennis"), topic("cycling"), topic("music")];
+
+  it("folds members into the canonical and keeps what no group mentions", () => {
+    const merged = mergeGroups(pool, [{ canonical: "football", members: ["tennis", "cycling"] }]);
+
+    expect(merged.map((t) => t.slug)).toEqual(["football", "music"]);
+  });
+
+  it("lets a broadening group describe what it folded in", () => {
+    // Keeping the canonical's own description sends `football ← tennis,
+    // cycling` to the ballot as football alone.
+    const merged = mergeGroups(pool, [
+      { canonical: "football", members: ["tennis", "cycling"], description: "Any sport." },
+    ]);
+
+    expect(merged.find((t) => t.slug === "football")?.description).toBe("Any sport.");
+  });
+});
+
+describe("withMandatory", () => {
+  it("puts the mandatory tags in whatever the derivation produced", () => {
+    const final = withMandatory([topic("video-games")]);
+
+    expect(final.map((t) => t.slug)).toEqual(
+      expect.arrayContaining(MANDATORY_TOPICS.map((t) => t.slug)),
+    );
+  });
+
+  it("drops a derived tag that a mandatory one absorbs", () => {
+    // Two tags covering the same ground is how a classifier ends up splitting
+    // one subject at random. `relationships` reached 4/4 on a real derivation.
+    const final = withMandatory([topic("relationships"), topic("video-games")]);
+
+    expect(final.map((t) => t.slug)).not.toContain("relationships");
+    expect(final.map((t) => t.slug)).toContain("video-games");
+  });
+
+  it("leads with the mandatory tags, because they are the decision", () => {
+    const final = withMandatory([topic("video-games")]);
+
+    expect(final[0]?.slug).toBe(MANDATORY_TOPICS[0]?.slug);
+  });
+});
+
 describe("parseVocabulary", () => {
   const frozen = {
     version: 1,
     frozen_at: "2026-09-03",
     status: "frozen",
-    topics: [topic("aviation")],
+    topics: [topic("aviation"), ...MANDATORY_TOPICS.map(({ supersedes: _s, ...t }) => t)],
   };
 
   it("accepts a frozen, versioned vocabulary", () => {
@@ -227,10 +317,18 @@ describe("parseVocabulary", () => {
     expect(() => parseVocabulary(JSON.stringify(unversioned))).toThrow(/version/);
   });
 
+  it("refuses a vocabulary frozen without a mandatory tag", () => {
+    // The point of the category is that it cannot be lost to a derivation that
+    // did not happen to produce it — including by a hand-edit at review time.
+    const without = { ...frozen, topics: [topic("aviation")] };
+
+    expect(() => parseVocabulary(JSON.stringify(without))).toThrow(/mandatory/);
+  });
+
   it("refuses a slug that is not the kebab-case key the Catalog will store", () => {
     expect(() =>
       parseVocabulary(
-        JSON.stringify({ ...frozen, topics: [{ ...topic("x"), slug: "Board Games" }] }),
+        JSON.stringify({ ...frozen, topics: [...frozen.topics, { ...topic("x"), slug: "Board Games" }] }),
       ),
     ).toThrow(/kebab-case/);
   });
