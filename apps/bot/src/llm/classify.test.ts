@@ -74,10 +74,19 @@ describe("parseTags", () => {
 });
 
 describe("nativeTopics", () => {
-  it("reads a Topic out of a mod's own Forum tag", () => {
-    const post = entity({ id: "1", name: "Helldivers", applied_tags: ["PC"] });
+  it("reads a Topic out of a mod's own Forum tag that names it", () => {
+    const post = entity({ id: "1", name: "Wingspan", applied_tags: ["Board Game"] });
 
-    expect(nativeTopics(post, vocabulary.topics)).toEqual(["pc-gaming"]);
+    expect(nativeTopics(post, vocabulary.topics)).toEqual(["board-games"]);
+  });
+
+  it("does not read a Topic out of one word of its slug", () => {
+    // #22: `sports` claimed `sports-and-outdoors` for a politics Post, and
+    // `home` claimed `home-and-diy` for a movie night. A tag naming part of a
+    // Topic says nothing about the rest of it.
+    const post = entity({ id: "1", name: "Politics", applied_tags: ["sports", "PC", "gaming"] });
+
+    expect(nativeTopics(post, vocabulary.topics)).toEqual([]);
   });
 
   it("invents no correspondence where the two facets do not overlap", () => {
@@ -92,22 +101,40 @@ describe("nativeTopics", () => {
 describe("reconcile", () => {
   it("keeps the mod's tag when the model contradicts it, and logs the disagreement", () => {
     const warnings: string[] = [];
-    const post = entity({ id: "1", name: "Factorio", applied_tags: ["PC"] });
+    const post = entity({ id: "1", name: "Microsoft Flight Simulator", applied_tags: ["Aviation"] });
 
-    const tags = reconcile(post, ["board-games"], vocabulary, (m) => warnings.push(m));
+    const tags = reconcile(post, ["pc-gaming"], vocabulary, (m) => warnings.push(m));
 
-    expect(tags).toEqual(["board-games", "pc-gaming"]);
-    expect(warnings[0]).toContain("pc-gaming");
+    expect(tags).toEqual(["aviation", "pc-gaming"]);
+    expect(warnings[0]).toContain("aviation");
     expect(warnings[0]).toContain("Keeping the mod's tag");
   });
 
   it("says nothing when the model and the mod agree", () => {
     const warnings: string[] = [];
-    const post = entity({ id: "1", name: "Factorio", applied_tags: ["PC"] });
+    const post = entity({ id: "1", name: "Microsoft Flight Simulator", applied_tags: ["Aviation"] });
 
-    reconcile(post, ["pc-gaming"], vocabulary, (m) => warnings.push(m));
+    reconcile(post, ["aviation"], vocabulary, (m) => warnings.push(m));
 
     expect(warnings).toEqual([]);
+  });
+
+  it("adds a coarse core tag wherever a tag it covers is present", () => {
+    const withUmbrella: Vocabulary = {
+      ...vocabulary,
+      topics: [
+        ...vocabulary.topics,
+        { slug: "music", label: "Music", description: "Music." },
+        { slug: "entertainment", label: "Entertainment", description: "Media." },
+      ],
+    };
+    const post = entity({ id: "1", name: "Album of the week" });
+
+    expect(reconcile(post, ["music"], withUmbrella)).toEqual(["entertainment", "music"]);
+    expect(reconcile(post, ["aviation"], withUmbrella)).toEqual(["aviation"]);
+    // Not conjured into a vocabulary that does not carry it.
+    const without = { ...withUmbrella, topics: withUmbrella.topics.filter((t) => t.slug !== "entertainment") };
+    expect(reconcile(post, ["music"], without)).toEqual(["music"]);
   });
 
   it("keeps model tags the mod said nothing about, because they are additive", () => {

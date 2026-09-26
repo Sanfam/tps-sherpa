@@ -436,7 +436,7 @@ Most of the proposed taxonomy is not a classification problem:
 | **Format** | The entity type. |
 | **Region** | A small gazetteer over names; LLM only as fallback. |
 
-**Native `applied_tags` win wherever a Post has them.** LLM tags are additive. A contradiction between the two is logged for a mod to look at, never used to overwrite mod intent.
+**Native `applied_tags` win wherever a Post has them.** LLM tags are additive. A contradiction between the two is logged for a mod to look at, never used to overwrite mod intent. A Forum tag asserts a Topic only when it names the **whole** Topic: matching on one word of a compound slug turned the lifestyle Forum's `sports` tag into `sports-and-outdoors` on a politics Post, which is not mod intent but a string coincidence (#22).
 
 **Built and measured 2026-09-02.** All three mechanical axes are in the sync, and none of them needed a model.
 
@@ -501,7 +501,10 @@ skew is reported in the proposal file rather than assumed absent, and
 
 **Mandatory tags.** `parenting-and-family` and `relationships-and-self-care`
 are in the vocabulary **by decision, not by derivation** (Staff, 2026-09-05),
-and `parseVocabulary` refuses a frozen vocabulary that is missing either.
+and `parseVocabulary` refuses a frozen vocabulary that is missing any
+mandatory tag. v2 (Staff, 2026-09-26) adds `discussion`, `politics` and
+`entertainment` as **core** tags: deliberately coarse, applied alongside the
+specific ones so a member can filter broadly as well as narrowly.
 Volume is not salience and nothing that counts Entities can tell the
 difference: parenting is 1.4% of this corpus and is what the community is
 *for*. The uniform cap gave it four tags of twelve and the square root gave it
