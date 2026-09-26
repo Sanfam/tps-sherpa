@@ -74,10 +74,17 @@ gateway cannot serve a model is `codex exec -s read-only -m <model>`, fed the
 agent's brief and the intent on stdin, with `-m` pinned to a model other than
 the author's — see `review-process.md`.
 
-**Known gap (2026-09-24):** the gateway rejects `gpt-5.6-sol` when Codex is
-signed in with a ChatGPT account, so `final-reviewer` fails on its first call.
-Until the gateway is authenticated with an API key, run the final review
-through the CLI fallback and say so in the commit message.
+**Known gap (checked 2026-09-26):** through the gateway, `gpt-5.6-sol` and
+`gpt-6-astra` are refused with *"not supported when using Codex with a ChatGPT
+account"*, so `final-reviewer`, `architecture-consultant` and `ux-designer` all
+fail on their first call. Only Luna answers. The fault is in how the gateway
+presents ChatGPT-account auth, not in the account's entitlement: `codex exec -m
+gpt-5.6-sol` on the same ChatGPT login works, and `model-gateway doctor` reports
+everything healthy on claude-code-proxy 0.1.37. Upgrading the proxy (0.1.42 is
+out) or authenticating the gateway with an API key are both untested fixes.
+Until that is fixed, run the final review through the CLI fallback with
+`-m gpt-5.6-sol` — the intended reviewer, unless Sol wrote the change — and
+say so in the commit message.
 
 ## Stop conditions outrank routing
 

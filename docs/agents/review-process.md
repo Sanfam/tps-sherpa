@@ -47,10 +47,11 @@ reviewer differ, not that any particular model is the authority.
    only check syntax. The agent covers staged, unstaged and untracked changes.
    Without the subagent, pipe the agent's brief plus the intent to
    `codex exec -s read-only -m <model> -o <file> -`, with `-m` naming a model
-   that is **not** the author's — the local Codex default is `gpt-6-astra`,
-   which is also the `ux-designer`'s. Not `codex review --uncommitted`: it
-   refuses a prompt alongside that flag, so the reviewer never learns the
-   intent. See `delegation-model.md`.
+   that is **not** the author's — `gpt-5.6-sol`, the `final-reviewer`'s own
+   model, unless Sol wrote the change. The local Codex default is
+   `gpt-6-astra`, which is also the `ux-designer`'s. Not `codex review
+   --uncommitted`: it refuses a prompt alongside that flag, so the reviewer
+   never learns the intent. See `delegation-model.md`.
 3. **Triage every finding explicitly.** Three outcomes, no fourth:
    - **Valid, in scope** → fix before committing.
    - **Valid, out of scope** → file a ticket and link it in the commit message.

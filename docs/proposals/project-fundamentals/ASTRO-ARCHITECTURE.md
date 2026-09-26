@@ -650,7 +650,7 @@ These cannot be automated. Reaching one means producing the artifact and waiting
 |---|---|---|
 | **Set 17 missing Channel topics** | 2 | ~15 minutes in Discord. The largest remaining description gap, fixed at its source rather than inferred |
 | Tag vocabulary review | 2 | ~10 minutes reviewing ~20 proposed Topic tags before the vocabulary freezes. **Done 2026-09-24**: v1 frozen as `content/config/topics.json`, 19 tags — the 18 proposed plus `tabletop-gaming`, added at review because the vote on tabletop split three ways rather than rejecting it (recorded under `review.staff_edits`) |
-| Golden-set judgement | 2 | Confirms whether summaries would actually help a member decide to join. **Waiting now**: the `summary_generated` fields in `content/index/data.json` |
+| Golden-set judgement | 2 | Confirms whether summaries would actually help a member decide to join. **Done 2026-09-26**: Staff judged the summaries good. One addition requested — mark whether a Post is open or closed — filed as #23 |
 | Club Lead usability trial | 5 | One real Club Lead uses the CMS with no instructions |
 | Shadow-mode review | 3–6 | ≥2 weeks of suppressed intro-responder output, read by mods |
 | Go-live approval | 6 | Explicit sign-off before the bot posts to `#introductions` |
