@@ -7,7 +7,13 @@
  * a classifier whose labels mean something different every month.
  */
 import type { Entity } from "../sync/catalog.ts";
-import { slugify, type Topic, type Vocabulary } from "./vocabulary.ts";
+import {
+  MANDATORY_TOPICS,
+  consensusKey,
+  slugify,
+  type Topic,
+  type Vocabulary,
+} from "./vocabulary.ts";
 
 /**
  * Whether an Entity is due for classification.
@@ -71,19 +77,20 @@ export const parseTags = (
 /**
  * Topics a mod's own Forum tags already assert.
  *
- * Matched on whole slug words, so the Forum tag `PC` claims `pc-gaming` but
- * `Xbox` claims nothing unless a Topic actually names it. Where the two facets
- * do not overlap, that is not a failure: Platform is a separate axis and stays
- * in `applied_tags`. Nothing here invents a correspondence.
+ * A Forum tag asserts a Topic only when it names the whole Topic — `Music`
+ * claims `music`, `Board Games` claims `board-game`. It used to match any word
+ * of the slug, which held while slugs were single words and broke on v1's
+ * compounds: the lifestyle Forum's `home` tag claimed `home-and-diy` for a
+ * movie night, and `sports` put a politics Post under `sports-and-outdoors`,
+ * overriding the model both times (#22). Where the two facets do not overlap,
+ * that is not a failure: Platform is a separate axis and stays in
+ * `applied_tags`. Nothing here invents a correspondence.
  */
 export const nativeTopics = (entity: Entity, topics: Topic[]): string[] => {
-  const claimed = entity.applied_tags.map(slugify).filter(Boolean);
-  return topics
-    .filter((t) => {
-      const words = t.slug.split("-");
-      return claimed.some((c) => t.slug === c || words.includes(c));
-    })
-    .map((t) => t.slug);
+  const claimed = new Set(
+    entity.applied_tags.map((tag) => consensusKey(slugify(tag))).filter(Boolean),
+  );
+  return topics.filter((t) => claimed.has(consensusKey(t.slug))).map((t) => t.slug);
 };
 
 /**
@@ -107,5 +114,12 @@ export const reconcile = (
           `[${entity.applied_tags.join(", ")}], which asserts "${slug}", but the ` +
           `model did not. Keeping the mod's tag.`,
       );
-  return [...new Set([...modelTags, ...native])].sort();
+  const tags = new Set([...modelTags, ...native]);
+  // A coarse core tag follows from the specific tags it covers. Only when the
+  // vocabulary actually carries it: an older version without it must not
+  // acquire a slug it never had.
+  const known = new Set(vocabulary.topics.map((t) => t.slug));
+  for (const m of MANDATORY_TOPICS)
+    if (known.has(m.slug) && m.covers?.some((slug) => tags.has(slug))) tags.add(m.slug);
+  return [...tags].sort();
 };

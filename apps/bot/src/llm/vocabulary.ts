@@ -57,8 +57,14 @@ export interface Vocabulary {
  * `supersedes` lists slugs a mandatory tag absorbs. It holds only slugs
  * actually observed in a derivation, not everything one might imagine — a
  * speculative list is a maintenance burden that protects against nothing.
+ *
+ * `covers` lists specific tags a coarse one sits above. Any Entity carrying
+ * one of them carries the coarse tag too, enforced in `reconcile` rather than
+ * asked of the model: asked, it applied `entertainment` beside a media tag
+ * about a third of the time.
  */
-export const MANDATORY_TOPICS: Array<Topic & { supersedes?: string[] }> = [
+export type MandatoryTopic = Topic & { supersedes?: string[]; covers?: string[] };
+export const MANDATORY_TOPICS: MandatoryTopic[] = [
   {
     slug: "parenting-and-family",
     label: "Parenting & Family",
@@ -76,6 +82,35 @@ export const MANDATORY_TOPICS: Array<Topic & { supersedes?: string[] }> = [
       "own physical and mental health, burnout and self-care. Not raising the children.",
     supersedes: ["relationship", "relationships", "relationships-and-intimacy"],
   },
+  // Coarse by design (Staff, 2026-09-26). These sit above the specific tags
+  // and are applied alongside them, so a member can filter broadly as well as
+  // narrowly. `politics` also has nowhere else to go: the lifestyle Forum's
+  // politics Post was being tagged sports because nothing named its subject.
+  {
+    slug: "discussion",
+    label: "Discussion",
+    description:
+      "Open-ended conversation rather than one fixed subject: general and off-topic chat, " +
+      "debates, philosophy, 'what's on your mind' threads and questions to the group. " +
+      "Applied alongside a specific tag when the conversation also has a subject.",
+  },
+  {
+    slug: "politics",
+    label: "Politics",
+    description:
+      "Politics, government, elections, policy, and news and current events debated as " +
+      "politics. Not sports, and not personal finance.",
+  },
+  {
+    slug: "entertainment",
+    label: "Entertainment",
+    description:
+      "The broad umbrella over media and pop culture — film, TV, anime, music, books, " +
+      "streaming and celebrity. Applied alongside the specific tag (movies-and-tv, music, " +
+      "anime-and-manga, books-and-reading). Video games and tabletop have their own tags " +
+      "and do not also need this one.",
+    covers: ["movies-and-tv", "music", "anime-and-manga", "books-and-reading"],
+  },
 ];
 
 /**
@@ -88,7 +123,7 @@ export const MANDATORY_TOPICS: Array<Topic & { supersedes?: string[] }> = [
  */
 export const withMandatory = (
   derived: Topic[],
-  mandatory: Array<Topic & { supersedes?: string[] }> = MANDATORY_TOPICS,
+  mandatory: MandatoryTopic[] = MANDATORY_TOPICS,
 ): Topic[] => {
   const absorbed = new Set(
     mandatory.flatMap((m) => [
@@ -97,7 +132,7 @@ export const withMandatory = (
     ]),
   );
   return [
-    ...mandatory.map(({ supersedes: _supersedes, ...topic }) => topic),
+    ...mandatory.map(({ supersedes: _supersedes, covers: _covers, ...topic }) => topic),
     ...derived.filter((t) => !absorbed.has(consensusKey(t.slug))),
   ];
 };

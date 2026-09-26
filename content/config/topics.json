@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "frozen_at": "2026-09-24",
+  "version": 2,
+  "frozen_at": "2026-09-26",
   "status": "frozen",
   "topics": [
     {
@@ -12,6 +12,21 @@
       "slug": "relationships-and-self-care",
       "label": "Relationships & Self Care",
       "description": "Partners, marriage, intimacy and co-parenting as a relationship, plus a dad's own physical and mental health, burnout and self-care. Not raising the children."
+    },
+    {
+      "slug": "discussion",
+      "label": "Discussion",
+      "description": "Open-ended conversation rather than one fixed subject: general and off-topic chat, debates, philosophy, 'what's on your mind' threads and questions to the group. Applied alongside a specific tag when the conversation also has a subject."
+    },
+    {
+      "slug": "politics",
+      "label": "Politics",
+      "description": "Politics, government, elections, policy, and news and current events debated as politics. Not sports, and not personal finance."
+    },
+    {
+      "slug": "entertainment",
+      "label": "Entertainment",
+      "description": "The broad umbrella over media and pop culture — film, TV, anime, music, books, streaming and celebrity. Applied alongside the specific tag (movies-and-tv, music, anime-and-manga, books-and-reading). Video games and tabletop have their own tags and do not also need this one."
     },
     {
       "slug": "anime-and-manga",
@@ -276,7 +291,8 @@
       "One notable gap the vocabulary cannot cover: tabletop games — board games, TTRPGs, and physical/analog game discussion like Dice Throne, Pandemic, MTG, and Tabletop Simulator. video-games explicitly excludes tabletop/physical games, and social-activities-and-events only covers scheduled game nights, not individual tabletop discussion. A future dedicated tag would be needed, but I cannot add it here."
     ],
     "staff_edits": [
-      "Added tabletop-gaming at review. The critique flagged tabletop as the one gap, and the vote on it split three ways (tabletop-gaming, board-game, tabletop-rpg at 2/4 each) rather than rejecting it."
+      "Added tabletop-gaming at review. The critique flagged tabletop as the one gap, and the vote on it split three ways (tabletop-gaming, board-game, tabletop-rpg at 2/4 each) rather than rejecting it.",
+      "v2 (2026-09-26): added discussion, politics and entertainment as mandatory core tags — coarse filters applied alongside the specific ones. politics in particular had no home: the lifestyle Forum politics Post was tagged sports."
     ]
   }
 }
