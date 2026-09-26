@@ -16,9 +16,27 @@ export interface WireConfig {
   apiKey: string;
   /** A model that never answers is a hung sync, not a slow one. */
   timeoutMs?: number;
+  /**
+   * Routing preference, passed through verbatim. Vendor-specific and omitted
+   * entirely when unset, so the wire stays the plain chat-completions shape
+   * for anything that is not a router.
+   *
+   * Measured 2026-09-04, same prompt and the same **pinned** model, five
+   * calls: 11s, 47s, 58s, 106s, 205s — a 20x spread tracking which provider
+   * the router picked, with output from 48 to 5,710 tokens. Pinning a model
+   * does not pin who serves it, and on the heavy prompts here that difference
+   * decides whether a run finishes at all.
+   */
+  provider?: unknown;
 }
 
-const DEFAULT_TIMEOUT_MS = 60_000;
+/**
+ * Three minutes, not one. The vocabulary bootstrap hands the strong model a
+ * hundred-odd catalog entries and asks for twenty tags; that took longer than
+ * 60s and aborted mid-derivation. Long enough for the heaviest job here,
+ * short enough that a model which never answers still fails rather than hangs.
+ */
+const DEFAULT_TIMEOUT_MS = 180_000;
 
 export const openAiWire = (config: WireConfig): ChatPort => ({
   complete: async ({ model, system, user }) => {
@@ -30,6 +48,7 @@ export const openAiWire = (config: WireConfig): ChatPort => ({
       },
       body: JSON.stringify({
         model,
+        ...(config.provider === undefined ? {} : { provider: config.provider }),
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
@@ -77,11 +96,23 @@ export const wireFromEnv = (
   };
   for (const [role, name] of Object.entries(models))
     if (!name) throw new Error(`LLM_MODEL_${role.toUpperCase()} must be set.`);
+  // Raw JSON rather than a parsed set of knobs: this is one vendor's routing
+  // object passed straight through, and inventing our own vocabulary for it
+  // would mean maintaining a translation for a field we do not own.
+  let provider: unknown;
+  if (env["LLM_PROVIDER"])
+    try {
+      provider = JSON.parse(env["LLM_PROVIDER"]);
+    } catch {
+      throw new Error(`LLM_PROVIDER must be JSON. Got: ${env["LLM_PROVIDER"]}`);
+    }
+
   return {
     wire: {
       baseUrl: env["LLM_BASE_URL"] ?? "https://openrouter.ai/api/v1",
       apiKey,
       ...(env["LLM_TIMEOUT_MS"] ? { timeoutMs: Number(env["LLM_TIMEOUT_MS"]) } : {}),
+      ...(provider === undefined ? {} : { provider }),
     },
     models: models as Record<ModelRole, string>,
   };

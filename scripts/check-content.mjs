@@ -19,6 +19,17 @@ const read = (path) => {
 
 const catalog = read("content/index/data.json");
 const roles = read("content/config/roles.json");
+// Absent until a human freezes one. Its absence is not a problem; a Catalog
+// carrying tags that are not in it would be.
+let vocabulary = null;
+try {
+  vocabulary = JSON.parse(
+    readFileSync(new URL("../content/config/topics.json", import.meta.url), "utf8"),
+  );
+} catch (error) {
+  if (error.code !== "ENOENT") problems.push(`content/config/topics.json: ${error.message}`);
+}
+const knownTopics = vocabulary && new Set((vocabulary.topics ?? []).map((t) => t.slug));
 
 if (Array.isArray(catalog)) {
   const seen = new Set();
@@ -42,6 +53,23 @@ if (Array.isArray(catalog)) {
       problems.push(`${e.id}: applied_tags contains a raw Discord id`);
     if (!Array.isArray(e.region) || e.region.some((r) => typeof r !== "string"))
       problems.push(`${e.id}: region is not an array of names`);
+    if (!Array.isArray(e.topics) || e.topics.some((t) => typeof t !== "string"))
+      problems.push(`${e.id}: topics is not an array of vocabulary slugs`);
+    // Unknown tags are skipped and logged, never created — a standing
+    // anti-goal. The classifier enforces it per call; this enforces it on the
+    // artifact, which is what a hand-edit or a bad merge would get past.
+    if (knownTopics)
+      for (const t of e.topics ?? [])
+        if (!knownTopics.has(t))
+          problems.push(`${e.id}: topic "${t}" is not in the frozen vocabulary`);
+    if (e.topics_version !== null && !Number.isInteger(e.topics_version))
+      problems.push(`${e.id}: topics_version is neither null nor an integer`);
+    // Tags with no version cannot be retagged on a bump, because nothing can
+    // tell they are stale.
+    if (e.topics?.length && e.topics_version === null)
+      problems.push(`${e.id}: carries topics but no vocabulary version`);
+    if (e.summary_generated !== null && typeof e.summary_generated !== "string")
+      problems.push(`${e.id}: summary_generated is neither null nor a string`);
   }
   // Sorted by id, so a re-run produces no diff. An unsorted Catalog means
   // something wrote it by hand.

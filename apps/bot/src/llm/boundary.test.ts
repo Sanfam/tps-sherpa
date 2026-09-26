@@ -18,6 +18,8 @@ const entity = (over: Partial<Entity> & { id: string; name: string }): Entity =>
   topic: null,
   applied_tags: [],
   region: [],
+  topics: [],
+  topics_version: null,
   last_message_id: null,
   last_activity_at: null,
   summary_generated: null,
@@ -176,6 +178,25 @@ describe("what never reaches a model", () => {
     await expect(boundary(chat).ask({ ...ask, subject: introThread })).rejects.toThrow(
       /monitored/i,
     );
+    expect(calls).toHaveLength(0);
+  });
+
+  it("checks every subject when given a list, not just the first", async () => {
+    // The vocabulary bootstrap reasons over a whole stratified sample at once.
+    // A list check that stopped at the first Entity would skip the carve-out
+    // for the hundred that follow it, which is where nearly all the text is.
+    const { chat, calls } = fixtureChat('{"ok":true}');
+
+    await expect(boundary(chat).ask({ ...ask, subject: [post, introThread] })).rejects.toThrow(
+      /monitored/i,
+    );
+    expect(calls).toHaveLength(0);
+  });
+
+  it("refuses an empty subject list rather than checking nothing", async () => {
+    const { chat, calls } = fixtureChat('{"ok":true}');
+
+    await expect(boundary(chat).ask({ ...ask, subject: [] })).rejects.toThrow(/no subject/i);
     expect(calls).toHaveLength(0);
   });
 

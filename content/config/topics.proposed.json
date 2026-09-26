@@ -1,0 +1,274 @@
+{
+  "version": 1,
+  "frozen_at": null,
+  "status": "proposed",
+  "topics": [
+    {
+      "slug": "parenting-and-family",
+      "label": "Parenting & Family",
+      "description": "Raising children at any stage — expecting, newborns, toddlers, school age, teens, grown children and grandkids — and family shape: adoption, fostering, step-parenting, single parenting. Not the relationship with a partner."
+    },
+    {
+      "slug": "relationships-and-self-care",
+      "label": "Relationships & Self Care",
+      "description": "Partners, marriage, intimacy and co-parenting as a relationship, plus a dad's own physical and mental health, burnout and self-care. Not raising the children."
+    },
+    {
+      "slug": "anime-and-manga",
+      "label": "Anime & Manga",
+      "description": "Anime, manga, graphic novels, and visual literature."
+    },
+    {
+      "slug": "books-and-reading",
+      "label": "Books & Reading",
+      "description": "Books of any genre, book-club selections, reading recommendations, and storytelling."
+    },
+    {
+      "slug": "content-creation-and-streaming",
+      "label": "Content Creation & Streaming",
+      "description": "Making and broadcasting media: filmmaking, video editing, livestreaming games, and creating content; not just watching media."
+    },
+    {
+      "slug": "food-and-cooking",
+      "label": "Food & Cooking",
+      "description": "Cooking, diets, plant-based eating, snacks, and anything else food-related."
+    },
+    {
+      "slug": "home-and-diy",
+      "label": "Home & DIY",
+      "description": "Home improvement, lawn and garden, backyard projects, decluttering, and do-it-yourself fixes."
+    },
+    {
+      "slug": "humor-and-memes",
+      "label": "Humor & Memes",
+      "description": "Dad jokes, memes, and funny content."
+    },
+    {
+      "slug": "lgbtq-and-allies",
+      "label": "LGBTQ+ & Allies",
+      "description": "Experiences and support for LGBTQ+ dads, parents of LGBTQ+ kids, and allies — not general parenting advice, which belongs under parenting-and-family."
+    },
+    {
+      "slug": "local-and-regional-connections",
+      "label": "Local & Regional Connections",
+      "description": "Regional threads, timezone-specific chat, and local meetups with nearby members — not travel recommendations or vacation photos."
+    },
+    {
+      "slug": "movies-and-tv",
+      "label": "Movies & TV",
+      "description": "Watching and discussing films, TV series, and live-action adaptations, including movie-club picks; not making films or anime."
+    },
+    {
+      "slug": "music",
+      "label": "Music",
+      "description": "Music, albums, and what dads are listening to."
+    },
+    {
+      "slug": "server-news-and-help",
+      "label": "Server News & Help",
+      "description": "Official announcements, rules, welcome information, help, and how-tos for using the server."
+    },
+    {
+      "slug": "server-suggestions-and-feedback",
+      "label": "Server Suggestions & Feedback",
+      "description": "Ideas, requests, and feedback for improving the server — channels, bots, emoji, and policies."
+    },
+    {
+      "slug": "social-activities-and-events",
+      "label": "Social Activities & Events",
+      "description": "Scheduled community get-togethers, game nights, watch parties, activities, and polls — not individual game discussion or hobby how-tos."
+    },
+    {
+      "slug": "sports-and-outdoors",
+      "label": "Sports & Outdoors",
+      "description": "Watching or playing sports, outdoor recreation, and exercise as leisure — not health or medical self-care, which belongs under relationships-and-self-care."
+    },
+    {
+      "slug": "technology-and-gadgets",
+      "label": "Technology & Gadgets",
+      "description": "Everyday tech, software help, apps, and non-gaming gadgets like watches and EDC carries."
+    },
+    {
+      "slug": "video-games",
+      "label": "Video Games",
+      "description": "Video game titles, platforms, hardware, backlogs, gaming news, and what you're playing — not tabletop or physical games."
+    }
+  ],
+  "review": {
+    "derived_at": "2026-09-06T16:20:56.185Z",
+    "model": "deepseek/deepseek-v4-flash-0731",
+    "runs": 4,
+    "allocation": "sqrt(size)",
+    "corpus": {
+      "entities": 1235,
+      "strata": 51,
+      "largest": {
+        "stratum": "🎮︱game-talk",
+        "count": 507,
+        "share": 0.4105263157894737
+      }
+    },
+    "sample": {
+      "entities": 151,
+      "strata": 51,
+      "largest": {
+        "stratum": "🎮︱game-talk",
+        "count": 23,
+        "share": 0.152317880794702
+      }
+    },
+    "pooled": 54,
+    "merged_to": 33,
+    "merges": [
+      "anime-and-manga ← anime-and-comics, anime-and-manga, anime-manga-and-comics",
+      "content-creation-and-streaming ← content-creation-and-streaming, streaming-and-creators",
+      "cars-and-vehicles ← automotive, cars-and-automotive, cars-and-vehicles",
+      "career-and-education ← career-and-education, work-and-career",
+      "money-and-finance ← money-and-benefits, money-and-finance",
+      "local-and-regional-connections ← connections-and-meetups, local-and-regional-connections, local-regional, regional-and-local",
+      "social-activities-and-events ← community-events, social-activities-and-events, social-and-events",
+      "home-and-diy ← home-and-diy, home-and-garden",
+      "humor-and-memes ← humor-and-comedy, humor-and-memes, jokes-and-memes",
+      "movies-and-tv ← movies-and-tv, tv-and-movies",
+      "server-suggestions-and-feedback ← server-feedback-and-improvement, server-suggestions-and-feedback",
+      "sports-and-outdoors ← sports-and-fitness, sports-and-outdoors",
+      "technology-and-gadgets ← gear-and-gadgets, technology-and-gadgets",
+      "video-games ← video-games, video-gaming",
+      "tabletop-gaming ← tabletop-games, tabletop-gaming"
+    ],
+    "agreement": [
+      {
+        "key": "anime-and-manga",
+        "label": "Anime & Manga",
+        "runs": 4
+      },
+      {
+        "key": "books-and-reading",
+        "label": "Books & Reading",
+        "runs": 4
+      },
+      {
+        "key": "content-creation-and-streaming",
+        "label": "Content Creation & Streaming",
+        "runs": 4
+      },
+      {
+        "key": "food-and-cooking",
+        "label": "Food & Cooking",
+        "runs": 4
+      },
+      {
+        "key": "home-and-diy",
+        "label": "Home & DIY",
+        "runs": 4
+      },
+      {
+        "key": "humor-and-meme",
+        "label": "Humor & Memes",
+        "runs": 4
+      },
+      {
+        "key": "lgbtq-and-allie",
+        "label": "LGBTQ+ & Allies",
+        "runs": 4
+      },
+      {
+        "key": "local-and-regional-connection",
+        "label": "Local & Regional Connections",
+        "runs": 4
+      },
+      {
+        "key": "movies-and-tv",
+        "label": "Movies & TV",
+        "runs": 4
+      },
+      {
+        "key": "music",
+        "label": "Music",
+        "runs": 4
+      },
+      {
+        "key": "server-news-and-help",
+        "label": "Server News & Help",
+        "runs": 4
+      },
+      {
+        "key": "server-suggestions-and-feedback",
+        "label": "Server Suggestions & Feedback",
+        "runs": 4
+      },
+      {
+        "key": "social-activities-and-event",
+        "label": "Social Activities & Events",
+        "runs": 4
+      },
+      {
+        "key": "sports-and-outdoor",
+        "label": "Sports & Outdoors",
+        "runs": 4
+      },
+      {
+        "key": "technology-and-gadget",
+        "label": "Technology & Gadgets",
+        "runs": 4
+      },
+      {
+        "key": "video-game",
+        "label": "Video Games",
+        "runs": 4
+      },
+      {
+        "key": "cars-and-vehicle",
+        "label": "Cars & Vehicles",
+        "runs": 3
+      },
+      {
+        "key": "board-game",
+        "label": "Board Games",
+        "runs": 2
+      },
+      {
+        "key": "career-and-education",
+        "label": "Career & Education",
+        "runs": 2
+      },
+      {
+        "key": "health-and-insurance",
+        "label": "Health & insurance",
+        "runs": 2
+      },
+      {
+        "key": "tabletop-gaming",
+        "label": "Tabletop Gaming",
+        "runs": 2
+      },
+      {
+        "key": "tabletop-rpg",
+        "label": "Tabletop RPGs",
+        "runs": 2
+      },
+      {
+        "key": "work-and-money",
+        "label": "Work, Money & Education",
+        "runs": 2
+      },
+      {
+        "key": "pets-and-animal",
+        "label": "Pets & Animals",
+        "runs": 1
+      }
+    ],
+    "mandatory": [
+      "parenting-and-family",
+      "relationships-and-self-care"
+    ],
+    "superseded_by_mandatory": [],
+    "critique_status": "applied",
+    "dropped_by_critique": [],
+    "reworded_by_critique": [],
+    "critique_notes": [
+      "No existing tag needs dropping or rewording; the candidate set is internally consistent and complements the fixed parenting/self-care tags.",
+      "One notable gap the vocabulary cannot cover: tabletop games — board games, TTRPGs, and physical/analog game discussion like Dice Throne, Pandemic, MTG, and Tabletop Simulator. video-games explicitly excludes tabletop/physical games, and social-activities-and-events only covers scheduled game nights, not individual tabletop discussion. A future dedicated tag would be needed, but I cannot add it here."
+    ]
+  }
+}

@@ -43,6 +43,17 @@ export interface Entity {
    * committed gazetteer. Empty for the ~95% of Entities that name no place.
    */
   region: string[];
+  /**
+   * The Topic facet: slugs from the frozen vocabulary. The one derived axis —
+   * everything else about an Entity is mod-authored or mechanical.
+   */
+  topics: string[];
+  /**
+   * Which vocabulary version those slugs were assigned under. Null means never
+   * classified. A version bump leaves every Entity stale, which is what makes
+   * a bump a full retag rather than a silent drift.
+   */
+  topics_version: number | null;
   /** Newest message. Null if nothing has been posted. */
   last_message_id: string | null;
   /**
@@ -50,7 +61,12 @@ export interface Entity {
    * time, so this costs nothing and is exact.
    */
   last_activity_at: string | null;
-  /** Overwritten by the sync every run. Null until Phase 2 generates one. */
+  /**
+   * Bot-owned. Carried forward while the Entity's identity is unchanged and
+   * dropped the moment it is not — see `identityKey`. The sync used to blank
+   * it every run, which would have meant regenerating 1,253 summaries on the
+   * strong model on every scheduled sync to replace them with the same text.
+   */
   summary_generated: string | null;
   /**
    * Human-authored, and the renderer prefers it. The sync only ever copies
@@ -59,6 +75,32 @@ export interface Entity {
    */
   summary_override: string | null;
 }
+
+/**
+ * What an Entity *is*, as far as anything derived from it is concerned.
+ *
+ * A key that has not moved is a licence to keep what the last enrichment run
+ * produced, so **it must cover every field that reaches a model.** That is
+ * exactly the set `subjectText` renders — name, type, parent name, mod tags,
+ * region, description — and the two must be changed together. Miss one and a
+ * Post moved between Forums, or a Forum renamed under its Posts, keeps a
+ * summary describing somewhere it no longer is, indefinitely and invisibly.
+ *
+ * It deliberately excludes activity: a new message in a five-year-old Post
+ * does not change what that Post is about, and keying on `last_message_id`
+ * would rerun the whole corpus through a model every night.
+ */
+export const identityKey = (entity: Entity, parent?: Entity | null): string =>
+  [
+    entity.type,
+    entity.name,
+    entity.topic ?? "",
+    // The parent's NAME, not its id: `subjectText` renders the name, so a
+    // rename changes the prompt without changing the parent_id.
+    parent?.name ?? "",
+    entity.applied_tags.join("\u001f"),
+    entity.region.join("\u001f"),
+  ].join("\u0000");
 
 /** Discord snowflakes embed a millisecond timestamp above the low 22 bits. */
 const DISCORD_EPOCH = 1420070400000;
@@ -101,6 +143,30 @@ export const buildCatalog = async (deps: {
   const overrides = new Map(
     (deps.previous ?? []).map((e) => [e.id, e.summary_override]),
   );
+  const previousById = new Map((deps.previous ?? []).map((e) => [e.id, e]));
+
+  /**
+   * Keeps the derived fields an LLM pass produced, but only while the Entity
+   * still means the same thing.
+   *
+   * Regenerating them every sync would put the whole corpus through a model on
+   * every scheduled run for identical output; keeping them unconditionally
+   * would leave a renamed Post advertising what it used to be. The identity
+   * key is the line between those two.
+   */
+  const carryDerived = (entity: Entity, currentById: Map<string, Entity>): Entity => {
+    const before = previousById.get(entity.id);
+    if (!before) return entity;
+    const parentNow = entity.parent_id ? currentById.get(entity.parent_id) : null;
+    const parentBefore = before.parent_id ? previousById.get(before.parent_id) : null;
+    if (identityKey(before, parentBefore) !== identityKey(entity, parentNow)) return entity;
+    return {
+      ...entity,
+      topics: before.topics ?? [],
+      topics_version: before.topics_version ?? null,
+      summary_generated: before.summary_generated ?? null,
+    };
+  };
 
   // A Channel is a standing text channel that is not a Forum. Categories are
   // headers and voice channels are not readable — neither is a Catalog Entity.
@@ -244,6 +310,8 @@ export const buildCatalog = async (deps: {
       topic,
       applied_tags: [],
       region: matchRegions(c.name, regions),
+      topics: [],
+      topics_version: null,
       last_message_id: c.lastMessageId ?? null,
       last_activity_at: snowflakeTime(c.lastMessageId),
       summary_generated: null,
@@ -268,6 +336,8 @@ export const buildCatalog = async (deps: {
       topic: first,
       applied_tags: tagNames(t),
       region: matchRegions(t.name, regions),
+      topics: [],
+      topics_version: null,
       last_message_id: t.lastMessageId ?? null,
       last_activity_at: snowflakeTime(t.lastMessageId),
       summary_generated: null,
@@ -275,15 +345,18 @@ export const buildCatalog = async (deps: {
     };
   };
 
+  // Built before carry-forward runs, because deciding whether a child's
+  // enrichment is still valid needs its parent's new name.
+  const built = [...containers.map(fromContainer), ...threads.map(fromThread)];
+  const builtById = new Map(built.map((e) => [e.id, e]));
+
   // Editors pick a role by name; Access gates store the ID. Regenerating the
   // manifest each run means a rename updates the display name while every
   // gate keeps working, and a deleted role simply stops matching.
   return {
     // Sorted by ID: Discord does not promise a stable order, and an unsorted
     // Catalog would produce a reordered commit on every scheduled run.
-    catalog: [...containers.map(fromContainer), ...threads.map(fromThread)].sort(
-      byId,
-    ),
+    catalog: built.map((e) => carryDerived(e, builtById)).sort(byId),
     roleManifest,
     exclusionsApplied: [
       ...visibleContainers.filter((c) => excluded.has(c.id)).map((c) => c.id),

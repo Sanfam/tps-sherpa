@@ -40,10 +40,18 @@ reviewer differ, not that any particular model is the authority.
    `npm test` · `npm run typecheck` · `node scripts/check-content.mjs`
    Do not send broken work to review; a reviewer's attention is for defects you
    did not already know about.
-2. **Run `/codex:adversarial-review`** over the change set. Frame it as *find
-   what is wrong with this*, never *is this okay*. Give it the intent as well
-   as the diff — a reviewer that does not know what the code was for can only
-   check syntax.
+2. **Delegate the review to the `final-reviewer` agent** — GPT-5.6 Sol, a
+   different model from whichever one wrote the code. Frame the prompt as *find
+   what is wrong with this*, never *is this okay*, and give it the intent as
+   well as the diff: a reviewer that does not know what the code was for can
+   only check syntax. The agent covers staged, unstaged and untracked changes.
+   Without the subagent, pipe the agent's brief plus the intent to
+   `codex exec -s read-only -m <model> -o <file> -`, with `-m` naming a model
+   that is **not** the author's — `gpt-5.6-sol`, the `final-reviewer`'s own
+   model, unless Sol wrote the change. The local Codex default is
+   `gpt-6-astra`, which is also the `ux-designer`'s. Not `codex review
+   --uncommitted`: it refuses a prompt alongside that flag, so the reviewer
+   never learns the intent. See `delegation-model.md`.
 3. **Triage every finding explicitly.** Three outcomes, no fourth:
    - **Valid, in scope** → fix before committing.
    - **Valid, out of scope** → file a ticket and link it in the commit message.
@@ -73,6 +81,7 @@ authority to reach the live guild.
 
 - **Codex unavailable or unauthenticated** → run `/code-review` instead, and
   say in the commit message which reviewer ran and why. Do not silently skip.
+  Check with `codex --version`; `codex doctor` diagnoses auth and runtime.
 - **Diff too large to review meaningfully** → split the change set. A review
   that ran but did not fit is worse than none, because it is recorded as done.
 - **Author and reviewer disagree on validity** → the author decides and records
@@ -86,9 +95,12 @@ authority to reach the live guild.
 does **not** verify that a review happened, and nothing prevents an unreviewed
 commit reaching `main`.
 
-`/codex:setup --enable-review-gate` makes the harness require a fresh review
-before a session ends, which is the only actual enforcement available. It is
-currently **off**.
+There is currently **no enforcement at all**. The `codex@openai-codex` plugin
+that provided `/codex:setup --enable-review-gate` — a stop-time gate requiring a
+fresh review before a session ended — is disabled in favour of the `skill-codex`
+skill, which ships no such hook. Re-enabling that plugin is the only way to get
+the gate back, and it would reintroduce a review command the model cannot
+invoke. Until then the rule above rests entirely on the author honouring it.
 
 ## Standards for a fix
 

@@ -16,6 +16,8 @@ const entity = (id: string, name: string): Entity => ({
   topic: null,
   applied_tags: [],
   region: [],
+  topics: [],
+  topics_version: null,
   last_message_id: null,
   last_activity_at: null,
   summary_generated: null,
