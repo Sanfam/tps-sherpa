@@ -1,29 +1,48 @@
 # Delegation model
 
-Who does which work, on which model, at what reasoning effort. Agent definitions
-live in `.claude/agents/`; this document is why they are what they are.
+Who does which work, on which model, at what reasoning effort, and how each is
+invoked. This document is why the roster is what it is.
 
 ## The roster
 
-| Role | Agent | Model | Effort | Edits code? |
+| Role | Brief | Model | Effort | Sandbox |
 |---|---|---|---|---|
-| Orchestrator / top architect | *(main thread)* | Claude Opus 5.5 | High | yes |
-| UX designer | `ux-designer` | GPT-6 Astra | Medium | yes |
-| Architectural reviewer | `architecture-consultant` | GPT-6 Astra | Medium | **no** |
-| Implementer — judgement | `implementer-opus` | Claude Opus 5.5 | Medium | yes |
-| Implementer — worker | `implementer-luna` | GPT-5.6 Luna | High | yes |
-| Implementer — hard worker | `implementer-luna-max` | GPT-5.6 Luna | Max | yes |
-| Final review | `final-reviewer` | GPT-5.6 Sol | High | **no** |
+| Orchestrator / top architect | *(main thread)* | Claude Opus 5.5 | High | — |
+| UX designer | `docs/agents/codex-briefs/ux-designer.md` | GPT-6 Astra | Medium | `workspace-write` |
+| Architectural reviewer | `docs/agents/codex-briefs/architecture-consultant.md` | GPT-6 Astra | Medium | `read-only` |
+| Implementer — judgement | `.claude/agents/implementer-opus.md` | Claude Opus 5.5 | Medium | — |
+| Implementer — worker | `docs/agents/codex-briefs/implementer-luna.md` | GPT-5.6 Luna | High | `workspace-write` |
+| Implementer — hard worker | `docs/agents/codex-briefs/implementer-luna-max.md` | GPT-5.6 Luna | Max | `workspace-write` |
+| Final review | `docs/agents/codex-briefs/final-reviewer.md` | GPT-5.6 Sol | High | `read-only` |
+
+`implementer-opus` is a Claude Code subagent. Every GPT role is a Codex
+session, not a subagent: its brief lives in `docs/agents/codex-briefs/`.
 
 Effort ranges the roles are licensed for, where a task warrants moving: Astra
-roles Low–Medium, `implementer-opus` Low–Medium, `final-reviewer` Medium–High.
-Changing one means editing that agent's `effort:` frontmatter — effort is fixed
-per definition, not chosen at spawn time. That is why Luna High and Luna Max are
-two files rather than one.
+roles Low–Medium, `implementer-opus` Low–Medium, final review Medium–High.
+Codex effort is chosen per call; the Opus subagent's is its `effort:`
+frontmatter.
+
+## How a Codex role is invoked
+
+**Only through the `skill-codex` skill.** It shells out to `codex exec` with an
+explicit model, reasoning effort and sandbox, and it owns the invocation
+details: flags, stdin prompts, timeouts, resuming a session. Follow the skill
+rather than copying a command line here that will drift from it.
+
+What this repo adds to each call:
+
+- **The prompt is the role's brief plus the task.** Pipe the brief file, then
+  the intent: what the change is for, what was verified, what to look at. A
+  reviewer that does not know what the code was for can only check syntax.
+- **The model, effort and sandbox are the roster's**, passed explicitly so a
+  local Codex default cannot substitute its own.
+- **Working directory is the repo root**, so the brief's relative paths
+  resolve.
 
 ## Why it is shaped this way
 
-**The orchestrator holds the context.** Subagents start cold and re-derive
+**The orchestrator holds the context.** Delegates start cold and re-derive
 everything, which is their real cost. Work stays in the main thread unless
 delegating buys isolation, a different model's blind spots, or genuine
 parallelism.
@@ -31,64 +50,37 @@ parallelism.
 **Author and reviewer are never the same model.** That is the whole argument in
 `review-process.md`, and it is the one rule here that is not negotiable. An
 Opus-authored change reviewed by Sol is independent; an Opus-authored change
-reviewed by Opus is one mind marking its own work.
+reviewed by Opus is one mind marking its own work. A change a Codex role wrote
+is reviewed by Claude instead — see `review-process.md`.
 
 **Workers are cheap but unverified.** Luna implementers take bounded,
 well-specified tasks. Their output is *always* validated — by the orchestrator,
 by `npm test` / `npm run typecheck` / `node scripts/check-content.mjs`, and by
-`final-reviewer` before it becomes history. Offloading is a throughput decision,
-never a trust decision.
+the final review before it becomes history. Offloading is a throughput
+decision, never a trust decision.
 
-**Advisors do not edit.** `architecture-consultant` and `final-reviewer` have
-no `Write` or `Edit` in their `tools:` list — but they keep `Bash`, because a
-reviewer that cannot run `git diff` or the tests cannot review, and `Bash` can
-write through a redirect. So this is enforced by instruction, not by the tool
-list, and an advisor that edits has broken its brief. A reviewer that can fix
-what it finds stops reporting and starts patching, and the author never learns
-what was wrong.
+**Advisors do not edit, and the sandbox enforces it.** The final reviewer and
+the architectural reviewer run under `read-only`, which lets them run
+`git diff` and read the tree but not write to it. A reviewer that can fix what
+it finds stops reporting and starts patching, and the author never learns what
+was wrong.
 
 ## Routing
 
 - **Needs judgement, spans modules, touches privacy or permissions** →
   `implementer-opus`, or keep it in the main thread.
-- **Bounded, one module, clear spec** → `implementer-luna`.
+- **Bounded, one module, clear spec** → Luna, High.
 - **Bounded but genuinely hard** — subtle state, tricky edge cases, an algorithm
-  that is easy to get almost right → `implementer-luna-max`.
+  that is easy to get almost right → Luna, Max.
 - **Several independent tasks, no shared state** → dispatch in parallel, one
-  agent per problem domain.
-- **Unsure whether the approach is right** → `architecture-consultant` before
+  delegate per problem domain.
+- **Unsure whether the approach is right** → the architectural reviewer before
   writing code, not after.
-- **Before every commit** → `final-reviewer`. Not optional.
-
-## How the GPT models are reached
-
-Astra, Luna and Sol are served through the local model gateway, which exposes
-them as Claude-shaped ids (`claude-gpt-6-astra[1m]`, `claude-gpt-5.6-luna[1m]`,
-`claude-gpt-5.6-sol[1m]`). The agent definitions name those ids directly. The
-gateway must be running; `ANTHROPIC_BASE_URL` points at it.
-
-This is a different mechanism from the `skill-codex` skill, which shells out to
-the `codex` CLI as a separate process. Both reach OpenAI models; only the
-gateway route gives you a real subagent with tools. The CLI fallback when the
-gateway cannot serve a model is `codex exec -s read-only -m <model>`, fed the
-agent's brief and the intent on stdin, with `-m` pinned to a model other than
-the author's — see `review-process.md`.
-
-**Known gap (checked 2026-09-26):** through the gateway, `gpt-5.6-sol` and
-`gpt-6-astra` are refused with *"not supported when using Codex with a ChatGPT
-account"*, so `final-reviewer`, `architecture-consultant` and `ux-designer` all
-fail on their first call. Only Luna answers. The fault is in how the gateway
-presents ChatGPT-account auth, not in the account's entitlement: `codex exec -m
-gpt-5.6-sol` on the same ChatGPT login works, and `model-gateway doctor` reports
-everything healthy on claude-code-proxy 0.1.37. Upgrading the proxy (0.1.42 is
-out) or authenticating the gateway with an API key are both untested fixes.
-Until that is fixed, run the final review through the CLI fallback with
-`-m gpt-5.6-sol` — the intended reviewer, unless Sol wrote the change — and
-say so in the commit message.
+- **Before every commit** → the final review. Not optional.
 
 ## Stop conditions outrank routing
 
-Every agent halts and asks rather than proceeding when work would touch child
+Every delegate halts and asks rather than proceeding when work would touch child
 data or member PII, need a new credential or scope, add a vendor, contradict a
 locked decision in `ASTRO-ARCHITECTURE.md`, or produce the bot's first public
-post. A subagent hitting one of these reports it; it does not decide it.
+post. A delegate hitting one of these reports it; it does not decide it.

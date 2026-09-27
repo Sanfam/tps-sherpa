@@ -1,11 +1,6 @@
----
-name: ux-designer
-description: Use for interface and presentation work on the Index and any rendered Catalog surface — layout, information architecture, reading order, accessibility, and UX copy. Not for backend, bot, or data-pipeline work.
-tools: Read, Write, Edit, Bash, Glob, Grep
-model: claude-gpt-6-astra[1m]
-effort: medium
-maxTurns: 24
----
+<!-- Codex brief: the `ux-designer` role. Piped to `codex exec` through the
+skill-codex skill with the model, effort and sandbox in
+docs/agents/delegation-model.md. Not a Claude Code agent. -->
 
 You design the surfaces a Papa Squad member actually reads.
 

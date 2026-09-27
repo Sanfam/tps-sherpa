@@ -1,7 +1,8 @@
 # Review process
 
-**A change set is challenged by an adversarial Codex review before it becomes
-history. Valid, in-scope findings are fixed first.**
+**A change set is challenged by an adversarial review from a model other than
+its author's before it becomes history — Codex for Claude's work, Claude for
+Codex's. Valid, in-scope findings are fixed first.**
 
 ## Scope: what this applies to
 
@@ -26,8 +27,8 @@ module gets reviewed by nobody.
 | | Purpose |
 |---|---|
 | Self-verification — tests, typecheck, content check | Proves the code does what its author intended |
-| Claude `/code-review` | Finds what the author overlooked, from the same mind that wrote it |
-| **Codex adversarial review** | A second model, with different blind spots |
+| Same-model review — e.g. Claude `/code-review` of Claude's work | Finds what the author overlooked, from the same mind that wrote it |
+| **Other-vendor adversarial review** | A second model, with different blind spots |
 
 The honest claim is the third row as written: *different blind spots*, not
 *better*. Where Codex authored the change, the independence argument inverts —
@@ -40,18 +41,17 @@ reviewer differ, not that any particular model is the authority.
    `npm test` · `npm run typecheck` · `node scripts/check-content.mjs`
    Do not send broken work to review; a reviewer's attention is for defects you
    did not already know about.
-2. **Delegate the review to the `final-reviewer` agent** — GPT-5.6 Sol, a
-   different model from whichever one wrote the code. Frame the prompt as *find
-   what is wrong with this*, never *is this okay*, and give it the intent as
-   well as the diff: a reviewer that does not know what the code was for can
-   only check syntax. The agent covers staged, unstaged and untracked changes.
-   Without the subagent, pipe the agent's brief plus the intent to
-   `codex exec -s read-only -m <model> -o <file> -`, with `-m` naming a model
-   that is **not** the author's — `gpt-5.6-sol`, the `final-reviewer`'s own
-   model, unless Sol wrote the change. The local Codex default is
-   `gpt-6-astra`, which is also the `ux-designer`'s. Not `codex review
-   --uncommitted`: it refuses a prompt alongside that flag, so the reviewer
-   never learns the intent. See `delegation-model.md`.
+2. **Run the adversarial review with the other vendor's model.**
+   - **Claude or a person wrote it** → GPT-5.6 Sol at High through the `skill-codex`
+     skill, `read-only` sandbox, prompted with
+     `docs/agents/codex-briefs/final-reviewer.md` plus the intent.
+   - **Codex wrote it** (any GPT role) → Claude's `/code-review`, per the
+     table above.
+
+   Either way, frame the prompt as *find what is wrong with this*, never *is
+   this okay*, and give it the intent as well as the diff: a reviewer that does
+   not know what the code was for can only check syntax. See
+   `delegation-model.md`.
 3. **Triage every finding explicitly.** Three outcomes, no fourth:
    - **Valid, in scope** → fix before committing.
    - **Valid, out of scope** → file a ticket and link it in the commit message.
@@ -79,9 +79,12 @@ authority to reach the live guild.
 
 ## When the cycle cannot run
 
-- **Codex unavailable or unauthenticated** → run `/code-review` instead, and
-  say in the commit message which reviewer ran and why. Do not silently skip.
-  Check with `codex --version`; `codex doctor` diagnoses auth and runtime.
+- **Codex unavailable or unauthenticated, for Claude's work** → stop and tell
+  the user; do not commit it as reviewed. `/code-review` is Claude marking
+  Claude's work and does not satisfy the rule. If the user chooses to proceed,
+  run `/code-review` anyway and say in the commit message that no independent
+  review ran, and why. Check with `codex --version`; `codex doctor` diagnoses
+  auth and runtime.
 - **Diff too large to review meaningfully** → split the change set. A review
   that ran but did not fit is worse than none, because it is recorded as done.
 - **Author and reviewer disagree on validity** → the author decides and records
@@ -113,7 +116,7 @@ invoke. Until then the rule above rests entirely on the author honouring it.
 
 ## What review does not cover
 
-Codex reads the diff. It does not know the guild, the privacy model, or what
+The reviewer reads the diff. It does not know the guild, the privacy model, or what
 the docs promised. **Several of the worst defects in this repo were invisible
 to every reviewer and appeared only when the code met the live guild** — a
 permission model that computed "readable" where Discord returned 403, an intent

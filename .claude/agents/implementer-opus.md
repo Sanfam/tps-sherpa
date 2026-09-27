@@ -42,6 +42,6 @@ child data, require a new credential or scope, add a vendor, contradict a locked
 decision, or produce the bot's first public post. Escalation is a correct
 outcome, not a failure.
 
-**Do not commit.** Every change set is reviewed by the `final-reviewer` agent
-before it becomes history. Leave the work in the tree and report what you did,
+**Do not commit.** Every change set gets the final review in
+`docs/agents/review-process.md` before it becomes history. Leave the work in the tree and report what you did,
 what you verified, and what you left undone.
