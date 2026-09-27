@@ -35,6 +35,7 @@ if (Array.isArray(catalog)) {
   const seen = new Set();
   const statuses = new Set(["present", "absent", "withheld"]);
   const types = new Set(["channel", "forum", "post", "thread"]);
+  const threadStates = new Set(["open", "closed", "locked"]);
   for (const e of catalog) {
     if (!/^\d{17,20}$/.test(e?.id ?? "")) problems.push(`Entity with a bad id: ${JSON.stringify(e?.id)}`);
     if (seen.has(e.id)) problems.push(`Duplicate Entity id: ${e.id}`);
@@ -68,6 +69,11 @@ if (Array.isArray(catalog)) {
     // tell they are stale.
     if (e.topics?.length && e.topics_version === null)
       problems.push(`${e.id}: carries topics but no vocabulary version`);
+    // Open, closed or locked for a Post or Thread; null for the containers,
+    // which have no such state. Mechanical, from the last sync.
+    const threadLike = e.type === "post" || e.type === "thread";
+    if (threadLike ? !threadStates.has(e.thread_state) : e.thread_state !== null)
+      problems.push(`${e.id}: thread_state ${JSON.stringify(e.thread_state)} is not valid for a ${e.type}`);
     if (e.summary_generated !== null && typeof e.summary_generated !== "string")
       problems.push(`${e.id}: summary_generated is neither null nor a string`);
   }

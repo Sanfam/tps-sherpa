@@ -7,6 +7,7 @@ export const ChannelType = {
   GuildVoice: 2,
   GuildCategory: 4,
   GuildAnnouncement: 5,
+  PrivateThread: 12,
   GuildForum: 15,
   GuildMedia: 16,
 } as const;
@@ -59,6 +60,10 @@ export interface RawThread {
    */
   firstPost: string | null;
   lastMessageId?: string | null;
+  /** Whether it came from the archived listing rather than the active one. */
+  archived?: boolean;
+  /** From `thread_metadata.locked`. */
+  locked?: boolean;
 }
 
 export interface RawCapturedMessage {

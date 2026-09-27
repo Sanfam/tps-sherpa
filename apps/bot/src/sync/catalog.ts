@@ -12,6 +12,13 @@ export type EntityType = "channel" | "forum" | "post" | "thread";
 
 export type DescriptionStatus = "present" | "absent" | "withheld";
 
+/**
+ * open   - members can reply
+ * closed - archived: a mod or the author closed it, or it went idle
+ * locked - only a mod can reopen it or reply
+ */
+export type ThreadState = "open" | "closed" | "locked";
+
 export interface Entity {
   /** Discord snowflake. The key. Names are mutable; this is not. */
   id: string;
@@ -54,6 +61,13 @@ export interface Entity {
    * a bump a full retag rather than a silent drift.
    */
   topics_version: number | null;
+  /**
+   * Whether a Post or Thread is open, closed or locked, as of the last sync.
+   * Null for Channels and Forums, which have no such state. Mechanical, like
+   * the Platform and Region facets — from Discord, never derived — and kept
+   * out of `identityKey`: closing a Post does not change what it is about.
+   */
+  thread_state: ThreadState | null;
   /** Newest message. Null if nothing has been posted. */
   last_message_id: string | null;
   /**
@@ -312,6 +326,7 @@ export const buildCatalog = async (deps: {
       region: matchRegions(c.name, regions),
       topics: [],
       topics_version: null,
+      thread_state: null,
       last_message_id: c.lastMessageId ?? null,
       last_activity_at: snowflakeTime(c.lastMessageId),
       summary_generated: null,
@@ -338,6 +353,9 @@ export const buildCatalog = async (deps: {
       region: matchRegions(t.name, regions),
       topics: [],
       topics_version: null,
+      // Locked outranks closed: a locked Post may also be archived, and what
+      // a member needs to know is that they cannot reopen it.
+      thread_state: t.locked ? "locked" : t.archived ? "closed" : "open",
       last_message_id: t.lastMessageId ?? null,
       last_activity_at: snowflakeTime(t.lastMessageId),
       summary_generated: null,

@@ -108,6 +108,7 @@ describe("buildCatalog", () => {
         region: [],
         topics: [],
         topics_version: null,
+        thread_state: null,
         last_message_id: null,
         last_activity_at: null,
         summary_generated: null,
@@ -444,5 +445,70 @@ describe("derived fields across syncs", () => {
     });
 
     expect(catalog[0]?.summary_generated).toBe("Rocket League nights.");
+  });
+});
+
+describe("thread state", () => {
+  const forum = { id: "100", name: "lifestyle", type: ChannelType.GuildForum };
+  const post = (id: string, over: { archived?: boolean; locked?: boolean } = {}) => ({
+    id,
+    name: `post ${id}`,
+    parentId: "100",
+    appliedTags: [],
+    firstPost: "About something.",
+    ...over,
+  });
+
+  it("marks each Post open, closed or locked, and gives the Forum none", async () => {
+    const { catalog } = await buildCatalog({
+      discord: fixtureDiscord({
+        channels: [forum],
+        threads: [
+          post("201"),
+          post("202", { archived: true }),
+          post("203", { locked: true }),
+          // Locked and archived: what a member needs to know is that they
+          // cannot reopen it.
+          post("204", { archived: true, locked: true }),
+        ],
+      }),
+      guildId: GUILD_ID,
+    });
+
+    expect(Object.fromEntries(catalog.map((e) => [e.id, e.thread_state]))).toEqual({
+      "100": null,
+      "201": "open",
+      "202": "closed",
+      "203": "locked",
+      "204": "locked",
+    });
+  });
+
+  it("keeps the summary and Topic tags when a Post is closed", async () => {
+    // Closing a Post does not change what it is about. If thread_state reached
+    // identityKey, every closed Post would go back through a model.
+    const { catalog: first } = await buildCatalog({
+      discord: fixtureDiscord({ channels: [forum], threads: [post("201")] }),
+      guildId: GUILD_ID,
+    });
+    const previous = first.map((e) => ({
+      ...e,
+      summary_generated: "Talk about something.",
+      topics: ["discussion"],
+      topics_version: 2,
+    }));
+
+    const { catalog } = await buildCatalog({
+      discord: fixtureDiscord({ channels: [forum], threads: [post("201", { archived: true })] }),
+      guildId: GUILD_ID,
+      previous,
+    });
+
+    expect(catalog.find((e) => e.id === "201")).toMatchObject({
+      thread_state: "closed",
+      summary_generated: "Talk about something.",
+      topics: ["discussion"],
+      topics_version: 2,
+    });
   });
 });
