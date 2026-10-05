@@ -4,7 +4,9 @@
  *   node --env-file=.env src/sync/capture.ts
  *
  * Incremental: an Entity whose newest message has not moved is skipped, so the
- * first run is expensive and every run after it is nearly free.
+ * first run is expensive and every run after it is nearly free. `--full`
+ * recaptures everything, for when what capture records has changed — rows
+ * stored before webhooks were flagged would otherwise keep them as members.
  *
  * **The store is a disposable cache.** Nothing here is backed up. If the volume
  * is lost, delete nothing and re-run — the rebuild path is this command.
@@ -34,7 +36,7 @@ mkdirSync(dirname(dbPath), { recursive: true });
 const store = openTier0(dbPath);
 const discord = discordRest({ token, guildId });
 
-const decision = selectForCapture(catalog, store.state());
+const decision = selectForCapture(catalog, process.argv.includes("--full") ? new Map() : store.state());
 console.log(`Catalog Entities        : ${catalog.length}`);
 console.log(`  Forums (no own content): ${decision.skippedNoOwnContent}`);
 console.log(`  monitored channels     : ${decision.skippedMonitored} (extract-and-discard — never stored)`);

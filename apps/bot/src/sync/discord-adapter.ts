@@ -309,6 +309,8 @@ export const discordRest = (config: {
       type Msg = {
         id: string;
         author?: { id?: string; bot?: boolean };
+        /** Set when a webhook posted it. Not a member's words either. */
+        webhook_id?: string;
         content?: string;
         timestamp?: string;
       };
@@ -328,7 +330,7 @@ export const discordRest = (config: {
       const shape = (m: Msg, window: "head" | "tail"): RawCapturedMessage => ({
         id: m.id,
         authorId: m.author?.id ?? "",
-        authorIsBot: m.author?.bot === true,
+        authorIsBot: m.author?.bot === true || Boolean(m.webhook_id),
         content: m.content ?? "",
         createdAt: m.timestamp ?? "",
         window,

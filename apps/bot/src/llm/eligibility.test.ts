@@ -2,7 +2,7 @@
  * What may reach a model, for either enrichment job.
  *
  * `enrich.ts` is a command rather than a module, so the predicate it applies
- * is asserted here against the same two rules it is built from. Both rules are
+ * lives in subject.ts and is asserted here directly. Both rules are
  * privacy rules, and both have already been got wrong once: monitored Threads
  * were nearly captured by matching only the channel's own name, and topic
  * classification shipped a review round sending withheld Entities to a model
@@ -11,7 +11,8 @@
  */
 import { describe, expect, it } from "vitest";
 import type { Entity } from "../sync/catalog.ts";
-import { DEFAULT_MONITORED_CHANNELS, isMonitored } from "../sync/tier0.ts";
+import { DEFAULT_MONITORED_CHANNELS } from "../sync/tier0.ts";
+import { isEnrichable } from "./subject.ts";
 
 const entity = (over: Partial<Entity> & { id: string; name: string }): Entity => ({
   type: "post",
@@ -45,9 +46,8 @@ const catalog = [intro, introThread, withheld, ordinary];
 const byId = new Map(catalog.map((e) => [e.id, e]));
 const monitored = new Set(DEFAULT_MONITORED_CHANNELS);
 
-/** The predicate `enrich.ts` applies before either job sees an Entity. */
-const eligible = (e: Entity) =>
-  !isMonitored(e, byId, monitored) && e.description_status !== "withheld";
+/** The predicate `enrich.ts` applies before any job sees an Entity. */
+const eligible = (e: Entity) => isEnrichable(e, byId, monitored);
 
 describe("what enrichment may send to a model", () => {
   it("passes an ordinary Entity", () => {

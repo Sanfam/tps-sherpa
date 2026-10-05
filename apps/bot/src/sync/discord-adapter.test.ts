@@ -19,6 +19,24 @@ const listThreads = (payload: { active: unknown[]; archived: unknown[] }, warn?:
     rest: fakeRest(payload) as never,
   }).listThreads(["100"]);
 
+describe("captureWindows", () => {
+  it("marks a webhook's message as not a member's, even without the bot flag", async () => {
+    const page = [
+      { id: "2", author: { id: "w1" }, webhook_id: "w1", content: "Free game!" },
+      { id: "1", author: { id: "m1", bot: false }, content: "nice" },
+    ];
+    const port = discordRest({
+      token: "unused",
+      guildId: "1",
+      rest: { get: async () => page } as never,
+    });
+
+    const messages = await port.captureWindows("500");
+
+    expect(Object.fromEntries(messages.map((m) => [m.id, m.authorIsBot]))).toEqual({ "1": false, "2": true });
+  });
+});
+
 describe("listThreads", () => {
   it("reads archived from the endpoint that answered and locked from the metadata", async () => {
     const threads = await listThreads({

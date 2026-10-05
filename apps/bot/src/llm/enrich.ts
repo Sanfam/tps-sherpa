@@ -1,16 +1,23 @@
 /**
- * The two steady-state LLM passes over the Catalog.
+ * The steady-state LLM passes over the Catalog.
  *
  *   node --env-file=.env src/llm/enrich.ts topics    [--limit N] [--dry-run] [--model id]
  *   node --env-file=.env src/llm/enrich.ts summaries [--limit N] [--dry-run] [--model id]
+ *   node --env-file=.env src/llm/enrich.ts activity  [--limit N] [--dry-run] [--model id]
+ *
+ * `activity` reads recent messages from Tier 0 and writes to the bot's volume
+ * (`.data/activity.json`), never to the committed Catalog — see activity.ts.
+ * Run a capture first: an Entity is only due once Tier 0's newest message is
+ * the Catalog's.
  *
  * `--vocabulary <path>` classifies against a candidate instead of the frozen
  * one, so a reviewer can see what a proposed vocabulary actually does to the
  * corpus before freezing it. It still refuses anything marked `proposed`:
  * freeze a copy, try it, throw the copy away.
  *
- * Both read the committed Catalog and write back into it — no Discord call, so
- * a retag or a reword is a local reprocess. Both are incremental: an Entity
+ * `topics` and `summaries` read the committed Catalog and write back into it —
+ * no Discord call, so a retag or a reword is a local reprocess. All three are
+ * incremental: an Entity
  * whose identity has not changed keeps what the last run produced (the sync
  * drops those fields when it does change), so a scheduled run does nothing and
  * costs nothing.
@@ -20,8 +27,16 @@
  * produced rather than a sample of a run you have already paid for.
  */
 import { writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import type { Entity } from "../sync/catalog.ts";
-import { DEFAULT_MONITORED_CHANNELS, isMonitored } from "../sync/tier0.ts";
+import { DEFAULT_MONITORED_CHANNELS } from "../sync/tier0.ts";
+import { openTier0 } from "../sync/tier0-store.ts";
+import {
+  ACTIVITY_SYSTEM_PROMPT,
+  type ActivityStore,
+  checkActivity,
+  planActivity,
+} from "./activity.ts";
 import { classifySystemPrompt, needsClassifying, parseTags, reconcile } from "./classify.ts";
 import {
   CATALOG_PATH,
@@ -32,13 +47,13 @@ import {
   readIfPresent,
   retrying,
 } from "./session.ts";
-import { hasDescribableInput, subjectText } from "./subject.ts";
+import { hasDescribableInput, isEnrichable, subjectText } from "./subject.ts";
 import { SUMMARY_SYSTEM_PROMPT, checkSummary, findCollisions } from "./summarise.ts";
 import { parseVocabulary } from "./vocabulary.ts";
 
 const job = process.argv[2];
-if (job !== "topics" && job !== "summaries") {
-  console.error("Usage: enrich.ts topics|summaries [--limit N] [--dry-run] [--model id]");
+if (job !== "topics" && job !== "summaries" && job !== "activity") {
+  console.error("Usage: enrich.ts topics|summaries|activity [--limit N] [--dry-run] [--model id]");
   process.exit(1);
 }
 
@@ -54,11 +69,19 @@ const warn = (m: string) => console.warn(m);
 
 // Classification runs cheap, summaries run strong: the one-time job that sets
 // something in stone gets the better model, and steady state does not.
-const role = job === "topics" ? ("cheap" as const) : ("strong" as const);
+// Activity is volatile and high-volume, so it runs cheap too.
+const role = job === "summaries" ? ("strong" as const) : ("cheap" as const);
 const { boundary, models } = openBoundary(catalog, { [role]: flag("model") ?? undefined });
 
 const vocabularyPath = flag("vocabulary") || VOCABULARY_PATH;
 const vocabulary = job === "topics" ? parseVocabulary(readIfPresent(vocabularyPath)) : null;
+
+const DATA_DIR = resolve(import.meta.dirname, "../../.data");
+const ACTIVITY_PATH = resolve(DATA_DIR, "activity.json");
+const tier0 =
+  job === "activity" ? openTier0(process.env["TIER0_PATH"] ?? resolve(DATA_DIR, "tier0.db")) : null;
+const activityStore: ActivityStore =
+  job === "activity" ? JSON.parse(readIfPresent(ACTIVITY_PATH) ?? "{}") : {};
 
 /**
  * What may reach a model at all, for either job.
@@ -75,12 +98,23 @@ const vocabulary = job === "topics" ? parseVocabulary(readIfPresent(vocabularyPa
  * them by needing an input; tagging does not need one, which is exactly why
  * the rule has to live here rather than in each job.
  */
-const eligible = catalog.filter(
-  (e) => !isMonitored(e, byId, monitored) && e.description_status !== "withheld",
-);
+const eligible = catalog.filter((e) => isEnrichable(e, byId, monitored));
 
+// One read of Tier 0 per Entity decides both whether it is due and what it is
+// summarised from — see planActivity.
+const activityPlan = new Map(
+  job === "activity"
+    ? planActivity(eligible, (id) => tier0!.messagesFor(id), activityStore).map(
+        (p) => [p.entity.id, p.sources] as const,
+      )
+    : [],
+);
 const due = eligible.filter((e) =>
-  vocabulary ? needsClassifying(e, vocabulary) : !e.summary_generated,
+  job === "activity"
+    ? activityPlan.has(e.id)
+    : vocabulary
+      ? needsClassifying(e, vocabulary)
+      : !e.summary_generated,
 );
 
 // Split before the limit, not after, so `--limit` samples work rather than
@@ -106,7 +140,7 @@ if (insufficient.length)
   );
 console.log(`This run : ${work.length}${limit > 0 ? ` (--limit ${limit})` : ""}`);
 
-const results = new Map<string, { topics?: string[]; summary?: string }>();
+const results = new Map<string, { topics?: string[]; summary?: string; activity?: string | null }>();
 const rejected: Array<{ entity: Entity; reason: string }> = [];
 let done = 0;
 
@@ -153,12 +187,56 @@ const summariseOne = async (entity: Entity) => {
   results.set(entity.id, { summary: summary.trim() });
 };
 
+const activityOne = async (entity: Entity) => {
+  const sources = activityPlan.get(entity.id) ?? [];
+  // Nothing human left to read is an answer, not a failure: recorded as null
+  // so the Entity is not retried until its activity moves.
+  if (sources.length === 0) {
+    results.set(entity.id, { activity: null });
+    return;
+  }
+  const summary = await retrying(
+    () =>
+      boundary.ask({
+        role,
+        // Opt-outs are only known inside the boundary. If every source was
+        // dropped there, nothing is sent and the answer is null, rather than
+        // an empty prompt the model would answer by inventing a subject.
+        orNothing: null,
+        system: ACTIVITY_SYSTEM_PROMPT,
+        subject: entity,
+        sources,
+        parse: (value) => {
+          const s = (value as { summary?: unknown }).summary;
+          // The shape only, never the value: a malformed answer is still
+          // conversation-derived text, and this message reaches a log.
+          if (s !== null && typeof s !== "string")
+            throw new Error(`Activity answer has no string-or-null summary (got ${typeof s}).`);
+          return s?.trim() || null;
+        },
+      }),
+    warn,
+  );
+  const problem = summary === null ? null : checkActivity(summary);
+  if (problem) {
+    // Left unrecorded, so it is due again next run rather than stored wrong.
+    // The reason only: activity text never goes to a log.
+    rejected.push({ entity, reason: problem.reason });
+    return;
+  }
+  results.set(entity.id, { activity: summary });
+};
+
 const queue = [...work];
 await Promise.all(
   Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
     for (let entity = queue.shift(); entity; entity = queue.shift()) {
       try {
-        await (job === "topics" ? classifyOne(entity) : summariseOne(entity));
+        await (job === "topics"
+          ? classifyOne(entity)
+          : job === "activity"
+            ? activityOne(entity)
+            : summariseOne(entity));
       } catch (error) {
         // One Entity failing must not abort the pass. The unrecorded ones are
         // simply due again next run, which is what incremental means.
@@ -171,7 +249,8 @@ await Promise.all(
 
 const updated = catalog.map((e) => {
   const result = results.get(e.id);
-  if (!result) return e;
+  // Activity never touches the Catalog: it goes to the bot's volume below.
+  if (!result || job === "activity") return e;
   return job === "topics"
     ? { ...e, topics: result.topics!, topics_version: vocabulary!.version }
     : { ...e, summary_generated: result.summary! };
@@ -199,7 +278,18 @@ if (job === "summaries") {
     console.log(`    ${e.name}\n      ${e.summary_generated}`);
 }
 
-if (dryRun) {
+if (job === "activity") {
+  const next: ActivityStore = { ...activityStore };
+  for (const [id, r] of results)
+    next[id] = { summary: r.activity ?? null, as_of: byId.get(id)!.last_message_id! };
+  console.log(`  nothing to summarise: ${[...results.values()].filter((r) => r.activity === null).length}`);
+  tier0!.close();
+  if (dryRun) console.log(`\nDry run — ${ACTIVITY_PATH} untouched.`);
+  else {
+    writeFileSync(ACTIVITY_PATH, `${JSON.stringify(next, null, 2)}\n`);
+    console.log(`\nWrote ${ACTIVITY_PATH} (bot-side; never committed)`);
+  }
+} else if (dryRun) {
   console.log(`\nDry run — ${CATALOG_PATH} untouched.`);
 } else {
   writeFileSync(CATALOG_PATH, `${JSON.stringify(updated, null, 2)}\n`);

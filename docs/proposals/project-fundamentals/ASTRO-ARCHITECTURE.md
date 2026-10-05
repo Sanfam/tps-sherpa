@@ -382,6 +382,15 @@ Still true, and unaffected by the cut:
 | Sourced from | Topic, first post, or name + parent | Recent activity |
 | Regenerated | On discovery; on admin re-sweep | When `last_message_id` moves |
 | Model | Strong | Cheap |
+| Stored in | The committed Catalog | **The bot's volume only** (`.data/activity.json`) |
+
+**Activity summaries never enter the committed Catalog** (Staff, 2026-10-05).
+They are derived from member conversation, the repository is public, and the
+boundary has no member-name cache, so a name said in conversation could
+otherwise reach a public file. They wait bot-side until a gated delivery path
+exists — see #26. Built by `enrich.ts activity` from the newest Tier 0
+messages, bots and webhooks dropped, near-duplicates collapsed, and only once
+Tier 0 holds an Entity's newest message.
 
 ### What "correct" means — testable criteria
 

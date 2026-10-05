@@ -100,6 +100,33 @@ export const openTier0 = (path: string) => {
       }
     },
 
+    /** Everything stored for one Entity. Order is not guaranteed. */
+    messagesFor: (entityId: string): StoredMessage[] =>
+      (
+        db
+          .prepare(
+            `SELECT entity_id, message_id, author_id, author_is_bot, content, created_at, window
+               FROM message WHERE entity_id = ?`,
+          )
+          .all(entityId) as Array<{
+          entity_id: string;
+          message_id: string;
+          author_id: string;
+          author_is_bot: number;
+          content: string;
+          created_at: string;
+          window: "head" | "tail";
+        }>
+      ).map((r) => ({
+        entityId: r.entity_id,
+        messageId: r.message_id,
+        authorId: r.author_id,
+        authorIsBot: r.author_is_bot === 1,
+        content: r.content,
+        createdAt: r.created_at,
+        window: r.window,
+      })),
+
     stats: () => {
       // CAST AS BLOB: LENGTH() on text counts characters, and this figure is
       // reported as a volume footprint. Emoji-heavy content undercounts ~4x.

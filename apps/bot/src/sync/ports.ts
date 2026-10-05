@@ -69,6 +69,7 @@ export interface RawThread {
 export interface RawCapturedMessage {
   id: string;
   authorId: string;
+  /** A bot or a webhook: either way, not a member's words. */
   authorIsBot: boolean;
   content: string;
   createdAt: string;
