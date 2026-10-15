@@ -21,13 +21,16 @@ Every credential gets three homes:
 | Credential | Purpose | Runtime location | Durable copy | Expires | Owners |
 |---|---|---|---|---|---|
 | `DISCORD_BOT_TOKEN` | Papa Sherpa reads the guild and (later) posts | ⚠️ local `.env` only — **not yet in Railway** | ⚠️ TODO | Never (rotate on exposure) | ⚠️ TODO |
-| `GITHUB_MACHINE_TOKEN` | The bot commits the Catalog and role manifest | ⚠️ local `.env` only — **not yet in Railway** | ⚠️ TODO | **No expiry set** *(verified 2026-09-02)* | ⚠️ TODO |
+| `GITHUB_MACHINE_TOKEN` | **Retired by ADR-0001** — the bot no longer commits. Revoke once a human confirms nothing else uses it | ⚠️ local `.env` only | ⚠️ TODO | **No expiry set** *(verified 2026-09-02)* | ⚠️ TODO |
+| Litestream object-storage keys | Replicate durable SQLite files to R2 (or B2), one bucket-scoped key per service (ADR-0001) | ⚠️ not yet minted | ⚠️ TODO | ⚠️ TODO | ⚠️ TODO |
 | `LLM_API_KEY` | Every model call — tagging, summaries | ⚠️ local `.env` only (as `OPENROUTER_API_KEY`) — **not yet in Railway** | ⚠️ TODO | Provider-managed | ⚠️ TODO |
 | Discord application | Owns the bot; invisible until it is lost | Discord developer portal | n/a — account ownership | n/a | ⚠️ TODO |
 | Railway project | Hosting | n/a | n/a | n/a | ⚠️ TODO |
 | Cloudflare account | DNS, proxy, R2 | n/a | n/a | n/a | ⚠️ TODO |
 
 ## The GitHub token: what actually works here
+
+*Historical since ADR-0001 (2026-10-13): the bot no longer needs a GitHub write credential. Kept for the record of what failed.*
 
 **Classic PAT with the `repo` scope, on the `tps-papabot` machine user.**
 Verified 2026-09-02: authenticates as `tps-papabot`, `push: true` on this repo.
@@ -40,7 +43,7 @@ Two approaches were tried first and failed, both for reasons worth recording:
   listed zero repositories despite valid write access. This is an artifact of
   the repo living on a personal account; an org-owned repo (#12) would not
   have it.
-- **`public_repo` is not enough.** This repo is private, and GitHub answers
+- **`public_repo` was not enough.** This repo was private on 2026-09-02 (it is public now), and GitHub answers
   with `404 Not Found` rather than `403`, so it reads as "the repo does not
   exist" rather than "you lack the scope". The full `repo` scope is required.
 
@@ -53,6 +56,8 @@ either way, because the bot sets author and committer itself. Worth revisiting
 if credential rotation becomes a chore.
 
 ## Expiry is a scheduled outage
+
+*Historical since ADR-0001 (2026-10-13): there is no push to fail. The principle still applies to every credential: a failure must be an alarm, not a log line.*
 
 The current token has **no expiry set**, which removes that particular trap and
 introduces the opposite one: a credential that lives forever until somebody

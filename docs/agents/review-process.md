@@ -10,9 +10,9 @@ Codex's. Valid, in-scope findings are fixed first.**
 |---|---|
 | Human- or agent-authored code | **Yes** |
 | Human- or agent-authored docs and config | **Yes** — a wrong doc misleads the next agent |
-| The bot's own content commits (`content/index/data.json`, `roles.json`) | **No** |
+| ~~The bot's own content commits~~ | *Retired by ADR-0001: the bot no longer commits* |
 
-The bot pushes generated content straight to `main` with no PR and no pause;
+*Historical:* the bot pushed generated content straight to `main` with no PR and no pause;
 its safety net is CI plus the fact that the Catalog is regenerable. Requiring
 an interactive review there would make one mandatory rule contradict another.
 That exemption covers *generated output only* — the code that generates it is

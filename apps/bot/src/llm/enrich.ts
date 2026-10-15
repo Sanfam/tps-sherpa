@@ -6,7 +6,7 @@
  *   node --env-file=.env src/llm/enrich.ts activity  [--limit N] [--dry-run] [--model id]
  *
  * `activity` reads recent messages from Tier 0 and writes to the bot's volume
- * (`.data/activity.json`), never to the committed Catalog — see activity.ts.
+ * (`.data/activity.json`), never to the Catalog — see activity.ts.
  * Run a capture first: an Entity is only due once Tier 0's newest message is
  * the Catalog's.
  *
@@ -15,7 +15,7 @@
  * corpus before freezing it. It still refuses anything marked `proposed`:
  * freeze a copy, try it, throw the copy away.
  *
- * `topics` and `summaries` read the committed Catalog and write back into it —
+ * `topics` and `summaries` read the local Catalog and write back into it —
  * no Discord call, so a retag or a reword is a local reprocess. All three are
  * incremental: an Entity
  * whose identity has not changed keeps what the last run produced (the sync

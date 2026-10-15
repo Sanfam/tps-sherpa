@@ -4,3 +4,8 @@ dist/
 .data/
 .DS_Store
 .claude/settings.local.json
+
+# Sync output: the Catalog and the role manifest live on the bot's volume
+# (ADR-0001, #26). A local sync still writes them here; never commit them again.
+content/index/data.json
+content/config/roles.json

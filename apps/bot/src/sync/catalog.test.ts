@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCatalog } from "./catalog.ts";
+import { buildCatalog, parsePrevious } from "./catalog.ts";
 import { fixtureDiscord } from "./fixture-discord.ts";
 import { ChannelType } from "./ports.ts";
 
@@ -510,5 +510,46 @@ describe("thread state", () => {
       topics: ["discussion"],
       topics_version: 2,
     });
+  });
+});
+
+describe("parsePrevious", () => {
+  it("starts empty only on an explicit first run", () => {
+    expect(parsePrevious(null, true)).toEqual([]);
+    expect(() => parsePrevious(null, false)).toThrow(/missing/);
+    expect(parsePrevious("[]", true)).toEqual([]);
+    expect(() => parsePrevious("[]", false)).toThrow(/empty/);
+  });
+
+  const carried = {
+    id: "1",
+    summary_override: "Staff wrote this",
+    summary_generated: null,
+    topics: ["gaming"],
+    topics_version: 2,
+  };
+  const json = (...entities: object[]) => JSON.stringify(entities);
+
+  it("refuses valid JSON that is not a list of Entities", () => {
+    const { summary_override: _, ...noOverride } = carried;
+    for (const raw of [
+      "null",
+      "{}",
+      "[null]",
+      json(noOverride),
+      json({ ...carried, summary_override: {} }),
+      json({ ...carried, topics: "gaming" }),
+      json({ ...carried, topics_version: "2" }),
+    ])
+      expect(() => parsePrevious(raw, false)).toThrow(/not a list/);
+    expect(() => parsePrevious("[{", false)).toThrow();
+  });
+
+  it("refuses duplicate ids, which would pick one override silently", () => {
+    expect(() => parsePrevious(json(carried, carried), false)).toThrow(/duplicate/);
+  });
+
+  it("returns the Entities it was given", () => {
+    expect(parsePrevious(json(carried), false)).toEqual([carried]);
   });
 });

@@ -5,7 +5,7 @@
  * thing. If they drift, a Post is tagged from its first message and summarised
  * from its name, and the two disagree for no reason a reader can see.
  *
- * The input comes from the committed Catalog, never from a live API call. The
+ * The input comes from the local Catalog, never from a live API call. The
  * Catalog already holds the topic, the first post, the mod tags and the
  * parent, all normalised and mention-resolved by the sync — so a retag is a
  * local reprocess, which is the property Tier 0 exists to guarantee. Message

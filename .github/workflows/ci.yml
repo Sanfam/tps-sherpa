@@ -1,9 +1,9 @@
 name: CI
 
-# Every push, including the bot's content commits. This is the safety net that
-# makes pushing straight to main safe: a bad commit fails here, and whatever is
-# deployed keeps serving the last good version. Without it, "deploy only on
-# green" is a claim rather than a mechanism.
+# Every push. This is the safety net that makes pushing straight to main safe:
+# a bad commit fails here, and whatever is deployed keeps serving the last good
+# version. Without it, "deploy only on green" is a claim rather than a
+# mechanism.
 on:
   push:
     branches: [main]
@@ -27,8 +27,8 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Catalog is valid JSON and structurally sound
-        # The bot writes these. A malformed Catalog must fail here rather than
-        # reach the site, and it is the one artifact no unit test covers
-        # because it is data, not code.
+      - name: Content config is valid JSON and structurally sound
+        # Checks the committed vocabulary. The Catalog and role manifest are
+        # gitignored since ADR-0001, so a clean checkout has neither and this
+        # skips them; the site validates each snapshot it accepts.
         run: node scripts/check-content.mjs

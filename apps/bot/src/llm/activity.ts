@@ -8,7 +8,7 @@
  *
  * **Bot-side only (Staff, 2026-10-05).** These are derived from member
  * conversation, and the repository is public, so they are written to the
- * bot's volume and never into the committed Catalog. Only a Staff-approved
+ * bot's volume and never into the Catalog or its snapshot. Only a Staff-approved
  * monthly overview may ever be built from them for the public tier, and only
  * through that approval; nothing here may become a second way out. They are
  * kept out of logs for the same reason — a log line is a copy. A member name
