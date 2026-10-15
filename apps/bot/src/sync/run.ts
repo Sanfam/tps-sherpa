@@ -1,15 +1,16 @@
 /**
- * The sync entry point. Reads the guild, builds the Catalog, writes it into
- * the repository.
+ * The sync entry point. Reads the guild, builds the Catalog, writes it to
+ * `content/index/data.json`.
  *
  *   node --env-file=.env src/sync/run.ts
  *
- * Committing is deliberately not done here — see #10. This writes files; CI
- * and the scheduled job decide what happens to them.
+ * That file is gitignored (ADR-0001, #26): nothing commits it, and CI never
+ * sees it. Until the Catalog moves to the bot's database, run
+ * `scripts/check-content.mjs` locally after a sync.
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { buildCatalog, type Entity } from "./catalog.ts";
+import { buildCatalog, parsePrevious } from "./catalog.ts";
 import { discordRest } from "./discord-adapter.ts";
 import { parseExclusions } from "./exclusions.ts";
 import { activityBucket, parseGazetteer } from "./facets.ts";
@@ -28,16 +29,13 @@ const ROLES_PATH = contentPath("config/roles.json");
 const EXCLUSIONS_PATH = contentPath("config/index-flags.json");
 const REGIONS_PATH = contentPath("config/regions.json");
 
-/** Overrides are human-authored and must survive every sync. */
-const readPrevious = async (): Promise<Entity[]> => {
-  try {
-    return JSON.parse(await readFile(CATALOG_PATH, "utf8")) as Entity[];
-  } catch {
-    return [];
-  }
-};
-
-const previous = await readPrevious();
+const previous = parsePrevious(
+  await readFile(CATALOG_PATH, "utf8").catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }),
+  process.env["SYNC_FIRST_RUN"] === "1",
+);
 // A missing file means no exclusions. Any OTHER read failure must not be
 // swallowed: silently becoming "exclude nothing" would republish exactly what
 // the file exists to hide.

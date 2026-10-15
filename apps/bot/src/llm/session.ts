@@ -1,5 +1,5 @@
 /**
- * The pieces every LLM command needs: the committed Catalog, the name lookup
+ * The pieces every LLM command needs: the local Catalog, the name lookup
  * redaction runs against, and a boundary wired to the configured provider.
  *
  * Shared so the three commands cannot end up with three different ideas of

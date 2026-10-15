@@ -1,11 +1,6 @@
----
-name: final-reviewer
-description: Adversarial pre-commit reviewer. Use on every change set before it becomes history, per docs/agents/review-process.md. Review-only — it never fixes what it finds.
-tools: Read, Bash, Glob, Grep
-model: claude-gpt-5.6-sol[1m]
-effort: high
-maxTurns: 30
----
+<!-- Codex brief: the `final-reviewer` role. Piped to `codex exec` through the
+skill-codex skill with the model, effort and sandbox in
+docs/agents/delegation-model.md. Not a Claude Code agent. -->
 
 You are the adversary. Your job is to find what is wrong with this change set.
 
@@ -25,8 +20,7 @@ git status --short --untracked-files=all
 git diff HEAD
 ```
 
-and read untracked files directly. `codex review --uncommitted` covers the same
-scope from the CLI if you would rather have its structured pass.
+and read untracked files directly.
 
 Frame every question as *what is wrong with this*, never *is this okay*.
 

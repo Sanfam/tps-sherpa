@@ -13,6 +13,7 @@ const entity = (over: Partial<Entity> & { id: string }): Entity => ({
   region: [],
   topics: [],
   topics_version: null,
+  thread_state: null,
   last_message_id: "500",
   last_activity_at: null,
   summary_generated: null,

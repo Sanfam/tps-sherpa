@@ -5,13 +5,29 @@
  * thing. If they drift, a Post is tagged from its first message and summarised
  * from its name, and the two disagree for no reason a reader can see.
  *
- * The input comes from the committed Catalog, never from a live API call. The
+ * The input comes from the local Catalog, never from a live API call. The
  * Catalog already holds the topic, the first post, the mod tags and the
  * parent, all normalised and mention-resolved by the sync — so a retag is a
  * local reprocess, which is the property Tier 0 exists to guarantee. Message
  * sampling is not used here and is a standing anti-goal.
  */
 import type { Entity } from "../sync/catalog.ts";
+import { isMonitored } from "../sync/tier0.ts";
+
+/**
+ * What enrichment may send to a model at all, for every job.
+ *
+ * Monitored conversation is extract-and-discard, and `withheld` means
+ * deliberately listed without content and never sampled — classification
+ * would otherwise send a withheld Entity's name, tags and parent to the
+ * provider, because it needs no description and so never hits a check that
+ * requires one.
+ */
+export const isEnrichable = (
+  entity: Entity,
+  byId: Map<string, Entity>,
+  monitored: ReadonlySet<string>,
+): boolean => !isMonitored(entity, byId, monitored) && entity.description_status !== "withheld";
 
 export const parentOf = (entity: Entity, byId: Map<string, Entity>): Entity | null =>
   entity.parent_id ? (byId.get(entity.parent_id) ?? null) : null;

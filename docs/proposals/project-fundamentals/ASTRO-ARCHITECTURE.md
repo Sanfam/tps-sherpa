@@ -3,9 +3,10 @@
 **Audience:** an LLM-backed coding agent, or a team of them, working with substantial autonomy.
 **Date:** 2026-08-31.
 **Supersedes:** the 2026-08-27 revision of this file, and in `PROJECT-STATUS.md` — §3 (architecture), the Storage subsection of §4, §5 (Instatic), §6 (open decisions), and Track 2 of §9.
+**Amended by:** [ADR-0001](../../adr/0001-retire-git-as-content-store.md) (2026-10-13). Git is no longer the content store, and Tina is no longer the CMS. Where this document and an ADR disagree, the ADR wins. The superseded passages below are marked, not deleted.
 **Companions:**
 - `CONTEXT.md` — the glossary. **Its vocabulary is binding.** Where this document and the glossary disagree about what a word means, the glossary wins.
-- `PROJECT-STATUS.md` — history, rejected options, the privacy model, verified Discord API facts, observed data from real transcripts, and the introductions-responder spec in §7. All still current except the sections named above.
+- `PROJECT-STATUS.md` — history, rejected options, the privacy model, verified Discord API facts, observed data from real transcripts, and the introductions-responder spec in §7. All still current except the sections named above, and the passages ADR-0001 supersedes.
 
 ---
 
@@ -52,9 +53,9 @@ Three tracks run independently until Phase 4:
 |---|---|---|
 | **A — Bot** | Sync, Tier 0 capture, summaries, tags, slash commands | Nothing |
 | **B — Site** | Auth spike, Astro shell, middleware, gating tests | Nothing |
-| **C — CMS** | Tina self-hosted spike, club-page trial | Nothing (but see the two-day abort) |
+| **C — CMS** | CMS selection (ADR-0002), club-page trial | Nothing |
 
-Track A owns the data contract (`content/index/data.json`); Track B consumes it. Agree the schema early and stub it so both can proceed.
+Track A owns the data contract: the Catalog snapshot, which uses today's `content/index/data.json` Entity schema (ADR-0001). Track B consumes it. Agree the schema early and stub it so both can proceed.
 
 ---
 
@@ -78,26 +79,28 @@ So reader gating is ours, and **that is precisely what makes the CMS swappable.*
 
 - **Astro, SSR mode**, Node adapter. Everything gated is server-rendered.
 - **Reader auth is ours**, built on **Better Auth**'s Discord provider. Scope `identify` only; guild membership and roles resolved server-side with the bot token.
-- **Git is the content bus.** The bot commits; the CMS commits; Astro reads. No content database.
+- ~~**Git is the content bus.**~~ *Superseded by ADR-0001.* By default each service owns its state in SQLite files on its own volume (the bot always; the site may move to Railway Postgres, decided with ADR-0002); durable files are replicated by Litestream to R2, or to B2 as a drop-in. The site pulls a Catalog snapshot from the bot over Railway private networking. Git holds code, docs and versioned vocabulary.
 - **One monorepo** containing bot, site, content, and docs.
-- **A small, disposable session database** on the Astro service (Better Auth's requirement). Not shared with the bot, not backed up.
+- **A small, disposable session database** on the Astro service (Better Auth's requirement). Not shared with the bot, not backed up. *(If the site moves to Railway Postgres and runs more than one instance, sessions must move there too: replicas have no sticky sessions. See the research note's §2.3.)*
 - **Bot state is SQLite, bot-side only — and not all of it is backed up.** *(Refined 2026-09-01.)* Two kinds:
   - **Rebuildable cache** — Tier 0 raw text, sync bookkeeping. Lives on the service's volume with **no replication**. Losing it costs one re-crawl, and replicating raw member-authored message text off-vendor would outlive the member's own deletions, widening the narrow Tier 0 exception in exactly the direction the privacy model resists.
-  - **Durable state** — opt-outs, interest profiles, recommendation history, intro-responder terminal states. **This** is what gets Litestream → R2 and a rehearsed restore. None of it exists before Phase 3; the requirement travels with the first ticket that creates it. Losing an opt-out means re-approaching someone who asked not to be.
-- **CMS is Tina, self-hosted, backend-only**, and must not require editors to hold GitHub accounts.
+  - **Durable state** — the Catalog with its overrides, exclusions, opt-outs, interest profiles, recommendation history, intro-responder terminal states. **This** is what gets Litestream → R2 and a rehearsed restore, from the Catalog's first deployed write (ADR-0001), not Phase 3. Losing an opt-out means re-approaching someone who asked not to be.
+- ~~**CMS is Tina, self-hosted, backend-only.**~~ *Superseded by ADR-0001.* The CMS is reopened: it stores content in SQLite on the site's volume (or in Railway Postgres, an open option for the site), needs no GitHub accounts, keeps revisions, and costs at most $10/month in software with no one-time licence. ADR-0002 will select it.
 - **Sherpa history stays bot-side.** Members query it through the bot, not the site.
 - **Bot-first phasing.** Slash commands ship before the website.
 - **Access and Affinity are separate mechanisms.** See below.
 
 ### Retracted from earlier revisions
 
-- **Shared Railway Postgres is retracted.** Its stated justification was that two services needed one dataset. That premise died with the Instatic architecture: git is the bus, and the site's only database is a disposable session store. `PROJECT-STATUS.md` §4 Storage and §12 action 1 are void. Postgres remains open for *future* evaluation, but nothing in the current design needs it.
+- **Shared Railway Postgres is retracted.** Its stated justification was that two services needed one dataset. That premise died with the Instatic architecture: git is the bus, and the site's only database is a disposable session store. `PROJECT-STATUS.md` §4 Storage and §12 action 1 are void. Postgres remains open for *future* evaluation, but nothing in the current design needs it. *(2026-10-13: git is no longer the bus, but the retraction of a **shared** Postgres stands: each service owns its data, and data moves one way; see ADR-0001. A Railway Postgres for the **site alone** is an open option, decided with ADR-0002; see `docs/research/2026-10-13-cms-and-datastore-options.md`.)*
 - **Instatic is dead.** It is a Bun-only standalone server that ships its own static publisher — it replaces Astro rather than complementing it. Its reader-gating lives in PR #311, which as of 2026-08-31 is open, merge-conflicted, 402 files / +30k lines, with **zero review activity in 32 days**, behind three other workstreams the maintainer named as prerequisites *(verified 2026-08-31)*. Maintaining a fork of that size to obtain a capability our own middleware already provides is cost without benefit.
-- **EmDash is dead** — with a correction. It **is** a Cloudflare project: Cloudflare Inc. holds the copyright, it was announced on Cloudflare's blog, its creator and top committer is a Cloudflare employee, and Cloudflare moved its own blog onto it on 2026-08-12 *(verified 2026-08-30)*. The previous revision's dismissal was based on a wrong premise. It is nonetheless ruled out here: content is Portable Text JSON in SQL tables rather than markdown (so the "content stays portable markdown either way" escape hatch is false for it), there is **no git mode and none on the 1.0 roadmap**, JSON backup restoration is "intentionally not exposed" and snapshot generation is currently broken on Postgres, and it is `0.35.0` beta preview with no LTS or stability commitment. **Re-evaluate only when both are true: 1.0 shipped, and a documented git-sync or file-based content story exists.**
+- **EmDash was ruled out on 2026-08-31** *(and is a candidate again since ADR-0001; see the note at the end of this item)* — with a correction. It **is** a Cloudflare project: Cloudflare Inc. holds the copyright, it was announced on Cloudflare's blog, its creator and top committer is a Cloudflare employee, and Cloudflare moved its own blog onto it on 2026-08-12 *(verified 2026-08-30)*. The previous revision's dismissal was based on a wrong premise. It is nonetheless ruled out here: content is Portable Text JSON in SQL tables rather than markdown (so the "content stays portable markdown either way" escape hatch is false for it), there is **no git mode and none on the 1.0 roadmap**, JSON backup restoration is "intentionally not exposed" and snapshot generation is currently broken on Postgres, and it is `0.35.0` beta preview with no LTS or stability commitment. **Re-evaluate only when both are true: 1.0 shipped, and a documented git-sync or file-based content story exists.** *(2026-10-13: the git half of this gate fell with ADR-0001. EmDash 1.1 is a candidate for ADR-0002; see `docs/research/2026-10-05-emdash-1.1-reevaluation.md`.)*
 
 ---
 
 ## Shape
+
+*Redrawn 2026-10-13 for ADR-0001.*
 
 ```
 ┌──────────────────────────────┐
@@ -108,32 +111,31 @@ So reader gating is ours, and **that is precisely what makes the CMS swappable.*
 │  • LLM tagging + summaries   │
 │  • Papa Sherpa               │
 │  • build-failure alarm       │
-└──────┬────────────────┬──────┘
-       │                │
-   commits          SQLite (bot-only)
-   content          (Tier 0 + sync state: volume, no backup
-       │             profiles, history, opt-outs: Litestream
-       │             → R2, from Phase 3)
+│  • private snapshot endpoint │
+└──────┬───────────────────────┘
+       │  bot.db   — Catalog, overrides, exclusions,
+       │             opt-outs…: Litestream → R2
+       │  cache.db — Tier 0, sync state: not replicated
+       │
+       │  snapshot, pulled by the site
+       │  (Railway private network, no public port)
        ▼
-┌───────────────┐         ┌──────────────────────┐
-│   Git repo    │◀───────▶│  Tina (self-hosted)  │
-│ • club pages  │ commits │  • editor auth       │
-│ • data.json   │         │  • visual editing    │
-│ • roles.json  │         │  • sqlite-level      │
-│ • landing     │         │    (rebuildable)     │
-└───────┬───────┘         └──────────────────────┘
-        │ reads
-        ▼
 ┌──────────────────────────────┐
 │  Astro (SSR, Node adapter)   │
 │  • /auth/discord/*           │
 │  • session middleware        │
 │  • gated Index + club pages  │
-│  • public landing (static)   │
+│  • public landing            │
+│  • CMS (ADR-0002)            │
 └──────────────────────────────┘
+   site.db     — CMS content, promote flags: Litestream → R2
+   snapshot.db — last accepted snapshot: not replicated
+   sessions    — disposable
 ```
 
-Two Railway services. Cloudflare for DNS, origin proxy, **and R2** (the Litestream target — note this is a wider Cloudflare surface than "DNS and proxy only," which earlier drafts claimed). No content database.
+The file names are illustrative. What matters is the split: durable files are replicated, and caches and sessions are not.
+
+Two Railway services, each with one volume. Cloudflare for DNS, origin proxy, **and R2** (the Litestream target — note this is a wider Cloudflare surface than "DNS and proxy only," which earlier drafts claimed). Backblaze B2 is a drop-in alternative. A service with a volume can't run two deployments at once, so every redeploy has a short gap, and each service runs as one instance. The startup and restore contract is in ADR-0001.
 
 ---
 
@@ -143,22 +145,15 @@ One repo, two deployed services:
 
 ```
 apps/bot/          Discord service — gateway, sync, LLM pipeline, Sherpa
-apps/site/         Astro SSR app + Tina backend route
+apps/site/         Astro SSR app + CMS
 content/
-  index/data.json      Catalog, written by the bot every sync
-  clubs/*.md           Club pages, edited in the CMS
-  config/roles.json    Guild role manifest (id ↔ name), written by the bot
-  config/index-flags.json  Promote/exclude flags
-  landing.md           Public landing page
-  privacy.md           Privacy policy
-docs/              This document and its companions
+  config/topics.json   Topic vocabulary, versioned with the code
+  config/regions.json  Region gazetteer, versioned with the code
+  config/index-flags.json  Exclusion seed, read once at first initialisation (ADR-0001)
+docs/              This document, its companions, and docs/adr/
 ```
 
-**Railway watch paths per service** so a content commit rebuilds the site and does not redeploy the bot.
-
-**The bot pushes directly to `main`** on content paths, as an **org-owned machine account or GitHub App — never a personal access token**. No PR flow: a PR nobody reviews is theatre, and the real safety net is CI. Build in CI, deploy only on green; a bad content commit fails the build and the live site keeps serving the last good version. `git revert` is the fix.
-
-Two repos were considered and rejected: the content bus becomes a directory rather than a cross-repo push with a token to manage, and one clone is the whole system — which matters for the handoff problem this project exists to solve.
+**Railway watch paths per service** so a site change does not redeploy the bot, and the reverse. The bot has no git credential and never commits; CI gates code only. *(ADR-0001 retired the content commits, the bot's push to `main`, its machine account, and `git revert` as the content fix.)*
 
 ---
 
@@ -170,7 +165,7 @@ Two repos were considered and rejected: the content bus becomes a directory rath
 2. `GET /auth/discord/callback` → verify state, exchange code, `GET /users/@me` for the snowflake, **discard the user's access token**.
 3. `GET /guilds/{GUILD_ID}/members/{user_id}` with `Authorization: Bot <token>`. 404 → not in the guild → reject. 200 → membership plus a `roles` array.
 4. **Check the `roles` array for the `Member` role.** A 404 answers "is this person in the guild"; it does not answer "is this person a Member." Someone who has joined but not yet been granted the role must not receive gated content.
-5. Map role ids → group slugs from `content/config/roles.json`.
+5. Map role ids → group slugs from the role manifest carried in the Catalog snapshot (ADR-0001).
 6. Issue a session; store `{ discord_id, role_ids, roles_fetched_at }` **server-side**, with only an opaque token in the cookie.
 
 ### Why `identify` + bot token, not `guilds.members.read`
@@ -233,7 +228,7 @@ affinity: { tags: [flight-sim, aviation] }
 
 ### The role manifest
 
-The bot already syncs the guild; it also emits `content/config/roles.json` (`id` ↔ `name`) and commits it. Tina's Access field is a select sourced from that file: **the editor picks a name, the stored value is the ID, and rendering resolves the ID back to a name.** A renamed role updates the manifest on the next sync and every gate keeps working.
+The bot already syncs the guild; it also emits the role manifest (`id` ↔ `name`) and carries it in the Catalog snapshot (ADR-0001). The CMS's Access field is a select sourced from that manifest: **the editor picks a name, the stored value is the ID, and rendering resolves the ID back to a name.** A renamed role updates the manifest on the next sync and every gate keeps working.
 
 This is the lesson the old index taught the hard way — `steam-deck-gaming` was renamed `steam-deck-and-handhelds` and the page broke. *Key everything on ID; treat names as mutable.*
 
@@ -247,16 +242,17 @@ Affinity is a field on content. Each consumer brings its own profile: the bot ma
 
 ## Content model
 
-| Content | Path | Written by | Edited by |
+| Content | Owner and store | Written by | Edited by |
 |---|---|---|---|
-| Club pages | `content/clubs/*.md` | Wiki.js migration | Club Leads, in the CMS |
-| Catalog | `content/index/data.json` | Bot, per sync | Staff, in the CMS |
-| Role manifest | `content/config/roles.json` | Bot, per sync | Nobody |
-| Landing page | `content/landing.md` | Bot fills slots | Staff |
-| Privacy policy | `content/privacy.md` | Human | Staff |
-| Promote/exclude flags | `content/config/index-flags.json` | Staff | Staff, in the CMS |
+| Club pages | Site, CMS | Wiki.js migration | Club Leads, in the CMS |
+| Catalog | Bot, durable file | Bot, per sync | Staff, through bot commands: overrides only |
+| Role manifest | Bot, carried in the snapshot | Bot, per sync | Nobody |
+| Landing page | Site, CMS | Bot fills slots | Staff |
+| Privacy policy | Site, CMS | Human | Staff |
+| Exclusions | Bot, durable file | Staff | Staff, through a bot command |
+| Promote flags | Site, durable file | Staff | Staff, in the CMS: Index presentation only |
 
-Flags living in git is what removes the last shared-state requirement: the bot reads them from the repo at sync time rather than from a database the site also writes.
+*Rewritten 2026-10-13 for ADR-0001.* Data moves one way, from the bot to the site. Exclusions and overrides stay with the bot, because they shape the Catalog that Sherpa reads too. Promote flags affect only the Index, so they live on the site.
 
 ### Override pattern
 
@@ -265,7 +261,7 @@ Each Catalog entity carries:
 - `summary_generated` — bot overwrites every sync
 - `summary_override` — human-only; the renderer prefers it
 
-The bot never writes the override field, so it structurally cannot clobber a correction. Git supplies the audit trail for free.
+The bot never derives the override field; the sync only carries it forward, so it structurally cannot clobber a correction. If the previous Catalog can't be read, the sync stops; it never treats the previous Catalog as empty. Each override change appends a revision row recording who made it, when, and the previous value. *(This replaces "git supplies the audit trail for free"; see ADR-0001.)*
 
 This answers the real defects in the current index: the Escape from Tarkov entry's 200-word paste, the Formula 1 entry's full race calendar, and the entries that render empty because the first post was image-only.
 
@@ -273,11 +269,15 @@ This answers the real defects in the current index: the Escape from Tarkov entry
 
 ## CMS: Tina, self-hosted
 
+> **⚠️ SUPERSEDED 2026-10-13 by ADR-0001.** Tina's premise was git as the content store, and that is retired. The CMS will be selected in ADR-0002, against the criteria in ADR-0001. The section is kept for the evaluation record. Two lessons carry over:
+> - A control that fails open is worse than no control (see *Editor authorization*).
+> - Prefer an enforced per-entry scope to a convention, where the chosen CMS offers one.
+
 ### Why
 
 Against the stated criteria — free-to-cheap, well-featured, visual editing with a markdown alternative, minimal database, full-text search, coexists with Astro — Tina is the only candidate that clears all of them *(surveyed 2026-08-31)*. Auth.js gives username/password editors; content stays markdown in git; `@tinacms/search` covers full-text; Astro is becoming Tina's default starter with React-free visual editing.
 
-Two candidates were eliminated on hard constraints rather than preference: **Directus** caps its free tier at 3 editor seats under a non-OSI licence (there are ~5 editors), and **Payload requires Next.js**. Keystatic, Decap, Sveltia and PagesCMS are all git-host-OAuth-only — none offers username/password, so relaxing the Discord-auth requirement did not rescue them.
+Two candidates were eliminated on hard constraints rather than preference: **Directus** caps its free tier at 3 editor seats under a non-OSI licence (there are ~5 editors), and **Payload requires Next.js**. Keystatic, Decap, Sveltia and PagesCMS are all git-host-OAuth-only — none offers username/password, so relaxing the Discord-auth requirement did not rescue them. *(Corrected 2026-10-13: wrong for Keystatic, Decap and PagesCMS, all of which have editor sign-in without GitHub accounts. Right for Sveltia.)*
 
 ### The database question
 
@@ -382,6 +382,15 @@ Still true, and unaffected by the cut:
 | Sourced from | Topic, first post, or name + parent | Recent activity |
 | Regenerated | On discovery; on admin re-sweep | When `last_message_id` moves |
 | Model | Strong | Cheap |
+| Stored in | The Catalog | **The bot's volume only** (`.data/activity.json`) |
+
+**Activity summaries never enter the Catalog, and so never the site's snapshot** (Staff, 2026-10-05).
+They are derived from member conversation, the repository is public, and the
+boundary has no member-name cache, so a name said in conversation could
+otherwise reach a public file. They wait bot-side until a gated delivery path
+exists — see #26. Built by `enrich.ts activity` from the newest Tier 0
+messages, bots and webhooks dropped, near-duplicates collapsed, and only once
+Tier 0 holds an Entity's newest message.
 
 ### What "correct" means — testable criteria
 
@@ -559,9 +568,9 @@ It is LLM-generated, public, indexed, and about a private community. The summari
 
 Bot-first. The evidence supports it: the topics page is already linked in the `#introductions` channel description and no member in either transcript used it — every one was hand-directed by another human. `/find` automates what is actually happening, and reaches members where they already are.
 
-### Phase 1 — Sync engine → git
+### Phase 1 — Sync engine → Catalog
 
-discord.js REST, emits `content/index/data.json` and `content/config/roles.json` and commits. Mention resolution, markdown escaping, truncation. Tier 0 capture lands here too.
+discord.js REST, emits the Catalog and the role manifest. *(Originally written to `content/` and committed. Since ADR-0001 they go to the bot's durable SQLite file and are served as the snapshot.)* Mention resolution, markdown escaping, truncation. Tier 0 capture lands here too.
 
 **Mechanical gate:** the coverage fixture passes, all four defect fixtures pass, and the run emits a count of entities the old script missed. Coverage is the gate; layout is a free variable — do not spend time on presentation here.
 
@@ -597,25 +606,25 @@ See Ingestion and description sourcing. What remains, cheapest first:
 
 **Auth spike first, timeboxed to 1–2 days.** Better Auth with the Discord provider, the `getUserInfo` guild-membership rejection, `Member` role check, role manifest mapping, middleware gating a stub page. This is smaller than the previous revision budgeted for, because the rejection path is now a known API rather than an open risk.
 
-Then: Astro reads the JSON, renders the Index behind the gate, MiniSearch client-side, public landing page prerendered, Access honoured, redaction on the render path.
+Then: Astro pulls and validates the Catalog snapshot (ADR-0001), renders the Index behind the gate, MiniSearch client-side, public landing page prerendered, Access honoured, redaction on the render path.
 
 **Mechanical gate:** a guild member with the `Member` role reaches the stub; a guild member *without* it is rejected; a non-member is rejected *and no user row is created for them*; a role change is reflected within the TTL; the leak test passes.
 
 ### Phase 5 — CMS
 
-Stand up Tina (two-day abort condition above), migrate one club page, hand it to a real Club Lead with no instructions. Learn here rather than after migrating everything. Override pattern goes live.
+Stand up the CMS selected in ADR-0002, migrate one club page, hand it to a real Club Lead with no instructions. Learn here rather than after migrating everything. Override pattern goes live.
 
 If the visual editing turns out to be insufficient for real editors, that is a real signal worth reopening the CMS choice on. A canvas editor was ranked a **preference**, below "coexists with Astro" and "no database service."
 
 ### Phase 6 — Wiki.js migration + introductions responder live
 
-**All** wiki content migrates — it is not expansive and none of it should be lost. Export via Wiki.js's GraphQL API to markdown, commit, cut over once. **Wiki.js goes read-only at cutover; no dual-running period** — two writable sources for the same page is exactly the failure this architecture is shaped to avoid. Leave the old wiki up read-only as an archive for as long as it is free.
+**All** wiki content migrates — it is not expansive and none of it should be lost. Export via Wiki.js's GraphQL API and import into the CMS, then cut over once *(was "to markdown, commit" before ADR-0001)*. **Wiki.js goes read-only at cutover; no dual-running period** — two writable sources for the same page is exactly the failure this architecture is shaped to avoid. Leave the old wiki up read-only as an archive for as long as it is free.
 
 Flip shadow mode off after ≥2 weeks of reviewed output. Full spec in `PROJECT-STATUS.md` §7.
 
 ### Cross-cutting
 
-**Build-failure alarm.** The bot watches CI and posts to a dedicated mod channel on failure — another reason the bot comes early.
+**Build-failure alarm.** The bot watches CI and posts to a dedicated mod channel on failure — another reason the bot comes early. CI covers code only since ADR-0001. A rejected Catalog snapshot raises its own alert from the site.
 
 ---
 
@@ -633,15 +642,13 @@ Flip shadow mode off after ≥2 weeks of reviewed output. Full spec in `PROJECT-
 | Model prose emitted directly to Discord or the site | Structured output only; the app renders from a template. This is the prompt-injection containment. |
 | Prerendered routes carrying an `access` field | Astro middleware does not run for them. This leaks gated content. |
 | Reader gating as a CMS selection criterion | Nothing self-hostable ships it in a form that fits. It collapses the field to one immature candidate, twice now. |
-| Per-document authorization inside Tina's `isAuthorized` | Requires parsing GraphQL bodies on an unsupported seam, and fails *open* on an upstream change. |
-| A Postgres `abstract-level` adapter | Writing a database driver to avoid adding a database. |
+| Per-document authorization built on an unsupported CMS seam | Tina's `isAuthorized` was the case in point: parsing GraphQL bodies, failing *open* on an upstream change. Use a CMS's own per-entry scoping or none. |
 | A duplicate-merge queue UI | The action happens in Discord. A mod channel post is the whole feature. |
 | **A trolling classifier** | The confidence gate already suppresses signal-free intros, and structured output means no input can make the bot say anything. A naive classifier flags this server's affection as abuse and does more harm than none. Revisit only if shadow mode produces a real failure. |
 | Affinity as a ranking | Ship it as a filter. A ranking will be accused of hiding things in a community where findability is the point. |
 | Deny rules in Access | Grant-plus-deny is where access-control bugs live. |
 | Auto-ageing of stored parenting stage | Reintroduces the derived precision the privacy model removes. Expire instead. |
 | Admin UI for anything env config already handles | Out of scope until someone asks. |
-| A content database | See "what would force one" below. |
 
 ---
 
@@ -686,21 +693,23 @@ Create these before the code they test. They are drawn from real transcripts and
 
 ---
 
-## What would force a content database later
+## When Postgres would earn its place
 
-A disposable session database already exists (Better Auth), and Tina's datalayer is a rebuildable cache. These would force a real, backed-up one. None are v1, and each is additive — git content stays valid.
+*Rewritten 2026-10-13 for ADR-0001.* SQLite per service is the default shape. Railway Postgres is **open for the site**, and any of these would justify moving the site's durable state to it:
 
-- Members viewing Sherpa history **on the site** (currently bot-first by decision)
-- Staff flags needing instant effect (weekly refresh means no)
-- Activity charts over time
-- Per-member state beyond sessions — saved items, read markers
+- **The site needs more than one instance, or deploys without a gap.** A volume pins a service to one instance and gives every redeploy a short gap. Postgres makes the site stateless; Postgres itself still sits on a volume unless HA is bought.
+- **The chosen CMS prefers it.** Payload, Wagtail and StudioCMS are at home on Postgres; EmDash supports it but loses full-text search there.
+- **We want Railway-managed point-in-time recovery** rather than our own Litestream restore contract.
 
-If two or more land, go to Postgres and stop optimizing.
+The bot stays on SQLite in every shape: it is single-instance because of the gateway connection, and its Tier 0 cache must stay local. A Postgres **shared by both services** earns its coupling only if both services have to write the same data; today data moves one way, from the bot to the site. If that lands, revisit a shared Postgres with a schema per service rather than syncing SQLite files in both directions.
+
+Trade-offs, costs and hybrid shapes: `docs/research/2026-10-13-cms-and-datastore-options.md` §2.
 
 ---
 
 ## Open questions
 
-1. **Ownership mechanics.** Which GitHub org; which humans hold owner on GitHub, Railway, Cloudflare and the Discord application; where secrets live besides Railway's env; who takes a handoff. Deferred as organizational rather than technical — **but it has one hard deadline: the machine account credential in Phase 1.** If that is minted against a personal account, the organizational problem becomes a code problem the first time someone else needs to rotate it. Every human checkpoint above is also unassigned, and an unassigned checkpoint belongs to whoever wrote the plan.
+1. **Ownership mechanics.** Which GitHub org; which humans hold owner on GitHub, Railway, Cloudflare and the Discord application; where secrets live besides Railway's env; who takes a handoff. Deferred as organizational rather than technical. *(Its hard deadline, the bot's git machine-account credential, went away with ADR-0001. The R2 or B2 bucket and its keys inherit the same concern: they must not be one person's.)* Every human checkpoint above is also unassigned, and an unassigned checkpoint belongs to whoever wrote the plan.
 2. **Wiki.js inventory.** Page count, nesting depth, and whether there are assets beyond markdown. Needed to scope the Phase 6 migration. Nobody has counted.
 3. **Tier 0 storage footprint** against the volume — a Phase 2 measurement, not a decision. Tier 0 is a rebuildable cache and is not replicated.
+4. ~~**Erasure policy and maximum snapshot age.**~~ *Decided 2026-10-14 (ADR-0001, Decided).* Removals leave the site within one sync and pull, and leave backups within 30 days. There is no maximum snapshot age; the Index shows the snapshot's age and marks it out of date.

@@ -1,11 +1,12 @@
 import { REST } from "@discordjs/rest";
 import { Routes } from "discord-api-types/v10";
-import type {
-  DiscordReadPort,
-  RawChannel,
-  RawCapturedMessage,
-  RawRole,
-  RawThread,
+import {
+  ChannelType,
+  type DiscordReadPort,
+  type RawChannel,
+  type RawCapturedMessage,
+  type RawRole,
+  type RawThread,
 } from "./ports.ts";
 
 const VIEW_CHANNEL = 1n << 10n;
@@ -21,10 +22,11 @@ export interface Overwrite {
 interface RawDiscordThread {
   id: string;
   name: string;
+  type?: number;
   parent_id?: string | null;
   applied_tags?: string[];
   last_message_id?: string | null;
-  thread_metadata?: { archive_timestamp?: string };
+  thread_metadata?: { archive_timestamp?: string; archived?: boolean; locked?: boolean };
 }
 
 export interface RawGuildChannel {
@@ -126,8 +128,10 @@ export const discordRest = (config: {
   token: string;
   guildId: string;
   warn?: (message: string) => void;
+  /** Tests only: a stand-in for discord.js REST. */
+  rest?: Pick<REST, "get">;
 }): DiscordReadPort => {
-  const rest = new REST({ version: "10" }).setToken(config.token);
+  const rest = config.rest ?? new REST({ version: "10" }).setToken(config.token);
 
   // Fetched once per sync. Two fetches opened a window where a role created
   // or deleted between them made the permission context and the committed
@@ -211,14 +215,22 @@ export const discordRest = (config: {
 
     listThreads: async (parentIds: string[]): Promise<RawThread[]> => {
       const wanted = new Set(parentIds);
-      const raw = new Map<string, RawDiscordThread>();
+      // Archived is known from which endpoint answered, not read from
+      // optional metadata: a Thread missing `thread_metadata` would otherwise
+      // be published as open on a guess.
+      const raw = new Map<string, { thread: RawDiscordThread; archived: boolean }>();
 
-      // Active threads across the whole guild arrive in one call.
+      // Active threads across the whole guild arrive in one call — including
+      // private Threads the bot can see. Those are dropped: a private Thread
+      // is not something a Member can browse to, and its archived copy is
+      // behind MANAGE_THREADS, so publishing it while active would also make
+      // it vanish rather than close when it is archived.
       const active = (await rest.get(
         Routes.guildActiveThreads(config.guildId),
       )) as { threads: RawDiscordThread[] };
       for (const t of active.threads)
-        if (t.parent_id && wanted.has(t.parent_id)) raw.set(t.id, t);
+        if (t.parent_id && wanted.has(t.parent_id) && t.type !== ChannelType.PrivateThread)
+          raw.set(t.id, { thread: t, archived: false });
 
       // Archived ones are per-parent and paginated. Roughly two thirds of this
       // guild's Posts are archived, so this is the bulk of the work.
@@ -244,7 +256,7 @@ export const discordRest = (config: {
             }
             throw error;
           }
-          for (const t of page.threads) raw.set(t.id, t);
+          for (const t of page.threads) raw.set(t.id, { thread: t, archived: true });
           const last = page.threads.at(-1)?.thread_metadata?.archive_timestamp;
           if (!page.has_more || !last) break;
           before = last;
@@ -254,7 +266,14 @@ export const discordRest = (config: {
       // A Post's ID equals its starter message's ID, so the first post is one
       // un-paginated call. Verified against real Posts on 2026-09-01.
       return Promise.all(
-        [...raw.values()].map(async (t) => {
+        [...raw.values()].map(async ({ thread: t, archived }) => {
+          // Discord defines `locked` as a required boolean, so this is a
+          // malformed response, not a state — loud rather than a guess.
+          if (typeof t.thread_metadata?.locked !== "boolean")
+            config.warn?.(
+              `[threads] "${t.name}" (${t.id}) arrived without thread_metadata.locked, ` +
+                `so whether it is locked is unknown. Recorded as not locked.`,
+            );
           let firstPost: string | null = null;
           try {
             const msg = (await rest.get(
@@ -270,6 +289,8 @@ export const discordRest = (config: {
             parentId: t.parent_id ?? "",
             appliedTags: t.applied_tags ?? [],
             lastMessageId: t.last_message_id ?? null,
+            archived,
+            locked: t.thread_metadata?.locked === true,
             firstPost,
           };
         }),
@@ -288,6 +309,8 @@ export const discordRest = (config: {
       type Msg = {
         id: string;
         author?: { id?: string; bot?: boolean };
+        /** Set when a webhook posted it. Not a member's words either. */
+        webhook_id?: string;
         content?: string;
         timestamp?: string;
       };
@@ -307,7 +330,7 @@ export const discordRest = (config: {
       const shape = (m: Msg, window: "head" | "tail"): RawCapturedMessage => ({
         id: m.id,
         authorId: m.author?.id ?? "",
-        authorIsBot: m.author?.bot === true,
+        authorIsBot: m.author?.bot === true || Boolean(m.webhook_id),
         content: m.content ?? "",
         createdAt: m.timestamp ?? "",
         window,

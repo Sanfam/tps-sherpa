@@ -5,6 +5,8 @@
 
 **Superseded here:** §3 (architecture), the **Storage** subsection of §4, §5 (Instatic — now dead, not a watching brief), §6 (open decisions — all resolved or moved), Track 2 of §9, and §12 (next actions).
 
+**Also superseded, by ADR-0001 (2026-10-13):** every statement below that git holds the content, that the bot commits, or that a machine credential is needed. In particular: the §10 backup and bus-factor notes; the `data.json` output in §9 Track 1; §12 action 3, the git credential, which is now not needed; and the git destination in §12 action 4. Durable state now lives by default in each service's SQLite files, replicated by Litestream (the site may move to Railway Postgres); see `docs/adr/0001-retire-git-as-content-store.md`.
+
 **Still current and referenced by the handoff:** the rest of the §4 decision log, the privacy model, the Discord API facts in §8, the observed data in §8, the recurring risks in §10, and the introductions-responder spec in §7.
 
 **Purpose:** pick-up document. Captures what has been decided, what was rejected and why, what remains open, and what has been learned about the problem domain. A future conversation should be able to read this and resume without re-litigating settled questions.
@@ -342,7 +344,7 @@ Two tracks. **Track 1 has no external dependencies and should not wait on Track 
 
 ### Track 1 — Discord service
 
-1. **Sync + render.** discord.js REST, emits `data.json` + markdown. Fix mention resolution, markdown escaping, truncation. **Acceptance gate:** every entity from the old page present with a resolved name, working deep link, and either a description or an explicit marker — *plus a count of what the old script missed*. Coverage as the gate; layout is a free variable.
+1. **Sync + render.** discord.js REST, emits `data.json` + markdown *(transport superseded by ADR-0001: the Catalog goes to the bot's SQLite and reaches the site as a pulled snapshot)*. Fix mention resolution, markdown escaping, truncation. **Acceptance gate:** every entity from the old page present with a resolved name, working deep link, and either a description or an explicit marker — *plus a count of what the old script missed*. Coverage as the gate; layout is a free variable.
 2. **Denylist/allowlist config + privacy layer.** Ship redaction on the render path here, not later.
 3. **Tags + summaries.** Delta-driven off `last_message_id`. Duplicate detection → mod queue.
 4. **Papa Sherpa slash commands.** `/find`, `/lately`. Whole-catalog prompt.

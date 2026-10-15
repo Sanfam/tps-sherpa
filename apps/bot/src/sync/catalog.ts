@@ -12,6 +12,13 @@ export type EntityType = "channel" | "forum" | "post" | "thread";
 
 export type DescriptionStatus = "present" | "absent" | "withheld";
 
+/**
+ * open   - members can reply
+ * closed - archived: a mod or the author closed it, or it went idle
+ * locked - only a mod can reopen it or reply
+ */
+export type ThreadState = "open" | "closed" | "locked";
+
 export interface Entity {
   /** Discord snowflake. The key. Names are mutable; this is not. */
   id: string;
@@ -54,6 +61,13 @@ export interface Entity {
    * a bump a full retag rather than a silent drift.
    */
   topics_version: number | null;
+  /**
+   * Whether a Post or Thread is open, closed or locked, as of the last sync.
+   * Null for Channels and Forums, which have no such state. Mechanical, like
+   * the Platform and Region facets — from Discord, never derived — and kept
+   * out of `identityKey`: closing a Post does not change what it is about.
+   */
+  thread_state: ThreadState | null;
   /** Newest message. Null if nothing has been posted. */
   last_message_id: string | null;
   /**
@@ -101,6 +115,48 @@ export const identityKey = (entity: Entity, parent?: Entity | null): string =>
     entity.applied_tags.join("\u001f"),
     entity.region.join("\u001f"),
   ].join("\u0000");
+
+/**
+ * Overrides are human-authored and carried forward from the previous Catalog,
+ * so anything that reads as "no previous Catalog" writes every one away. Only
+ * an explicit first run may start empty; a missing file otherwise means the
+ * Catalog was lost, and valid JSON that is not a list of Entities is corrupt.
+ */
+export const parsePrevious = (raw: string | null, firstRun: boolean): Entity[] => {
+  if (raw === null) {
+    if (firstRun) return [];
+    throw new Error(
+      "The previous Catalog is missing. Refusing to sync: starting empty would " +
+        "drop every summary override. Set SYNC_FIRST_RUN=1 only for a first run.",
+    );
+  }
+  const parsed: unknown = JSON.parse(raw);
+  // Checks what is carried forward verbatim. Anything else malformed crashes
+  // buildCatalog before a write, which already fails closed.
+  // A missing field would be carried forward as null, silently.
+  const isEntity = (e: unknown) => {
+    if (typeof e !== "object" || e === null) return false;
+    const { id, summary_override, summary_generated, topics, topics_version } = e as Entity;
+    const stringOrNull = (v: unknown) => v === null || typeof v === "string";
+    return (
+      typeof id === "string" &&
+      stringOrNull(summary_override) &&
+      stringOrNull(summary_generated) &&
+      Array.isArray(topics) &&
+      topics.every((t) => typeof t === "string") &&
+      (topics_version === null || Number.isInteger(topics_version))
+    );
+  };
+  if (!Array.isArray(parsed) || !parsed.every(isEntity))
+    throw new Error("The previous Catalog is not a list of Entities. Refusing to sync.");
+  // Duplicates would make the override lookup pick one silently.
+  if (new Set(parsed.map((e: Entity) => e.id)).size !== parsed.length)
+    throw new Error("The previous Catalog has duplicate Entity ids. Refusing to sync.");
+  // An established Catalog is never empty, so an empty one was truncated.
+  if (parsed.length === 0 && !firstRun)
+    throw new Error("The previous Catalog is empty. Refusing to sync; see SYNC_FIRST_RUN.");
+  return parsed as Entity[];
+};
 
 /** Discord snowflakes embed a millisecond timestamp above the low 22 bits. */
 const DISCORD_EPOCH = 1420070400000;
@@ -312,6 +368,7 @@ export const buildCatalog = async (deps: {
       region: matchRegions(c.name, regions),
       topics: [],
       topics_version: null,
+      thread_state: null,
       last_message_id: c.lastMessageId ?? null,
       last_activity_at: snowflakeTime(c.lastMessageId),
       summary_generated: null,
@@ -338,6 +395,9 @@ export const buildCatalog = async (deps: {
       region: matchRegions(t.name, regions),
       topics: [],
       topics_version: null,
+      // Locked outranks closed: a locked Post may also be archived, and what
+      // a member needs to know is that they cannot reopen it.
+      thread_state: t.locked ? "locked" : t.archived ? "closed" : "open",
       last_message_id: t.lastMessageId ?? null,
       last_activity_at: snowflakeTime(t.lastMessageId),
       summary_generated: null,

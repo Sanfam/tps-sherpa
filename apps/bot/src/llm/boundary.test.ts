@@ -20,6 +20,7 @@ const entity = (over: Partial<Entity> & { id: string; name: string }): Entity =>
   region: [],
   topics: [],
   topics_version: null,
+  thread_state: null,
   last_message_id: null,
   last_activity_at: null,
   summary_generated: null,
@@ -152,12 +153,32 @@ describe("output validation", () => {
     await expect(boundary(chat).ask(ask)).rejects.toThrow(/did not return JSON/i);
   });
 
-  it("redacts the model output it quotes back in the error", async () => {
-    // A model that answered with prose may have echoed its input back, and an
-    // exception message is a place logs keep things.
-    const { chat } = fixtureChat("Sorry! Ask 732682426853359667 instead.");
+  it("names the category of a refused output, never the refused text", async () => {
+    // These errors are retried and logged; quoting what was refused copies it
+    // into the log.
+    for (const reply of [
+      '{"summary":"Ask 732682426853359667"}',
+      '{"summary":"@everyone Dave is hosting raids"}',
+      '{"summary":"Dave is hosting raids"}',
+    ]) {
+      const { chat } = fixtureChat(reply);
+      const error = await boundary(chat, { memberNames: ["Dave"] }).ask(ask).catch((e: Error) => e);
 
-    await expect(boundary(chat).ask(ask)).rejects.toThrow(/\[id\]/);
+      expect(String(error)).toMatch(/identifier|mass mention|names a member/);
+      expect(String(error)).not.toMatch(/Dave|732682426853359667|@everyone|raids/);
+    }
+  });
+
+  it("never quotes the model's prose back in the error", async () => {
+    // A model that answered with prose may have echoed member messages back,
+    // and redaction cannot remove a plain-text name it was never told about.
+    // An exception message is a place logs keep things.
+    const { chat } = fixtureChat("Sorry! Ask Dave or 732682426853359667 instead.");
+
+    const error = await boundary(chat).ask(ask).catch((e: Error) => e);
+
+    expect(String(error)).toMatch(/did not return JSON/);
+    expect(String(error)).not.toMatch(/Dave|732682426853359667|\[id\]/);
   });
 });
 
@@ -166,6 +187,14 @@ describe("what never reaches a model", () => {
     const { chat, calls } = fixtureChat('{"ok":true}');
 
     await expect(boundary(chat).ask({ ...ask, subject: intro })).rejects.toThrow(/monitored/i);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("refuses a withheld Entity, even if a caller forgot to filter it", async () => {
+    const { chat, calls } = fixtureChat('{"ok":true}');
+    const withheld = { ...post, description_status: "withheld" as const };
+
+    await expect(boundary(chat).ask({ ...ask, subject: withheld })).rejects.toThrow(/withheld/);
     expect(calls).toHaveLength(0);
   });
 
@@ -273,6 +302,46 @@ describe("what never reaches a model", () => {
     });
 
     expect(calls[0]?.user).toBe("good game");
+  });
+});
+
+describe("when filtering leaves nothing", () => {
+  const optedOut = { authorId: "9", authorIsBot: false, content: "Anyone up for raids?" };
+
+  it("answers with orNothing and never calls the model", async () => {
+    const { chat, calls } = fixtureChat('{"summary":"Invented."}');
+
+    const result = await boundary(chat, { hasOptedOut: () => true }).ask({
+      ...ask,
+      sources: [optedOut],
+      orNothing: null,
+    });
+
+    expect(result).toBeNull();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("still answers orNothing when context is present, rather than asking about the context alone", async () => {
+    const { chat, calls } = fixtureChat('{"summary":"Invented."}');
+
+    const result = await boundary(chat, { hasOptedOut: () => true }).ask({
+      ...ask,
+      context: "Elden Ring",
+      sources: [optedOut],
+      orNothing: null,
+    });
+
+    expect(result).toBeNull();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("refuses rather than sending an empty prompt when no fallback was given", async () => {
+    const { chat, calls } = fixtureChat('{"summary":"Invented."}');
+
+    await expect(
+      boundary(chat, { hasOptedOut: () => true }).ask({ ...ask, sources: [optedOut] }),
+    ).rejects.toThrow(/filtered out/);
+    expect(calls).toHaveLength(0);
   });
 });
 

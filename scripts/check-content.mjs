@@ -1,5 +1,5 @@
 /**
- * Validates the committed content the bot writes.
+ * Validates the content the bot writes.
  *
  * Unit tests cover the code that produces the Catalog; nothing covers the
  * artifact itself once it is on disk. A truncated write, a bad merge or a
@@ -8,17 +8,24 @@
 import { readFileSync } from "node:fs";
 
 const problems = [];
-const read = (path) => {
+// `undefined` means unreadable (already reported) or optional and absent, so
+// a file that parses to literal `null` still fails as "not an array".
+const read = (path, { optional = false } = {}) => {
   try {
     return JSON.parse(readFileSync(new URL(`../${path}`, import.meta.url), "utf8"));
   } catch (error) {
-    problems.push(`${path}: ${error.message}`);
-    return null;
+    if (!(optional && error.code === "ENOENT")) problems.push(`${path}: ${error.message}`);
+    return undefined;
   }
 };
 
-const catalog = read("content/index/data.json");
-const roles = read("content/config/roles.json");
+// Both are sync output, untracked since ADR-0001 (#26), so CI has neither;
+// checked wherever a sync has written them.
+const catalog = read("content/index/data.json", { optional: true });
+const roles = read("content/config/roles.json", { optional: true });
+// One sync writes both, so exactly one on disk is a half-written generation.
+if ((catalog === undefined) !== (roles === undefined) && !problems.length)
+  problems.push("Only one of the Catalog and the role manifest is on disk");
 // Absent until a human freezes one. Its absence is not a problem; a Catalog
 // carrying tags that are not in it would be.
 let vocabulary = null;
@@ -35,6 +42,7 @@ if (Array.isArray(catalog)) {
   const seen = new Set();
   const statuses = new Set(["present", "absent", "withheld"]);
   const types = new Set(["channel", "forum", "post", "thread"]);
+  const threadStates = new Set(["open", "closed", "locked"]);
   for (const e of catalog) {
     if (!/^\d{17,20}$/.test(e?.id ?? "")) problems.push(`Entity with a bad id: ${JSON.stringify(e?.id)}`);
     if (seen.has(e.id)) problems.push(`Duplicate Entity id: ${e.id}`);
@@ -68,15 +76,25 @@ if (Array.isArray(catalog)) {
     // tell they are stale.
     if (e.topics?.length && e.topics_version === null)
       problems.push(`${e.id}: carries topics but no vocabulary version`);
+    // Open, closed or locked for a Post or Thread; null for the containers,
+    // which have no such state. Mechanical, from the last sync.
+    const threadLike = e.type === "post" || e.type === "thread";
+    if (threadLike ? !threadStates.has(e.thread_state) : e.thread_state !== null)
+      problems.push(`${e.id}: thread_state ${JSON.stringify(e.thread_state)} is not valid for a ${e.type}`);
     if (e.summary_generated !== null && typeof e.summary_generated !== "string")
       problems.push(`${e.id}: summary_generated is neither null nor a string`);
+    // Human-authored and carried forward by every sync; see parsePrevious.
+    if (e.summary_override !== null && typeof e.summary_override !== "string")
+      problems.push(`${e.id}: summary_override is neither null nor a string`);
   }
   // Sorted by id, so a re-run produces no diff. An unsorted Catalog means
   // something wrote it by hand.
+  // An established Catalog is never empty; the next sync would refuse it.
+  if (catalog.length === 0) problems.push("Catalog is empty");
   const sorted = [...catalog].map((e) => e.id).sort();
   if (JSON.stringify(sorted) !== JSON.stringify(catalog.map((e) => e.id)))
     problems.push("Catalog is not sorted by id");
-} else if (catalog !== null) {
+} else if (catalog !== undefined) {
   problems.push("content/index/data.json is not an array");
 }
 
@@ -87,7 +105,7 @@ if (Array.isArray(roles)) {
     if (r?.ids?.some((id) => !/^\d{17,20}$/.test(id)))
       problems.push(`Role "${r.name}" has a bad id`);
   }
-} else if (roles !== null) {
+} else if (roles !== undefined) {
   problems.push("content/config/roles.json is not an array");
 }
 
@@ -97,5 +115,6 @@ if (problems.length) {
   process.exit(1);
 }
 console.log(
-  `Content OK: ${catalog.length} Entities, ${roles.length} role manifest entries.`,
+  `Content OK: ${catalog ? `${catalog.length} Entities` : "no Catalog on disk"}, ` +
+    `${roles ? `${roles.length} role manifest entries` : "no role manifest on disk"}.`,
 );

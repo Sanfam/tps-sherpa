@@ -61,17 +61,19 @@ export const openAiWire = (config: WireConfig): ChatPort => ({
       signal: AbortSignal.timeout(config.timeoutMs ?? DEFAULT_TIMEOUT_MS),
     });
 
-    if (!response.ok)
-      throw new Error(
-        `${model} returned ${response.status}: ${(await response.text()).slice(0, 300)}`,
-      );
+    // The status only. A provider's error body — even its own `message` —
+    // can quote the prompt back ("Rejected prompt: …"), and this error is
+    // retried and logged. Member text never goes to a log.
+    if (!response.ok) throw new Error(`${model} returned ${response.status}.`);
 
-    const body = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    const content = body.choices?.[0]?.message?.content;
+    // A body that is not JSON makes response.json() throw a SyntaxError that
+    // quotes the body — so it is caught and replaced, for the same reason.
+    const body = (await response.json().catch(() => {
+      throw new Error(`${model} returned a body that is not JSON.`);
+    })) as { choices?: Array<{ message?: { content?: string } }> } | null;
+    const content = body?.choices?.[0]?.message?.content;
     if (typeof content !== "string")
-      throw new Error(`${model} returned no message content: ${JSON.stringify(body).slice(0, 300)}`);
+      throw new Error(`${model} returned no message content.`);
     return content;
   },
 });

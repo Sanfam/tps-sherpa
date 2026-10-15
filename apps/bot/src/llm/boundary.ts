@@ -55,6 +55,12 @@ export interface AskRequest<T> {
   /** Member-authored text. Bots, opt-outs and identifiers are removed first. */
   sources?: Source[];
   /**
+   * Returned without a model call when `sources` were given and filtering
+   * removed every one, whatever `context` holds. When absent, that case is
+   * an error.
+   */
+  orNothing?: T;
+  /**
    * Validates the model's JSON and narrows it. Throw to reject: a model that
    * answered the wrong shape has not answered.
    */
@@ -162,20 +168,21 @@ export const createBoundary = (deps: BoundaryDeps) => {
    * Throws on anything the model should never have been able to say. Loud on
    * purpose: the alternative is a quiet strip, which turns a containment
    * failure into a cosmetic one and hides that the prompt is wrong.
+   *
+   * The message names the category, never the offending text: these errors
+   * are retried and logged, and quoting the snowflake, the name or the line
+   * around a mass mention would copy exactly what was refused into a log.
    */
   const validate = (value: unknown): void => {
     for (const text of strings(value)) {
-      const snowflake = SNOWFLAKE.exec(text);
-      if (snowflake)
+      if (SNOWFLAKE.test(text))
         throw new Error(
-          `Model output contains a Discord identifier (${snowflake[0]}). ` +
+          `Model output contains a Discord identifier. ` +
             `Refusing it — this is a containment failure, not a formatting one.`,
         );
-      if (MASS_MENTION.test(text))
-        throw new Error(`Model output contains a mass mention: ${text.slice(0, 80)}`);
-      for (const [index, pattern] of namePatterns.entries())
-        if (pattern.test(text))
-          throw new Error(`Model output names a member: ${memberNames[index]}`);
+      if (MASS_MENTION.test(text)) throw new Error(`Model output contains a mass mention.`);
+      if (namePatterns.some((pattern) => pattern.test(text)))
+        throw new Error(`Model output names a member.`);
     }
   };
 
@@ -195,6 +202,14 @@ export const createBoundary = (deps: BoundaryDeps) => {
             `"${subject.name}" has parent ${subject.parent_id}, which is not in ` +
               `the Catalog, so the monitored-channel check cannot be made. ` +
               `Refusing rather than assuming it is safe.`,
+          );
+        // Withheld means nothing is derived from it, so nothing about it is
+        // sent. Callers filter too; this is here so one that forgets cannot
+        // leak, which is the reason the monitored check lives here as well.
+        if (subject.description_status === "withheld")
+          throw new Error(
+            `"${subject.name}" is withheld: listed without content, never sampled. ` +
+              `It must never reach a model.`,
           );
         if (isMonitored(subject, byId, monitored))
           throw new Error(
@@ -223,10 +238,18 @@ export const createBoundary = (deps: BoundaryDeps) => {
       // for. Anything member-shaped in there is a bug in the caller.
       validate(request.system);
 
-      const parts = [
-        request.context ? redactOutbound(request.context) : null,
-        ...usable.map((s) => redactOutbound(s.content)),
-      ].filter((p): p is string => p !== null && p.trim().length > 0);
+      const sourceParts = usable.map((s) => redactOutbound(s.content)).filter((p) => p.trim());
+      const parts = [request.context ? redactOutbound(request.context) : "", ...sourceParts].filter(
+        (p) => p.trim().length > 0,
+      );
+
+      // Member sources were the point of the call and filtering removed every
+      // one — all bots, all opted out. Asked about nothing but context, a
+      // model answers anyway, and that answer is invention.
+      if ((request.sources?.length ?? 0) > 0 && sourceParts.length === 0) {
+        if ("orNothing" in request) return request.orNothing as T;
+        throw new Error("Every source was filtered out before the call; refusing an empty prompt.");
+      }
 
       const raw = await deps.chat.complete({
         model: deps.models[request.role],
@@ -238,9 +261,11 @@ export const createBoundary = (deps: BoundaryDeps) => {
       try {
         parsed = JSON.parse(raw);
       } catch {
-        // Redacted before it goes anywhere a log can keep it. A model that
-        // answered with prose may well have echoed its input back.
-        throw new Error(`Model did not return JSON: ${redactOutbound(raw).slice(0, 200)}`);
+        // The length, never the text. A model that answered with prose may
+        // have echoed member messages back, and redaction cannot remove a
+        // plain-text name it was never told about — an exception message is a
+        // place logs keep things.
+        throw new Error(`Model did not return JSON (${raw.length} characters).`);
       }
       validate(parsed);
       return request.parse(parsed);

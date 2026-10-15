@@ -22,7 +22,7 @@ import {
  * Entity's identity changes (see `identityKey`), so "no version" covers both
  * the never-classified and the changed. A version bump makes every Entity
  * stale at once, which is exactly what "a bump retags the whole corpus" means
- * — and it retags from the committed Catalog, with no Discord call.
+ * — and it retags from the local Catalog, with no Discord call.
  */
 export const needsClassifying = (entity: Entity, vocabulary: Vocabulary): boolean =>
   entity.topics_version !== vocabulary.version;
