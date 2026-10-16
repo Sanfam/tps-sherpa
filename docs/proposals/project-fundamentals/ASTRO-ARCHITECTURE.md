@@ -135,7 +135,7 @@ So reader gating is ours, and **that is precisely what makes the CMS swappable.*
 
 The file names are illustrative. What matters is the split: durable files are replicated, and caches and sessions are not.
 
-Two Railway services, each with one volume. Cloudflare for DNS, origin proxy, **and R2** (the Litestream target — note this is a wider Cloudflare surface than "DNS and proxy only," which earlier drafts claimed). Backblaze B2 is a drop-in alternative. A service with a volume can't run two deployments at once, so every redeploy has a short gap, and each service runs as one instance. The startup and restore contract is in ADR-0001.
+Two Railway services, each with one volume. Cloudflare for DNS, origin proxy, **and R2** (the Litestream target — note this is a wider Cloudflare surface than "DNS and proxy only," which earlier drafts claimed). Backblaze B2 is a drop-in alternative. A service with a volume can't run two deployments at once, so every redeploy has a short gap, and each service runs as one instance. The startup and restore contract is in ADR-0001. The site will serve at `sherpa.omgod.com` for now (2026-10-15); the bot has no public domain. The bot service runs `apps/bot/src/serve.ts`: Sherpa's gateway, and the sync and enrichment on a six-hourly loop that never runs two writers at once.
 
 ---
 

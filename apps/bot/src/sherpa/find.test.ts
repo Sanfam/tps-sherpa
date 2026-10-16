@@ -109,6 +109,17 @@ describe("/find candidates", () => {
       "Flight Simulators",
     ]);
   });
+
+  it("offers the suggestions Forum and the micro-polls channel, but never what is in them", () => {
+    const suggestions = entity({ id: "1088128866033356801", name: "🗳︱suggestions", type: "forum" });
+    const polls = entity({ id: "1121511095518122164", name: "✅︱micro-polls", type: "channel" });
+    const suggestion = entity({ id: "100000000000000011", name: "Sim racing channel?", parent_id: suggestions.id });
+    const poll = entity({ id: "100000000000000012", name: "Pineapple on pizza?", type: "thread", parent_id: polls.id });
+    expect(candidatesOf([suggestions, polls, suggestion, poll]).map((e) => e.name)).toEqual([
+      "🗳︱suggestions",
+      "✅︱micro-polls",
+    ]);
+  });
 });
 
 describe("findPlaces", () => {

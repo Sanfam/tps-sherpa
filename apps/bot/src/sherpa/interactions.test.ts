@@ -17,6 +17,7 @@ import type { RoleManifestEntry } from "../sync/ports.ts";
 import { EMPTY_QUERY } from "./find.ts";
 import {
   CAP_REACHED,
+  FIND_OFF,
   DEFAULT_FIND_DAILY_CAP,
   FAILED,
   NOT_A_MEMBER,
@@ -101,7 +102,11 @@ const tempCap = (limit: number, now?: () => Date) => {
 };
 
 /** A Sherpa wired to fixtures: a real boundary over a fake wire, a real cap on a temp file. */
-const harness = (opts: { reply?: string | (() => string); limit?: number; roles?: RoleManifestEntry[] } = {}) => {
+const harness = (
+  opts: { reply?: string | (() => string); limit?: number; roles?: RoleManifestEntry[] } & Partial<
+    Pick<Sherpa, "loadCatalog" | "loadVocabulary">
+  > = {},
+) => {
   const calls: string[] = [];
   const logs: string[] = [];
   const chat: ChatPort = {
@@ -114,9 +119,9 @@ const harness = (opts: { reply?: string | (() => string); limit?: number; roles?
   const { cap, path } = tempCap(opts.limit ?? 10);
   const sherpa: Sherpa = {
     guildId: GUILD,
-    loadCatalog: () => catalog,
+    loadCatalog: opts.loadCatalog ?? (() => catalog),
     loadRoleManifest: () => opts.roles ?? manifest,
-    loadVocabulary: () => vocabulary,
+    loadVocabulary: opts.loadVocabulary ?? (() => vocabulary),
     askFor: (c) =>
       createBoundary({
         chat,
@@ -145,7 +150,9 @@ describe("every reply is ephemeral", () => {
       ["find, matches", {}, command("find", { interests: QUERY })],
       ["find, few", { reply: '{"matches":[]}' }, command("find", { interests: QUERY })],
       ["find, empty", {}, command("find", { interests: "  " })],
-      ["find, capped", { limit: 0 }, command("find", { interests: QUERY })],
+      // The first call spends the only one; the retry finds the day spent.
+      ["find, capped", { limit: 1, reply: "not json" }, command("find", { interests: QUERY })],
+      ["find, off", { limit: 0 }, command("find", { interests: QUERY })],
       ["find, model broken", { reply: "not json" }, command("find", { interests: QUERY })],
       ["find, not a Member", {}, command("find", { interests: QUERY }, { roles: [OTHER_ROLE] })],
       ["lately", {}, command("lately")],
@@ -164,6 +171,7 @@ describe("every reply is ephemeral", () => {
     // Each branch reached a different answer, so none was skipped by accident.
     expect(contents.size).toBe(branches.length);
     expect(contents).toContain(CAP_REACHED);
+    expect(contents).toContain(FIND_OFF);
     expect(contents).toContain(FAILED);
     expect(contents).toContain(NOT_A_MEMBER);
     expect(contents).toContain(EMPTY_QUERY);
@@ -236,6 +244,15 @@ describe("the daily /find cap", () => {
     await run(command("find", { interests: QUERY }));
     expect(calls).toHaveLength(2);
     expect(await run(command("find", { interests: QUERY }))).toBe(CAP_REACHED);
+  });
+
+  it("says /find is off, rather than spent, when the cap is 0 — reading nothing", async () => {
+    const broken = () => {
+      throw new Error("unreadable");
+    };
+    const { run, calls } = harness({ limit: 0, loadCatalog: broken, loadVocabulary: broken });
+    expect(await run(command("find", { interests: QUERY }))).toBe(FIND_OFF);
+    expect(calls).toHaveLength(0);
   });
 
   it("leaves /lately alone once spent", async () => {

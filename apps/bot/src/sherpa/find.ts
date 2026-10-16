@@ -44,6 +44,7 @@ const MAX_SUMMARY_CHARS = 150;
  *   to go.
  * - An Entity whose parent is missing is dropped rather than sent, for the
  *   boundary's reason: its monitored check cannot be made.
+ * - Posts and Threads under `NOT_DESTINATIONS` are not places to go.
  */
 export const isCandidate = (
   entity: Entity,
@@ -52,7 +53,20 @@ export const isCandidate = (
 ): boolean =>
   isEnrichable(entity, byId, monitored) &&
   entity.thread_state !== "locked" &&
+  !NOT_DESTINATIONS.has(entity.parent_id ?? "") &&
   (entity.parent_id === null || byId.has(entity.parent_id));
+
+/**
+ * Containers whose Posts and Threads Sherpa never names: a suggestion is a
+ * request to Staff and a micro-poll is a vote, not somewhere to hang out
+ * (Staff, 2026-10-15). The containers themselves stay candidates — "where do I
+ * suggest a channel?" is a fair thing to ask. By id, so a rename cannot undo
+ * it (#33).
+ */
+export const NOT_DESTINATIONS: ReadonlySet<string> = new Set([
+  "1088128866033356801", // 🗳︱suggestions
+  "1121511095518122164", // ✅︱micro-polls
+]);
 
 export const candidatesOf = (catalog: Entity[]): Entity[] => {
   const byId = new Map(catalog.map((e) => [e.id, e]));
