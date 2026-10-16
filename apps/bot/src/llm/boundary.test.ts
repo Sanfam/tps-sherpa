@@ -365,6 +365,30 @@ describe("model selection", () => {
     expect(models).toEqual({ strong: "moonshotai/kimi-k2", cheap: "deepseek/deepseek-chat" });
   });
 
+  it("always routes to providers that keep and train on nothing, whatever LLM_PROVIDER says", () => {
+    const env = { LLM_API_KEY: "sk-test", LLM_MODEL_STRONG: "s", LLM_MODEL_CHEAP: "c" };
+    expect(wireFromEnv(env).wire.provider).toEqual({ data_collection: "deny", zdr: true });
+    expect(
+      wireFromEnv({ ...env, LLM_PROVIDER: '{"sort":"throughput","data_collection":"allow","zdr":false}' }).wire.provider,
+    ).toEqual({ sort: "throughput", data_collection: "deny", zdr: true });
+    expect(() => wireFromEnv({ ...env, LLM_PROVIDER: '["DeepSeek"]' })).toThrow(/JSON object/);
+  });
+
+  it("refuses a base URL anywhere but OpenRouter over https, where that routing is enforced", () => {
+    const env = { LLM_API_KEY: "sk-test", LLM_MODEL_STRONG: "s", LLM_MODEL_CHEAP: "c" };
+    expect(wireFromEnv({ ...env, LLM_BASE_URL: "https://openrouter.ai/api/v1" }).wire.baseUrl).toBe(
+      "https://openrouter.ai/api/v1",
+    );
+    for (const url of [
+      "https://api.deepseek.com/v1",
+      "http://openrouter.ai/api/v1",
+      "https://openrouter.ai.example.com/api/v1",
+      "http://localhost:11434/v1",
+      "not a url",
+    ])
+      expect(() => wireFromEnv({ ...env, LLM_BASE_URL: url })).toThrow(/LLM_BASE_URL/);
+  });
+
   it("refuses to run with a model unset rather than picking one", () => {
     expect(() => wireFromEnv({ LLM_API_KEY: "sk-test" })).toThrow(/LLM_MODEL_STRONG/);
   });

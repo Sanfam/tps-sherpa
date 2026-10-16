@@ -10,8 +10,14 @@
  * here is replicated: losing it costs one re-run. Replicating raw
  * member-authored text off-vendor would also outlive the member's own
  * deletions, which the privacy model does not extend to.
+ *
+ * Nothing in it was written more than seven days ago (`toStored` below, then
+ * `purge.ts`), and nothing in it was written by a member who has turned
+ * processing off.
  */
 import type { Entity } from "./catalog.ts";
+import type { RawCapturedMessage } from "./ports.ts";
+import { RETAIN_MS, type StoredMessage, type openTier0 } from "./tier0-store.ts";
 
 /** What a previous run already stored, keyed by Entity id. */
 export type CaptureState = Map<string, { lastMessageId: string | null }>;
@@ -123,3 +129,79 @@ export const GLOBAL_REQUEST_CEILING = 10_000;
 
 export const projectedCalls = (entityCount: number) =>
   entityCount * CALLS_PER_ENTITY;
+
+/**
+ * What capture stores from one Entity's windows.
+ *
+ * A member who has turned processing off is dropped here, before storage —
+ * not filtered later at prompt time. What is never stored cannot be sent,
+ * summarised or need deleting. So is a message older than `RETAIN_MS`: the
+ * windows reach back to an Entity's opening, and the purge would only delete
+ * it again. Bots and webhooks are kept and flagged, as before: they are
+ * dropped where the text is used.
+ */
+export const toStored = (
+  entityId: string,
+  raw: RawCapturedMessage[],
+  optedOut: ReadonlySet<string>,
+  now = new Date(),
+): StoredMessage[] =>
+  raw
+    .filter((m) => !optedOut.has(m.authorId))
+    // A timestamp that does not parse is NaN, fails this, and is not stored.
+    .filter((m) => Date.parse(m.createdAt) >= now.getTime() - RETAIN_MS)
+    .map((m) => ({
+      entityId,
+      messageId: m.id,
+      authorId: m.authorId,
+      authorIsBot: m.authorIsBot,
+      content: m.content,
+      createdAt: m.createdAt,
+      window: m.window,
+    }));
+
+/**
+ * Captures each Entity in turn.
+ *
+ * One Entity failing must not abort the crawl. A single 50001 used to kill the
+ * whole ~1,200-Entity run, and because the failing Entity was never recorded,
+ * every retry died in the same place.
+ *
+ * Opt-outs are read for each Entity, just before its messages are stored, not
+ * once for the run: a crawl takes minutes, and someone who opts out part-way
+ * is not stored from the next Entity on. A read that fails fails that Entity,
+ * which is left uncaptured rather than stored unchecked.
+ *
+ * ponytail: an opt-out or a deletion that lands between that read and the
+ * write — milliseconds — is stored over. The next purge (within one cycle, six
+ * hours) sweeps every message from a member with processing off; a member who
+ * deleted and has opted back in by then keeps those until they age out.
+ */
+export const captureEach = async (deps: {
+  entities: Entity[];
+  fetch: (entityId: string) => Promise<RawCapturedMessage[]>;
+  store: Pick<ReturnType<typeof openTier0>, "record">;
+  optedOut: () => ReadonlySet<string>;
+  progress?: (handled: number) => void;
+}): Promise<{ done: number; calls: number; failed: Array<{ id: string; name: string; error: string }> }> => {
+  let calls = 0;
+  let done = 0;
+  const failed: Array<{ id: string; name: string; error: string }> = [];
+  for (const entity of deps.entities) {
+    try {
+      const raw = await deps.fetch(entity.id);
+      calls += CALLS_PER_ENTITY;
+      deps.store.record(entity.id, entity.last_message_id, toStored(entity.id, raw, deps.optedOut()));
+      done++;
+    } catch (error) {
+      calls += CALLS_PER_ENTITY;
+      failed.push({
+        id: entity.id,
+        name: entity.name,
+        error: `${(error as { status?: number }).status ?? "?"} ${(error as { code?: number }).code ?? ""}`.trim(),
+      });
+    }
+    deps.progress?.(done + failed.length);
+  }
+  return { done, calls, failed };
+};

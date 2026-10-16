@@ -10,13 +10,15 @@
  *
  * **The store is a disposable cache.** Nothing here is backed up. If the volume
  * is lost, delete nothing and re-run — the rebuild path is this command.
+ *
+ * Messages from a member who has turned processing off are never stored. The
+ * opt-outs are read again for every Entity (`captureEach`), and the purge
+ * sweeps anything stored in the moment before one was recorded.
  */
-import { mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
 import { discordRest } from "./discord-adapter.ts";
-import { readCurrent } from "./durable-store.ts";
-import { openTier0, type StoredMessage } from "./tier0-store.ts";
-import { GLOBAL_REQUEST_CEILING, projectedCalls, selectForCapture } from "./tier0.ts";
+import { readCurrent, readProcessingOptOuts } from "./durable-store.ts";
+import { TIER0_PATH, openTier0 } from "./tier0-store.ts";
+import { GLOBAL_REQUEST_CEILING, captureEach, projectedCalls, selectForCapture } from "./tier0.ts";
 
 const token = process.env["DISCORD_BOT_TOKEN"];
 const guildId = process.env["DISCORD_GUILD_ID"];
@@ -27,9 +29,7 @@ if (!token || !guildId) {
 
 const { catalog } = readCurrent();
 
-const dbPath = process.env["TIER0_PATH"] ?? resolve(import.meta.dirname, "../../.data/tier0.db");
-mkdirSync(dirname(dbPath), { recursive: true });
-const store = openTier0(dbPath);
+const store = openTier0(TIER0_PATH);
 const discord = discordRest({ token, guildId });
 
 const decision = selectForCapture(catalog, process.argv.includes("--full") ? new Map() : store.state());
@@ -54,48 +54,19 @@ if (projected > GLOBAL_REQUEST_CEILING)
       `discord.js paces requests, so this will simply take longer than ten minutes.`,
   );
 
-let calls = 0;
-let done = 0;
-const failed: Array<{ id: string; name: string; error: string }> = [];
-
-try {
-  for (const entity of decision.capture) {
-    // One Entity failing must not abort the crawl. A single 50001 used to kill
-    // the whole ~1,200-Entity run, and because the failing Entity was never
-    // recorded, every retry died in the same place.
-    try {
-      const raw = await discord.captureWindows(entity.id);
-      calls += 2;
-      const messages: StoredMessage[] = raw.map((m) => ({
-        entityId: entity.id,
-        messageId: m.id,
-        authorId: m.authorId,
-        authorIsBot: m.authorIsBot,
-        content: m.content,
-        createdAt: m.createdAt,
-        window: m.window,
-      }));
-      store.record(entity.id, entity.last_message_id, messages);
-      done++;
-    } catch (error) {
-      calls += 2;
-      failed.push({
-        id: entity.id,
-        name: entity.name,
-        error: `${(error as { status?: number }).status ?? "?"} ${(error as { code?: number }).code ?? ""}`.trim(),
-      });
-    }
-    if ((done + failed.length) % 200 === 0)
-      console.log(`  … ${done + failed.length}/${decision.capture.length}`);
-  }
-} finally {
-  // Reported before the store closes, so a crash still leaves the numbers.
-  if (failed.length) {
-    console.warn(`\n[tier0] ${failed.length} Entities could not be captured:`);
-    for (const f of failed.slice(0, 20))
-      console.warn(`    ${f.id}  ${f.name}  (${f.error})`);
-    if (failed.length > 20) console.warn(`    … and ${failed.length - 20} more`);
-  }
+const { done, calls, failed } = await captureEach({
+  entities: decision.capture,
+  fetch: (id) => discord.captureWindows(id),
+  store,
+  optedOut: () => readProcessingOptOuts(),
+  progress: (n) => {
+    if (n % 200 === 0) console.log(`  … ${n}/${decision.capture.length}`);
+  },
+});
+if (failed.length) {
+  console.warn(`\n[tier0] ${failed.length} Entities could not be captured:`);
+  for (const f of failed.slice(0, 20)) console.warn(`    ${f.id}  ${f.name}  (${f.error})`);
+  if (failed.length > 20) console.warn(`    … and ${failed.length - 20} more`);
 }
 
 const stats = store.stats();
@@ -104,6 +75,6 @@ console.log(`Store                   : ${stats.entities} Entities, ${stats.messa
 console.log(
   `Content footprint       : ${(stats.contentBytes / 1024 / 1024).toFixed(2)} MB of message text`,
 );
-console.log(`Path                    : ${dbPath}  (disposable — re-run to rebuild)`);
+console.log(`Path                    : ${TIER0_PATH}  (disposable — re-run to rebuild)`);
 if (failed.length) console.log(`Failed                  : ${failed.length} (re-run to retry — they were not recorded)`);
 store.close();

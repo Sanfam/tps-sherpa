@@ -27,28 +27,28 @@
  * spending a model on the whole corpus, and read the sample the corpus
  * produced rather than a sample of a run you have already paid for.
  */
-import { writeFileSync } from "node:fs";
-import { resolve } from "node:path";
 import type { Entity } from "../sync/catalog.ts";
-import { DURABLE_STORE_PATH, openDurableStore } from "../sync/durable-store.ts";
+import { DURABLE_STORE_PATH, openDurableStore, readProcessingOptOuts } from "../sync/durable-store.ts";
 import { DEFAULT_MONITORED_CHANNELS } from "../sync/tier0.ts";
-import { openTier0 } from "../sync/tier0-store.ts";
+import { TIER0_PATH, openTier0 } from "../sync/tier0-store.ts";
 import {
   ACTIVITY_SYSTEM_PROMPT,
   type ActivityStore,
   checkActivity,
+  commitActivity,
   planActivity,
 } from "./activity.ts";
 import { classifySystemPrompt, needsClassifying, parseTags, reconcile } from "./classify.ts";
 import {
   ACTIVITY_PATH,
-  DATA_DIR,
   VOCABULARY_PATH,
   flag,
   loadCatalog,
   openBoundary,
+  readActivity,
   readIfPresent,
   retrying,
+  writeActivity,
 } from "./session.ts";
 import { hasDescribableInput, isEnrichable, subjectText } from "./subject.ts";
 import { SUMMARY_SYSTEM_PROMPT, checkSummary, findCollisions } from "./summarise.ts";
@@ -79,10 +79,8 @@ const { boundary, models } = openBoundary(catalog, { [role]: flag("model") ?? un
 const vocabularyPath = flag("vocabulary") || VOCABULARY_PATH;
 const vocabulary = job === "topics" ? parseVocabulary(readIfPresent(vocabularyPath)) : null;
 
-const tier0 =
-  job === "activity" ? openTier0(process.env["TIER0_PATH"] ?? resolve(DATA_DIR, "tier0.db")) : null;
-const activityStore: ActivityStore =
-  job === "activity" ? JSON.parse(readIfPresent(ACTIVITY_PATH) ?? "{}") : {};
+const tier0 = job === "activity" ? openTier0(TIER0_PATH) : null;
+const activityStore: ActivityStore = job === "activity" ? readActivity() : {};
 
 /**
  * What may reach a model at all, for either job.
@@ -105,7 +103,7 @@ const eligible = catalog.filter((e) => isEnrichable(e, byId, monitored));
 // summarised from — see planActivity.
 const activityPlan = new Map(
   job === "activity"
-    ? planActivity(eligible, (id) => tier0!.messagesFor(id), activityStore).map(
+    ? planActivity(eligible, (id) => tier0!.messagesFor(id), activityStore, readProcessingOptOuts()).map(
         (p) => [p.entity.id, p.sources] as const,
       )
     : [],
@@ -280,16 +278,28 @@ if (job === "summaries") {
 }
 
 if (job === "activity") {
-  const next: ActivityStore = { ...activityStore };
-  for (const [id, r] of results)
-    next[id] = { summary: r.activity ?? null, as_of: byId.get(id)!.last_message_id! };
   console.log(`  nothing to summarise: ${[...results.values()].filter((r) => r.activity === null).length}`);
-  tier0!.close();
   if (dryRun) console.log(`\nDry run — ${ACTIVITY_PATH} untouched.`);
   else {
-    writeFileSync(ACTIVITY_PATH, `${JSON.stringify(next, null, 2)}\n`);
+    // Never the copy this run read at its start: /privacy may have deleted or
+    // opted out while it ran (commitActivity).
+    const { withheld } = commitActivity(
+      [...results].map(([id, r]) => ({
+        entity: byId.get(id)!,
+        sources: activityPlan.get(id) ?? [],
+        summary: r.activity ?? null,
+      })),
+      {
+        optedOut: () => readProcessingOptOuts(),
+        stored: (id) => tier0!.messagesFor(id),
+        read: () => readActivity(),
+        write: (store) => writeActivity(store),
+      },
+    );
+    if (withheld) console.log(`  left out, a source opted out or was deleted mid-run: ${withheld}`);
     console.log(`\nWrote ${ACTIVITY_PATH} (bot-side; never committed)`);
   }
+  tier0!.close();
 } else if (dryRun) {
   console.log(`\nDry run — ${DURABLE_STORE_PATH} untouched.`);
 } else {

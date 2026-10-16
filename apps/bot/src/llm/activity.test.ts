@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { Entity } from "../sync/catalog.ts";
 import type { StoredMessage } from "../sync/tier0-store.ts";
-import { checkActivity, isActivityDue, newestId, planActivity, recentSources } from "./activity.ts";
+import {
+  checkActivity,
+  commitActivity,
+  isActivityDue,
+  mergeActivity,
+  newestId,
+  planActivity,
+  pruneActivity,
+  recentSources,
+} from "./activity.ts";
 
 const entity = (last: string | null): Entity => ({
   id: "500",
@@ -114,6 +123,80 @@ describe("planActivity", () => {
 
     expect(reads).toBe(1);
     expect(plan[0]?.sources.map((m) => m.messageId)).toEqual(["900"]);
+  });
+
+  it("leaves out anyone with processing off, but still judges due-ness by the newest message", () => {
+    const snapshot = [msg("800", "boss down", { authorId: "in" }), msg("900", "my words", { authorId: "out" })];
+    const plan = planActivity([entity("900")], () => snapshot, {}, new Set(["out"]));
+    expect(plan[0]?.sources.map((m) => m.authorId)).toEqual(["in"]);
+  });
+});
+
+describe("mergeActivity", () => {
+  it("writes over the store as it is now, keeping what the run never touched, and records who it came from", () => {
+    const kept = { summary: "kept", as_of: "1", authors: ["a9"] };
+    const { store, withheld } = mergeActivity(
+      { "1": kept },
+      [{ entity: entity("900"), sources: [msg("900", "x"), msg("901", "y"), msg("902", "z", { authorId: "a2" })], summary: "New boss." }],
+      new Set(),
+    );
+    expect(store).toEqual({ "1": kept, "500": { summary: "New boss.", as_of: "900", authors: ["a1", "a2"] } });
+    expect(withheld).toBe(0);
+  });
+
+  it("drops entries already written that an opted-out member fed", () => {
+    const { store } = mergeActivity({ "1": { summary: "s", as_of: "1", authors: ["out"] } }, [], new Set(["out"]));
+    expect(store).toEqual({});
+  });
+
+  it("drops a summary whose sources include someone who opted out mid-run", () => {
+    const { store, withheld } = mergeActivity(
+      {},
+      [{ entity: entity("900"), sources: [msg("900", "x", { authorId: "out" })], summary: "About them." }],
+      new Set(["out"]),
+    );
+    expect(store).toEqual({});
+    expect(withheld).toBe(1);
+  });
+});
+
+describe("commitActivity", () => {
+  const produced = (id: string) => [{ entity: entity("900"), sources: [msg(id, "x")], summary: "New boss." }];
+
+  it("reads activity.json last, after everything slow, and writes onto that copy", () => {
+    const order: string[] = [];
+    let written: unknown;
+    commitActivity(produced("900"), {
+      optedOut: () => (order.push("optedOut"), new Set()),
+      stored: () => (order.push("stored"), [msg("900", "x")]),
+      // Fresh: an entry the run started with was deleted while it ran.
+      read: () => (order.push("read"), {}),
+      write: (s) => (order.push("write"), (written = s)),
+    });
+    expect(order).toEqual(["optedOut", "stored", "read", "write"]);
+    expect(Object.keys(written as object)).toEqual(["500"]);
+  });
+
+  it("leaves out a summary whose sources were deleted while the run went", () => {
+    let written: unknown;
+    const { withheld } = commitActivity(produced("900"), {
+      optedOut: () => new Set(),
+      stored: () => [],
+      read: () => ({}),
+      write: (s) => (written = s),
+    });
+    expect(written).toEqual({});
+    expect(withheld).toBe(1);
+  });
+});
+
+describe("pruneActivity", () => {
+  it("keeps entries only for Entities still in the Catalog and still eligible", () => {
+    const kept = entity("1");
+    const withheld = { ...entity("1"), id: "501", description_status: "withheld" } as Entity;
+    const entry = { summary: "s", as_of: "1" };
+    const pruned = pruneActivity({ "500": entry, "501": entry, "502": entry }, [kept, withheld]);
+    expect(Object.keys(pruned)).toEqual(["500"]);
   });
 });
 

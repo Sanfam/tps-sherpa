@@ -11,9 +11,15 @@
  * so an incomplete sync is never enriched; Sherpa keeps serving the last
  * complete generation.
  *
- * Capture and `enrich.ts activity` are not scheduled. They store members'
- * recent messages and what is derived from them, which waits on a Tier 0
- * purge and the privacy policy.
+ * The Tier 0 purge comes first, ahead of the sync, so neither a failing sync
+ * nor anything after it can hold back the seven-day limit (purge.ts). If the
+ * purge itself fails, nothing is captured that cycle: capture only runs
+ * behind a purge that worked.
+ *
+ * At startup the guild's commands are registered again (register.ts), so a
+ * deploy that changes them needs no separate step. That runs beside the
+ * gateway: a failure is logged loudly and the commands already registered keep
+ * working.
  */
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
@@ -21,30 +27,55 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { openDurableStore } from "./sync/durable-store.ts";
 
 // ponytail: a fixed cadence; a config knob when someone needs another one.
-const EVERY_MS = 6 * 60 * 60 * 1000;
-const STEPS = [["sync/run.ts"], ["llm/enrich.ts", "topics"], ["llm/enrich.ts", "summaries"]];
+export const EVERY_MS = 6 * 60 * 60 * 1000;
+export const STEPS = [
+  ["sync/purge.ts"],
+  ["sync/run.ts"],
+  ["sync/capture.ts"],
+  ["llm/enrich.ts", "topics"],
+  ["llm/enrich.ts", "summaries"],
+  ["llm/enrich.ts", "activity"],
+];
 
-// The startup contract: a missing or uninitialised store stops the bot here.
-openDurableStore().close();
-
-const run = ([script, ...args]: string[]) =>
-  new Promise<number | null>((done) =>
-    spawn(process.execPath, [resolve(import.meta.dirname, script!), ...args], { stdio: "inherit" })
-      .on("error", () => done(null))
-      .on("exit", done),
-  );
-
-await import("./sherpa/run.ts");
-
-for (;;) {
-  // Six-hourly from each cycle's start, so a long enrichment does not push every later sync back.
-  const next = Date.now() + EVERY_MS;
+/** One cycle: each step in turn, stopping at the first that does not exit 0. */
+export const runCycle = async (
+  run: (step: string[]) => Promise<number | null>,
+  log: (m: string) => void,
+): Promise<void> => {
   for (const step of STEPS) {
     const code = await run(step);
     if (code !== 0) {
-      console.error(`[pipeline] ${step.join(" ")} exited ${code}; the rest of this cycle is skipped.`);
-      break;
+      log(`[pipeline] ${step.join(" ")} exited ${code}; the rest of this cycle is skipped.`);
+      return;
     }
   }
-  await sleep(Math.max(0, next - Date.now()));
+};
+
+if (import.meta.main) {
+  // The startup contract: a missing or uninitialised store stops the bot here.
+  openDurableStore().close();
+
+  const run = ([script, ...args]: string[]) =>
+    new Promise<number | null>((done) =>
+      spawn(process.execPath, [resolve(import.meta.dirname, script!), ...args], { stdio: "inherit" })
+        .on("error", () => done(null))
+        .on("exit", done),
+    );
+
+  void run(["sherpa/register.ts"]).then((code) => {
+    if (code !== 0)
+      console.error(
+        `[sherpa] COMMAND REGISTRATION FAILED (exit ${code}). The gateway is up, but new or ` +
+          "changed commands are not registered. Run sherpa/register.ts by hand.",
+      );
+  });
+
+  await import("./sherpa/run.ts");
+
+  for (;;) {
+    // Six-hourly from each cycle's start, so a long enrichment does not push every later sync back.
+    const next = Date.now() + EVERY_MS;
+    await runCycle(run, (m) => console.error(m));
+    await sleep(Math.max(0, next - Date.now()));
+  }
 }

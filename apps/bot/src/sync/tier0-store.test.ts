@@ -1,3 +1,6 @@
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { openTier0, type StoredMessage } from "./tier0-store.ts";
 
@@ -89,5 +92,51 @@ describe("Tier 0 store — deletion propagates", () => {
     store.record("e1", "1", [msg({ entityId: "e1", messageId: "m1", content: "🧔‍♂" })]);
     expect(store.stats().contentBytes).toBeGreaterThan(4);
     store.close();
+  });
+});
+
+describe("Tier 0 store — retention and erasure", () => {
+  it("deletes messages written before the cutoff, by Discord's own timestamps, and keeps every cursor", () => {
+    const store = openTier0(":memory:");
+    store.record("e1", "9", [
+      // Discord's format: microseconds and an offset rather than a Z.
+      msg({ entityId: "e1", messageId: "m1", createdAt: "2026-10-04T23:59:59.999000+00:00" }),
+      msg({ entityId: "e1", messageId: "m2", createdAt: "2026-10-05T00:00:01.000000+00:00" }),
+      msg({ entityId: "e1", messageId: "m3", createdAt: "" }),
+    ]);
+
+    expect(store.dropWrittenBefore("2026-10-05T00:00:00.000Z")).toBe(2);
+    expect(store.messagesFor("e1").map((m) => m.messageId)).toEqual(["m2"]);
+    expect(store.state().get("e1")).toEqual({ lastMessageId: "9" });
+    store.close();
+  });
+
+  it("finds and deletes one author's messages, leaving everyone else's", () => {
+    const store = openTier0(":memory:");
+    store.record("e1", "1", [
+      msg({ entityId: "e1", messageId: "m1", authorId: "gone" }),
+      msg({ entityId: "e1", messageId: "m2", authorId: "stays" }),
+    ]);
+    store.record("e2", "1", [msg({ entityId: "e2", messageId: "m3", authorId: "gone" })]);
+    store.record("e3", "1", [msg({ entityId: "e3", messageId: "m4", authorId: "stays" })]);
+
+    expect(store.authoredIn("gone").sort()).toEqual(["e1", "e2"]);
+    expect(store.deleteAuthor("gone")).toBe(2);
+    expect(store.authoredIn("gone")).toEqual([]);
+    expect(store.messagesFor("e1").map((m) => m.authorId)).toEqual(["stays"]);
+    store.close();
+  });
+
+  it("leaves a deleted message unreadable in the file, not in a free page", () => {
+    const path = join(mkdtempSync(join(tmpdir(), "tier0-")), "tier0.db");
+    const store = openTier0(path);
+    const secret = "distinctive-erased-text-".repeat(40);
+    store.record("e1", "1", [
+      msg({ entityId: "e1", messageId: "m1", authorId: "gone", content: secret }),
+      msg({ entityId: "e1", messageId: "m2", authorId: "stays" }),
+    ]);
+    store.deleteAuthor("gone");
+    store.close();
+    expect(readFileSync(path).includes("distinctive-erased-text")).toBe(false);
   });
 });

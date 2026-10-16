@@ -101,20 +101,32 @@ export const wireFromEnv = (
   // Raw JSON rather than a parsed set of knobs: this is one vendor's routing
   // object passed straight through, and inventing our own vocabulary for it
   // would mean maintaining a translation for a field we do not own.
-  let provider: unknown;
+  let configured: unknown = {};
   if (env["LLM_PROVIDER"])
     try {
-      provider = JSON.parse(env["LLM_PROVIDER"]);
+      configured = JSON.parse(env["LLM_PROVIDER"]);
     } catch {
       throw new Error(`LLM_PROVIDER must be JSON. Got: ${env["LLM_PROVIDER"]}`);
     }
+  if (typeof configured !== "object" || configured === null || Array.isArray(configured))
+    throw new Error("LLM_PROVIDER must be a JSON object.");
+  // Members' words go only to providers that keep nothing and train on
+  // nothing (the privacy policy says so). Set last, so the environment can
+  // add routing preferences but never weaken these.
+  const provider = { ...configured, data_collection: "deny", zdr: true };
+  // Those two are OpenRouter's routing fields; any other server would ignore
+  // them, and members' words would go wherever it sends them.
+  const baseUrl = env["LLM_BASE_URL"] || "https://openrouter.ai/api/v1";
+  const url = URL.parse(baseUrl);
+  if (url?.protocol !== "https:" || url.hostname !== "openrouter.ai")
+    throw new Error(`LLM_BASE_URL must be https://openrouter.ai/…, where the routing above is enforced. Got: ${baseUrl}`);
 
   return {
     wire: {
-      baseUrl: env["LLM_BASE_URL"] ?? "https://openrouter.ai/api/v1",
+      baseUrl,
       apiKey,
       ...(env["LLM_TIMEOUT_MS"] ? { timeoutMs: Number(env["LLM_TIMEOUT_MS"]) } : {}),
-      ...(provider === undefined ? {} : { provider }),
+      provider,
     },
     models: models as Record<ModelRole, string>,
   };
