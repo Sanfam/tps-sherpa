@@ -102,7 +102,7 @@ const effective = (
 };
 
 /** The glossary's `Member`: the role that unlocks the community. */
-const MEMBER_ROLE_NAME = "Member";
+export const MEMBER_ROLE_NAME = "Member";
 
 const GATEWAY_MESSAGE_CONTENT = 1 << 18;
 const GATEWAY_MESSAGE_CONTENT_LIMITED = 1 << 19;

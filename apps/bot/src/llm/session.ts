@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Entity } from "../sync/catalog.ts";
 import type { NameLookup } from "../sync/normalise.ts";
+import type { RoleManifestEntry } from "../sync/ports.ts";
 import { createBoundary, type Boundary } from "./boundary.ts";
 import { openAiWire, wireFromEnv } from "./openai-wire.ts";
 
@@ -18,8 +19,14 @@ export const contentPath = (rel: string): string =>
   resolve(import.meta.dirname, "../../../../content", rel);
 
 export const CATALOG_PATH = contentPath("index/data.json");
+export const ROLES_PATH = contentPath("config/roles.json");
 export const VOCABULARY_PATH = contentPath("config/topics.json");
 export const VOCABULARY_PROPOSAL_PATH = contentPath("config/topics.proposed.json");
+
+/** The bot's volume: never committed, never in the Catalog's snapshot. */
+export const DATA_DIR = resolve(import.meta.dirname, "../../.data");
+/** Activity summaries. Bot-side only — see activity.ts. */
+export const ACTIVITY_PATH = resolve(DATA_DIR, "activity.json");
 
 export const readIfPresent = (path: string): string | null => {
   try {
@@ -36,14 +43,16 @@ export const readIfPresent = (path: string): string | null => {
 export const loadCatalog = (): Entity[] =>
   JSON.parse(readFileSync(CATALOG_PATH, "utf8")) as Entity[];
 
+/** The role manifest the sync writes beside the Catalog. Empty before a first sync. */
+export const loadRoleManifest = (): RoleManifestEntry[] =>
+  JSON.parse(readIfPresent(ROLES_PATH) ?? "[]") as RoleManifestEntry[];
+
 /**
  * Every Entity is a `<#id>` target, so the lookup covers the whole Catalog —
  * Posts and Threads included, not just containers.
  */
 export const nameLookup = (catalog: Entity[]): NameLookup => {
-  const roles = JSON.parse(
-    readIfPresent(contentPath("config/roles.json")) ?? "[]",
-  ) as Array<{ name: string; ids: string[] }>;
+  const roles = loadRoleManifest();
   return {
     channels: new Map(catalog.map((e) => [e.id, e.name])),
     roles: new Map(roles.flatMap((r) => r.ids.map((id) => [id, r.name] as const))),
