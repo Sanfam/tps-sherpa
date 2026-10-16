@@ -41,6 +41,8 @@ import {
 } from "./activity.ts";
 import { classifySystemPrompt, needsClassifying, parseTags, reconcile } from "./classify.ts";
 import {
+  ACTIVITY_PATH,
+  DATA_DIR,
   VOCABULARY_PATH,
   flag,
   loadCatalog,
@@ -77,8 +79,6 @@ const { boundary, models } = openBoundary(catalog, { [role]: flag("model") ?? un
 const vocabularyPath = flag("vocabulary") || VOCABULARY_PATH;
 const vocabulary = job === "topics" ? parseVocabulary(readIfPresent(vocabularyPath)) : null;
 
-const DATA_DIR = resolve(import.meta.dirname, "../../.data");
-const ACTIVITY_PATH = resolve(DATA_DIR, "activity.json");
 const tier0 =
   job === "activity" ? openTier0(process.env["TIER0_PATH"] ?? resolve(DATA_DIR, "tier0.db")) : null;
 const activityStore: ActivityStore =
