@@ -26,8 +26,10 @@ export const fixtureDiscord = (data: {
       memberVisible: c.memberVisible ?? c.visible ?? true,
       contentReadable: c.contentReadable ?? true,
     })),
-  listThreads: async (parentIds) =>
-    (data.threads ?? []).filter((t) => parentIds.includes(t.parentId)),
+  listThreads: async (parentIds) => ({
+    threads: (data.threads ?? []).filter((t) => parentIds.includes(t.parentId)),
+    failed: [],
+  }),
   listRoles: async () => data.roles ?? [],
   captureWindows: async (entityId) => data.windows?.[entityId] ?? [],
   hasMessageContentIntent: async () => data.messageContentIntent ?? true,

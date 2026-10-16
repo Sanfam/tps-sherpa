@@ -3,6 +3,7 @@ import { Routes } from "discord-api-types/v10";
 import {
   ChannelType,
   type DiscordReadPort,
+  type FailedContainer,
   type RawChannel,
   type RawCapturedMessage,
   type RawRole,
@@ -102,7 +103,7 @@ const effective = (
 };
 
 /** The glossary's `Member`: the role that unlocks the community. */
-const MEMBER_ROLE_NAME = "Member";
+export const MEMBER_ROLE_NAME = "Member";
 
 const GATEWAY_MESSAGE_CONTENT = 1 << 18;
 const GATEWAY_MESSAGE_CONTENT_LIMITED = 1 << 19;
@@ -213,8 +214,9 @@ export const discordRest = (config: {
       }));
     },
 
-    listThreads: async (parentIds: string[]): Promise<RawThread[]> => {
+    listThreads: async (parentIds: string[]) => {
       const wanted = new Set(parentIds);
+      const failed: FailedContainer[] = [];
       // Archived is known from which endpoint answered, not read from
       // optional metadata: a Thread missing `thread_metadata` would otherwise
       // be published as open on a guess.
@@ -246,26 +248,34 @@ export const discordRest = (config: {
               `/channels/${parentId}/threads/archived/public?${q}` as never,
             )) as { threads: RawDiscordThread[]; has_more: boolean };
           } catch (error) {
-            // Computed permissions and Discord disagreed. Skip loudly rather
-            // than crash — and treat it as a signal, not noise.
+            // Computed permissions and Discord disagreed. Reported to the
+            // caller rather than reduced to a warning and a shorter list: the
+            // Posts behind it have not been confirmed removed (#28).
             if ((error as { code?: number }).code === 50001) {
-              console.warn(
-                `[permissions] computed readable but Discord denied: ${parentId}`,
-              );
+              failed.push({
+                id: parentId,
+                reason: "50001: computed readable, but Discord denied its archived Threads",
+              });
               break;
             }
             throw error;
           }
           for (const t of page.threads) raw.set(t.id, { thread: t, archived: true });
+          if (!page.has_more) break;
+          // More promised, but no cursor that moves: the rest is unconfirmed,
+          // not absent, so the sync is incomplete (#28).
           const last = page.threads.at(-1)?.thread_metadata?.archive_timestamp;
-          if (!page.has_more || !last) break;
+          if (!last || last === before) {
+            failed.push({ id: parentId, reason: "more archived Threads promised, but no cursor to fetch them" });
+            break;
+          }
           before = last;
         }
       }
 
       // A Post's ID equals its starter message's ID, so the first post is one
       // un-paginated call. Verified against real Posts on 2026-09-01.
-      return Promise.all(
+      const threads: RawThread[] = await Promise.all(
         [...raw.values()].map(async ({ thread: t, archived }) => {
           // Discord defines `locked` as a required boolean, so this is a
           // malformed response, not a state — loud rather than a guess.
@@ -295,6 +305,7 @@ export const discordRest = (config: {
           };
         }),
       );
+      return { threads, failed };
     },
 
     listRoles: async (): Promise<RawRole[]> => {

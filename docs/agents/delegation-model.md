@@ -11,15 +11,17 @@ invoked. This document is why the roster is what it is.
 | UX designer | `docs/agents/codex-briefs/ux-designer.md` | GPT-6 Astra | Medium | `workspace-write` |
 | Architectural reviewer | `docs/agents/codex-briefs/architecture-consultant.md` | GPT-6 Astra | Medium | `read-only` |
 | Implementer — judgement | `.claude/agents/implementer-opus.md` | Claude Opus 5.5 | Medium | — |
+| Implementer — hard judgement | `.claude/agents/implementer-opus-high.md` | Claude Opus 5.5 | High | — |
 | Implementer — worker | `docs/agents/codex-briefs/implementer-luna.md` | GPT-5.6 Luna | High | `workspace-write` |
 | Implementer — hard worker | `docs/agents/codex-briefs/implementer-luna-max.md` | GPT-5.6 Luna | Max | `workspace-write` |
 | Final review | `docs/agents/codex-briefs/final-reviewer.md` | GPT-5.6 Sol | High | `read-only` |
 
-`implementer-opus` is a Claude Code subagent. Every GPT role is a Codex
+`implementer-opus` and `implementer-opus-high` are Claude Code subagents, the
+same brief at two efforts. Every GPT role is a Codex
 session, not a subagent: its brief lives in `docs/agents/codex-briefs/`.
 
 Effort ranges the roles are licensed for, where a task warrants moving: Astra
-roles Low–Medium, `implementer-opus` Low–Medium, final review Medium–High.
+roles Low–Medium, the Opus implementers Low–High, final review Medium–High.
 Codex effort is chosen per call; the Opus subagent's is its `effort:`
 frontmatter.
 
@@ -69,6 +71,8 @@ was wrong.
 
 - **Needs judgement, spans modules, touches privacy or permissions** →
   `implementer-opus`, or keep it in the main thread.
+- **Judgement and genuinely hard** — durable data, a privacy contract, several
+  interacting seams → `implementer-opus-high`.
 - **Bounded, one module, clear spec** → Luna, High.
 - **Bounded but genuinely hard** — subtle state, tricky edge cases, an algorithm
   that is easy to get almost right → Luna, Max.

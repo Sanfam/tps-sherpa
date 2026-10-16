@@ -39,8 +39,9 @@ It also draws on the EmDash 1.1 re-evaluation (`2026-10-05-emdash-1.1-reevaluati
    - It has attributed revisions with restore.
    - It is the only in-Astro candidate with **own-entry scoping**, which makes "Club Leads edit their own club page" a control rather than a convention.
    - Its costs: Discord sign-in is code we write, content is Portable Text rather than markdown, and the project is young.
+   - Its public auth API can re-sync an editor's role on every sign-in, so keeping roles in step with Discord needs no unsupported seam (§3.6).
 3. **StudioCMS is the in-Astro fallback.**
-   - Discord sign-in is built in.
+   - Discord sign-in is built in, but it checks neither guild membership nor roles, and it asks for the `email` scope, which the handoff's scope lock does not allow. The guild and role check is our code on either candidate (§3.6).
    - It is pre-1.0 and has no per-editor scoping.
    - Its SQLite path is libSQL, and whether Litestream can replicate a libSQL file is unverified.
 4. **Wagtail is the strongest separate-service option.**
@@ -132,7 +133,7 @@ All are $0 under the cost rule unless stated.
 | Candidate | Shape | SQLite | Postgres | Editor sign-in | Per-editor scoping | Revisions and rollback | Maturity |
 |---|---|---|---|---|---|---|---|
 | **EmDash 1.1** | Inside Astro | ✓ (WAL; full-text search) | ✓ (no full-text search) | Passkeys, GitHub, Google, Microsoft. Discord means writing a provider. | **Own entries** (Author role) | ✓ Full snapshots with `author_id`, and an ownership-checked restore | 1.1.0, semver since 1.0. Released 2026-09-28. |
-| **StudioCMS** | Inside Astro | libSQL `file:` (Litestream compatibility unverified) | ✓ | **Discord built in** (`@studiocms/oauth`) | None. Any editor can edit any page. | ✓ Diffs, with `revertToDiff` | 0.6.1, pre-1.0 |
+| **StudioCMS** | Inside Astro | libSQL `file:` (Litestream compatibility unverified) | ✓ | Discord sign-in built in (`@studiocms/oauth`), with no guild or role check. That check means writing a provider. | None. Any editor can edit any page. | ✓ Diffs, with `revertToDiff` | 0.6.1, pre-1.0 |
 | **Payload 3** | Separate Next.js service | ✓ | ✓ | Its own auth. Discord means writing a custom strategy. | ✓ Access functions return query constraints | ✓ Versions with diff and restore | 3.90 stable; 4.0 is in beta |
 | **Wagtail 8** | Separate Django service | ✓ (FTS5 search) | ✓ (recommended) | Django accounts. Discord through django-allauth, an undocumented combination. | ✓ **Permissions on a page subtree** | ✓ Compare, then replace the current version | 8.0, a mature project |
 | **Cockpit Core 2** | Separate PHP service | ✓ (several files) | ✗ (MongoDB only) | Its own accounts. OIDC is available, but Discord does not speak OIDC. | Per model only | ✓ Revert | 2.14 |
@@ -150,7 +151,7 @@ All are $0 under the cost rule unless stated.
 - **No paid tier.**
 
 **Cons**
-- **No Discord sign-in.** We would write an `AuthProviderDescriptor` modelled on `auth-atproto`. Roles are set only when the user is created, so keeping them in step with Discord roles is our code. `emdash-better-auth` does not help, because it runs on Workers only (EmDash note, §7).
+- **No Discord sign-in.** We would write an `AuthProviderDescriptor` modelled on `auth-atproto`. The shared helper sets a role only when it creates the user, but the provider's own callback can re-sync the role on every sign-in through the public `updateUser` (§3.6). Keeping roles in step with Discord is still our code. `emdash-better-auth` does not help, because it runs on Workers only (EmDash note, §7).
 - **Content is Portable Text, not markdown.** Custom blocks have no Markdown form, and there is no Markdown or Wiki.js importer. The Phase 6 migration from Wiki.js would be a script.
 - **Young.** 1.0 shipped on 2026-09-28, with eight releases in five weeks. No LTS or support window is stated, and plugins are still on 0.x.
 - **Recovery is the raw database file.** JSON backups cannot be restored, so Litestream or PITR is the only recovery path.
@@ -161,7 +162,7 @@ All are $0 under the cost rule unless stated.
 
 **Pros**
 - **Inside Astro**, using the Node adapter.
-- **Discord sign-in ships** via `@studiocms/oauth`, the only surviving candidate where it does.
+- **Discord sign-in ships** via `@studiocms/oauth`, the only surviving candidate where it does. It is sign-in only: it imposes no guild or role restriction, maps no roles, and asks for `email` as well as `identify` (Cons, and §3.6).
 - **Diff-based revisions** with revert.
 - **Supports Postgres** as well as libSQL and MySQL.
 
@@ -170,6 +171,7 @@ All are $0 under the cost rule unless stated.
 - **No ownership enforcement.** A page update checks only `isEditor`. Per-club scoping would be a convention again, the outcome the Tina design had to accept.
 - **Its SQLite path is libSQL.** It has no production statement, and no WAL pragma appears in the repo. Whether Litestream replicates a libSQL-written file is unverified. On Postgres, this concern goes away.
 - **Reverting prunes later diffs.** A revert discards the diffs that came after it, and `maxDiffs` caps how many are kept.
+- **Its Discord sign-in does not know about the guild.** The provider imposes no guild or role restriction, and a new account becomes a `visitor`. Promotion is by hand, and later sign-ins never refresh the rank. Mapping Discord roles to ranks means writing our own provider (§3.6).
 
 ### 3.3 Payload 3 (MIT)
 
@@ -209,6 +211,32 @@ All are $0 under the cost rule unless stated.
 - **A PHP service** that keeps several SQLite files. Litestream would replicate the directory.
 - **Discord needs an OIDC bridge**, because Discord does not speak OIDC.
 
+### 3.6 Discord sign-in and roles, checked at source *(verified 2026-10-15)*
+
+The question was whether either in-Astro candidate can limit sign-in to guild members and keep editor roles in step with Discord roles. Neither does it out of the box. EmDash can do it through its public API. StudioCMS has the pieces, a provider hook and a rank update, but whether they compose is unverified. StudioCMS's built-in Discord sign-in saves the OAuth handshake, not the check, and it cannot be used as shipped (scope, below).
+
+**StudioCMS** (`withstudiocms/studiocms` at `02aeed1c`):
+- **No guild or role check.**
+  - `@studiocms/oauth`'s Discord provider asks for the scopes `identify` and `email`, and reads only `/users/@me` (`packages/@studiocms/oauth/src/discord/impl.ts`).
+  - The callback handler checks only that auth, OAuth and the provider are enabled (`packages/studiocms/frontend/pages/studiocms_api/_handlers/auth/oauth.ts`).
+  - The registration switch, `allowUserRegistration`, sits under `usernameAndPasswordConfig`, so it does not govern OAuth sign-up (`packages/studiocms/src/schemas/config/auth.ts`).
+- **New accounts are `visitor`s**, and nothing refreshes the rank.
+  - A first sign-in creates the user as `visitor` (`packages/studiocms/src/virtuals/auth/core.ts`, line 48).
+  - A later sign-in only creates a session (`handleExistingOAuthAccount` in `packages/@studiocms/oauth/src/shared.ts`).
+- **The way in is a plugin.**
+  - A plugin can register its own OAuth provider through the `studiocms:auth` hook (`setAuthService`).
+  - The SDK can update a user's rank (`permissions` in `packages/@withstudiocms/sdk/src/modules/update/index.ts`).
+  - **Unverified:** whether a plugin provider's callback can update the rank, with the authority to do so, on first and later sign-ins. So is how much code it takes.
+- **The stock provider breaks the scope lock.** It asks for `email` as well as `identify`. The handoff names only `identify`, PROJECT-STATUS says never to request `email`, and any further scope is a stop condition. Enabling it as shipped needs a human's approval; otherwise our own provider asks for `identify` only.
+- **Unverified:** the provider's response schema declares `avatar`, `global_name` and `email` as plain strings. Discord returns `null` for each when unset. Whether that rejects such accounts was not tested.
+
+**EmDash** (`emdash-cms/emdash` at tag `emdash@1.1.0`):
+- **Re-sync is supported.** The shared helper `findOrCreateOAuthUser` sets a role only when it creates the user (`packages/auth/src/oauth/consumer.ts`, line 353). After it, a provider's callback can call the public `adapter.updateUser(user.id, { role })` (`UpdateUser` in `packages/auth/src/types.ts`, lines 94 to 102; Kysely adapter at `packages/auth/src/adapters/kysely.ts`, line 163).
+- **The pattern already exists in the repo.**
+  - `auth-atproto`'s callback runs its allowlist check before `findOrCreateOAuthUser`, then calls `adapter.updateUser` (`packages/auth-atproto/src/routes/callback.ts`).
+  - A Discord provider would put the guild and role check in the same place.
+- **External auth re-syncs roles natively.** External auth such as Cloudflare Access has a `syncRoles` option that re-applies the mapped role on every sign-in (`packages/core/src/auth/types.ts`; `packages/core/src/astro/middleware/auth.ts`, lines 578 to 581). Discord is not an external-auth provider, so this is the model to follow, not a switch to flip.
+
 ---
 
 ## 4. Eliminated, and why
@@ -232,11 +260,11 @@ All are $0 under the cost rule unless stated.
 
 ## 5. Open questions for the decision
 
-- **EmDash Discord provider.** It needs a spike. The spike should establish four things:
-  - That an `AuthProviderDescriptor` can run the guild and role check.
-  - Whether roles can be re-synced on later logins.
+- **EmDash Discord provider.** It needs a spike. The spike should establish three things:
+  - That an `AuthProviderDescriptor` runs the guild and role check and re-syncs the role on every sign-in. The source says it can (§3.6); the spike builds it.
   - Whether our middleware can gate `/_emdash/api/*`.
   - The memory cost of EmDash inside the Railway site process.
+- **StudioCMS Discord provider**, if StudioCMS is chosen. A spike would establish whether a plugin provider asks for `identify` only, rejects non-members, sets the rank on first sign-in, and promotes or demotes it on later ones. Trying it against real members' roles touches member data, so that part needs a human's approval.
 - **StudioCMS on libSQL.** Can Litestream replicate a libSQL-written file? If not, StudioCMS means Postgres.
 - **Site scaling.** Does anything planned need more than one site instance, or zero-downtime deploys? If not, shape A holds.
 - **Backups outside Railway.** If the site goes to Postgres, do we also want an off-Railway `pg_dump` to R2 or B2? Any such copy is bound by ADR-0001's erasure policy: removals leave every backup within 30 days.

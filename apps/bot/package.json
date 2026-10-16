@@ -12,7 +12,9 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "@discordjs/core": "^2.6.0",
     "@discordjs/rest": "^2.6.3",
+    "@discordjs/ws": "^2.0.4",
     "discord-api-types": "^0.38.54"
   }
 }

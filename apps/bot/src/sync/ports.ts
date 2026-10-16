@@ -101,13 +101,32 @@ export interface RoleManifestEntry {
   ids: string[];
 }
 
+/**
+ * Whether a sync enumerated everything it set out to. Incomplete means some
+ * containers' Posts or Threads could not be listed, so an Entity missing from
+ * the result has not been confirmed removed (#28). A plain value, so the
+ * snapshot envelope can carry it to the site.
+ */
+export type SyncOutcome =
+  | { complete: true }
+  | { complete: false; failed: FailedContainer[] };
+
+/** A Forum or Channel whose Posts or Threads could not be listed, and why. */
+export interface FailedContainer {
+  id: string;
+  reason: string;
+}
+
 export interface DiscordReadPort {
   listChannels: () => Promise<RawChannel[]>;
   /**
-   * Every Post and Thread inside the given parents. Parents the bot cannot
-   * read are never passed in — see the visibility filter.
+   * Every Post and Thread inside the given parents, and the parents that
+   * could not be fully listed. Parents the bot cannot read are never passed
+   * in — see the visibility filter.
    */
-  listThreads: (parentIds: string[]) => Promise<RawThread[]>;
+  listThreads: (
+    parentIds: string[],
+  ) => Promise<{ threads: RawThread[]; failed: FailedContainer[] }>;
   listRoles: () => Promise<RawRole[]>;
   /**
    * Head and tail message windows for one Entity. Two calls. Only ever asked

@@ -11,24 +11,17 @@
 import { REST } from "@discordjs/rest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import type { Entity } from "./catalog.ts";
 import { compareCoverage, parseOldIndex } from "./coverage.ts";
-import { parseExclusions } from "./exclusions.ts";
+import { openDurableStore, readCurrent } from "./durable-store.ts";
 
 const root = (rel: string) => resolve(import.meta.dirname, "../../../..", rel);
 const read = (rel: string) => readFileSync(root(rel), "utf8");
 
 const baseline = parseOldIndex(read("docs/reference/old-index.md"));
-const catalog: Entity[] = JSON.parse(read("content/index/data.json"));
-const excluded = parseExclusions(
-  (() => {
-    try {
-      return read("content/config/index-flags.json");
-    } catch {
-      return null;
-    }
-  })(),
-);
+const { catalog } = readCurrent();
+const store = openDurableStore();
+const excluded = store.exclusions();
+store.close();
 const channels: Array<{ id: string; visible: boolean }> = JSON.parse(
   read("apps/bot/src/sync/__fixtures__/guild-channels.json"),
 );
