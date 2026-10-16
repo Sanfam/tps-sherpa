@@ -163,3 +163,72 @@ describe("exclusion reporting and mention resolution", () => {
     expect(exclusionsApplied).toEqual(["222"]);
   });
 });
+
+describe("mentions of Posts under an excluded Forum", () => {
+  const data = {
+    channels: [
+      { id: "111", name: "general", type: ChannelType.GuildText, topic: "Also see <#444>" },
+      { id: "333", name: "regional", type: ChannelType.GuildForum, topic: "Regional talk" },
+      {
+        id: "555",
+        name: "staff-only",
+        type: ChannelType.GuildForum,
+        topic: "Private",
+        contentReadable: false,
+      },
+    ],
+    threads: [
+      { id: "444", name: "UK", parentId: "333", appliedTags: [], firstPost: "Dads in the UK" },
+      { id: "666", name: "Discipline", parentId: "555", appliedTags: [], firstPost: "Private" },
+    ],
+  };
+  const exclusions = new Set(["333", "555"]);
+
+  it("resolves the Post's name without putting it in the Catalog", async () => {
+    // The Forum's own name already resolves; its Posts must too. Read for the
+    // lookup only — an excluded Forum's Posts are still not destinations.
+    const { catalog } = await buildCatalog({
+      discord: fixtureDiscord(data),
+      guildId: GUILD_ID,
+      exclusions,
+    });
+    expect(catalog.map((e) => e.id)).toEqual(["111"]);
+    expect(catalog[0]?.topic).toBe("Also see #UK");
+  });
+
+  it("never enumerates the Posts of a withheld Forum, excluded or not", async () => {
+    // Withheld is a privacy posture: its Posts are not read for any purpose,
+    // the name lookup included.
+    const asked: string[][] = [];
+    const discord = fixtureDiscord(data);
+    for (const set of [exclusions, new Set<string>()])
+      await buildCatalog({
+        discord: {
+          ...discord,
+          listThreads: (parentIds) => (asked.push(parentIds), discord.listThreads(parentIds)),
+        },
+        guildId: GUILD_ID,
+        exclusions: set,
+      });
+    expect(asked.flat()).toContain("333");
+    expect(asked.flat()).not.toContain("555");
+  });
+
+  it("fails as any other enumeration does when an excluded Forum cannot be read", async () => {
+    const discord = fixtureDiscord(data);
+    const failure = new Error("enumeration failed");
+    await expect(
+      buildCatalog({
+        discord: {
+          ...discord,
+          listThreads: async (parentIds) => {
+            if (parentIds.includes("333")) throw failure;
+            return discord.listThreads(parentIds);
+          },
+        },
+        guildId: GUILD_ID,
+        exclusions,
+      }),
+    ).rejects.toBe(failure);
+  });
+});

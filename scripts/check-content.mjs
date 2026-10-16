@@ -6,6 +6,7 @@
  * hand-edit would otherwise reach the site unchallenged.
  */
 import { readFileSync } from "node:fs";
+import { parseVocabulary } from "../apps/bot/src/llm/vocabulary.ts";
 
 const problems = [];
 // `undefined` means unreadable (already reported) or optional and absent, so
@@ -26,17 +27,19 @@ const roles = read("content/config/roles.json", { optional: true });
 // One sync writes both, so exactly one on disk is a half-written generation.
 if ((catalog === undefined) !== (roles === undefined) && !problems.length)
   problems.push("Only one of the Catalog and the role manifest is on disk");
-// Absent until a human freezes one. Its absence is not a problem; a Catalog
-// carrying tags that are not in it would be.
-let vocabulary = null;
+// Committed and required: classification refuses to run without it, and on a
+// clean checkout it is the only content there is to check. Validated by the
+// bot's own parser, so CI and the enrichment run cannot disagree on what a
+// valid vocabulary is.
+let knownTopics = null;
 try {
-  vocabulary = JSON.parse(
+  const { topics } = parseVocabulary(
     readFileSync(new URL("../content/config/topics.json", import.meta.url), "utf8"),
   );
+  knownTopics = new Set(topics.map((t) => t.slug));
 } catch (error) {
-  if (error.code !== "ENOENT") problems.push(`content/config/topics.json: ${error.message}`);
+  problems.push(`content/config/topics.json: ${error.message}`);
 }
-const knownTopics = vocabulary && new Set((vocabulary.topics ?? []).map((t) => t.slug));
 
 if (Array.isArray(catalog)) {
   const seen = new Set();
@@ -115,6 +118,6 @@ if (problems.length) {
   process.exit(1);
 }
 console.log(
-  `Content OK: ${catalog ? `${catalog.length} Entities` : "no Catalog on disk"}, ` +
+  `Content OK: ${knownTopics.size} Topics, ${catalog ? `${catalog.length} Entities` : "no Catalog on disk"}, ` +
     `${roles ? `${roles.length} role manifest entries` : "no role manifest on disk"}.`,
 );

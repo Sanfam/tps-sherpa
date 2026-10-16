@@ -261,11 +261,13 @@ export const buildCatalog = async (deps: {
   const containers = visibleContainers.filter((c) => !excluded.has(c.id));
 
   // Threads are only enumerated from containers whose content is readable. A
-  // withheld Forum must never have its Posts read.
+  // withheld Forum must never have its Posts read. Excluded containers are
+  // enumerated too, for the name lookup alone; their Posts and Threads are
+  // dropped below, so they never reach the Catalog.
   const allThreads = await deps.discord.listThreads(
-    containers.filter((c) => c.contentReadable).map((c) => c.id),
+    visibleContainers.filter((c) => c.contentReadable).map((c) => c.id),
   );
-  const threads = allThreads.filter((t) => !excluded.has(t.id));
+  const threads = allThreads.filter((t) => !excluded.has(t.id) && !excluded.has(t.parentId));
   const containerType = new Map(containers.map((c) => [c.id, c.type]));
   const tagSets = new Map(
     containers.map((c) => [c.id, new Map((c.availableTags ?? []).map((t) => [t.id, t.name]))]),
