@@ -135,7 +135,7 @@ So reader gating is ours, and **that is precisely what makes the CMS swappable.*
 
 The file names are illustrative. What matters is the split: durable files are replicated, and caches and sessions are not.
 
-Two Railway services, each with one volume. Cloudflare for DNS, origin proxy, **and R2** (the Litestream target — note this is a wider Cloudflare surface than "DNS and proxy only," which earlier drafts claimed). Backblaze B2 is a drop-in alternative. A service with a volume can't run two deployments at once, so every redeploy has a short gap, and each service runs as one instance. The startup and restore contract is in ADR-0001. The site will serve at `sherpa.omgod.com` for now (2026-10-15); the bot has no public domain. The bot service runs `apps/bot/src/serve.ts`: Sherpa's gateway, and the sync and enrichment on a six-hourly loop that never runs two writers at once.
+Two Railway services, each with one volume. Cloudflare for DNS, origin proxy, **and R2** (the Litestream target — note this is a wider Cloudflare surface than "DNS and proxy only," which earlier drafts claimed). Backblaze B2 is a drop-in alternative. A service with a volume can't run two deployments at once, so every redeploy has a short gap, and each service runs as one instance. The startup and restore contract is in ADR-0001. The site will serve at `sherpa.omgod.com` for now (2026-10-15); the bot has no public domain. The bot service runs `apps/bot/src/serve.ts`: Sherpa's gateway, and the sync and enrichment on a six-hourly loop that never runs two writers at once. Since 2026-10-15 (owner-authorized) the loop is purge → sync → capture → topics → summaries → activity: Tier 0 raw text is held at most seven days, `/lately` shows activity summaries, and members control both through `/privacy`. Every model call goes to OpenRouter (the only host the code allows) with zero data retention and data collection denied on every request. OpenRouter's own account settings are outside the code: input/output logging and Broadcast must stay off, and model ids must not be presets that cache responses. Staff check these whenever the account changes.
 
 ---
 
@@ -248,7 +248,7 @@ Affinity is a field on content. Each consumer brings its own profile: the bot ma
 | Catalog | Bot, durable file | Bot, per sync | Staff, through bot commands: overrides only |
 | Role manifest | Bot, carried in the snapshot | Bot, per sync | Nobody |
 | Landing page | Site, CMS | Bot fills slots | Staff |
-| Privacy policy | Site, CMS | Human | Staff |
+| Privacy policy | `content/privacy-policy.md`, served by `/privacy policy`; the site will show it too | Claude, under the owner's authorization (2026-10-15) | Staff |
 | Exclusions | Bot, durable file | Staff | Staff, through a bot command |
 | Promote flags | Site, durable file | Staff | Staff, in the CMS: Index presentation only |
 
@@ -538,7 +538,7 @@ is a person reading ~20 tags, changing one word, and committing it as
   - **⚠️ The provider is the variable, not the model — and pinning the model does not pin the provider.** An earlier note here claimed the dated build was not routed across providers. That was wrong and is corrected: it is. Measured 2026-09-04, the same prompt to the same pinned model, five times: **11s, 47s, 58s, 106s, 205s**, tracking which provider the router chose, with completions ranging from 48 to 5,710 tokens. The 11s call returned a *truncated* answer, so speed was not a proxy for health either. **Every hang and every empty `{}` seen while building the Phase 2 passes traces to this**, and re-benchmarking models against it would have been measuring the router. Express the routing preference instead: `LLM_PROVIDER`, passed through verbatim, `{"sort":"throughput"}` today.
   - **Timeouts are sized per job, not globally.** A short leash is what turns a bad route into a retry rather than a block, so the per-Entity passes keep 180s. The bootstrap sets its own 420s, because one derivation was measured at 205s *answering correctly* and the default was aborting work that would have succeeded. Raising the global default to suit the slow job is the wrong lever — it was tried at 600s and left every other call waiting ten minutes on a hang.
   - **The bootstrap derives sequentially.** Four concurrent requests for a 2,000-token completion queue behind one another, and a `Promise.all` then loses the whole derivation to whichever one ran out of time. It runs once; wall clock is the cheapest thing it has to spend.
-- **Write to the OpenAI wire format** so a local model is a config change if the answer ever needs to be "nothing leaves the box."
+- **Write to the OpenAI wire format** so a local model is a small change if the answer ever needs to be "nothing leaves the box." *(2026-10-15: no longer a config change alone. The privacy policy names OpenRouter with zero data retention, so `openai-wire.ts` refuses any other host; a local model means allowing its host there and updating the policy.)*
 - Redaction applies to the **Index render path too**, not just LLM output. The old script leaked raw `<@732682426853359667>` and `<#1088552078709891242>` into the published page.
 
 ---
@@ -665,7 +665,7 @@ These cannot be automated. Reaching one means producing the artifact and waiting
 | Shadow-mode review | 3–6 | ≥2 weeks of suppressed intro-responder output, read by mods |
 | Go-live approval | 6 | Explicit sign-off before the bot posts to `#introductions` |
 | Monthly public summary | Ongoing | Staff approval before each publication |
-| Privacy policy | Before any member data is stored | Written and published by a human, not generated |
+| Privacy policy | Before any member data is stored | ~~Written and published by a human, not generated~~ *Owner-authorized (2026-10-15): Claude wrote `content/privacy-policy.md` to the owner's terms — consent on by default and revocable, no sharing with associated entities, no resale — with ADR-0001's retention and erasure windows.* |
 
 ---
 

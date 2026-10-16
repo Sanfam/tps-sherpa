@@ -193,3 +193,69 @@ describe("enrichment writes", () => {
     expect(readCatalog()).toHaveLength(3);
   });
 });
+
+describe("privacy preferences", () => {
+  const MEMBER = "500000000000000001";
+  const fresh = () => {
+    initDurableStore(path, { exclusionSeed: null, catalog: null, roleManifest: null });
+    return openDurableStore(path);
+  };
+  const changedAt = () => {
+    const db = new DatabaseSync(path);
+    const row = db.prepare("SELECT changed_at FROM preference").get() as { changed_at: string };
+    db.close();
+    return row.changed_at;
+  };
+
+  it("allows both settings for a member who has never chosen", () => {
+    const store = fresh();
+    expect(store.preferences(MEMBER)).toEqual({ approach: true, processing: true });
+    expect(store.processingOptOuts()).toEqual(new Set());
+    store.close();
+  });
+
+  it("records a change, and when it was made only when the value moves", () => {
+    const store = fresh();
+    store.setPreference(MEMBER, "processing", false);
+    expect(store.preferences(MEMBER)).toEqual({ approach: true, processing: false });
+    expect(store.processingOptOuts()).toEqual(new Set([MEMBER]));
+    const first = changedAt();
+    // An opt-out repeated is not a new choice.
+    const db = new DatabaseSync(path);
+    db.exec("UPDATE preference SET changed_at = '2000-01-01T00:00:00.000Z'");
+    db.close();
+    store.setPreference(MEMBER, "processing", false);
+    expect(changedAt()).toBe("2000-01-01T00:00:00.000Z");
+    store.setPreference(MEMBER, "processing", true);
+    expect(changedAt()).not.toBe("2000-01-01T00:00:00.000Z");
+    expect(first).toMatch(/^\d{4}-/);
+    expect(store.processingOptOuts()).toEqual(new Set());
+    store.close();
+  });
+
+  it("adds the table to a store initialised before it existed", () => {
+    const db = new DatabaseSync(path);
+    db.exec(`
+      CREATE TABLE entity (id TEXT PRIMARY KEY, body TEXT NOT NULL);
+      CREATE TABLE generation (id INTEGER PRIMARY KEY CHECK (id = 1), generated_at TEXT NOT NULL, role_manifest TEXT NOT NULL);
+      CREATE TABLE exclusion (id TEXT PRIMARY KEY, name TEXT, reason TEXT);
+      CREATE TABLE initialised (id INTEGER PRIMARY KEY CHECK (id = 1), at TEXT NOT NULL);
+      INSERT INTO exclusion VALUES ('999', 'bot-tests', 'testing');
+      INSERT INTO initialised VALUES (1, '2026-10-14T00:00:00.000Z');
+    `);
+    db.close();
+    const store = openDurableStore(path);
+    store.setPreference(MEMBER, "approach", false);
+    expect(store.preferences(MEMBER)).toEqual({ approach: false, processing: true });
+    expect(store.exclusions()).toEqual(new Set(["999"]));
+    store.close();
+  });
+
+  it("migrates nothing in a store it refuses", () => {
+    new DatabaseSync(path).close();
+    expect(() => openDurableStore(path)).toThrow(/no initialisation marker/);
+    const db = new DatabaseSync(path);
+    expect(db.prepare("SELECT name FROM sqlite_master").all()).toEqual([]);
+    db.close();
+  });
+});

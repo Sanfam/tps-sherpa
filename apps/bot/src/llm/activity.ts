@@ -11,13 +11,17 @@
  * bot's volume and never into the Catalog or its snapshot. Only a Staff-approved
  * monthly overview may ever be built from them for the public tier, and only
  * through that approval; nothing here may become a second way out. They are
- * kept out of logs for the same reason — a log line is a copy. A member name
- * said in conversation ("thanks Dave") is also not caught by anything yet —
- * the boundary has no member-name cache — which is the other reason this
- * stays off the page until a gated delivery path exists.
+ * kept out of logs for the same reason — a log line is a copy.
+ *
+ * **Shown in `/lately` (Staff, 2026-10-15)** — ephemerally, to Members only,
+ * which is the gated delivery path that was waited for. A member name said in
+ * conversation ("thanks Dave") is still not caught by anything — the boundary
+ * has no member-name cache — and that is the risk this accepted.
  */
 import type { Entity } from "../sync/catalog.ts";
+import { DEFAULT_MONITORED_CHANNELS } from "../sync/tier0.ts";
 import type { StoredMessage } from "../sync/tier0-store.ts";
+import { isEnrichable } from "./subject.ts";
 import { wordCount } from "./summarise.ts";
 
 /** One line, a little longer than identity: activity needs a verb and an object. */
@@ -39,12 +43,13 @@ export const ACTIVITY_SYSTEM_PROMPT = [
   'Reply with JSON: {"summary": string | null}',
 ].join("\n");
 
-/** What the job has produced, keyed by Entity id. Lives on the bot's volume. */
 /**
- * Entries are not removed when an Entity later becomes withheld, monitored or
- * deleted: that would be a purge of member-derived data, which is a Staff
- * decision. Anything that reads this must re-check eligibility against the
- * current Catalog.
+ * What the job has produced, keyed by Entity id. Lives on the bot's volume.
+ *
+ * The purge removes entries for Entities that have left the Catalog or are no
+ * longer eligible (`pruneActivity`; Staff, 2026-10-15). Between purges an entry
+ * can still outlive its Entity's eligibility, so anything that reads this must
+ * re-check against the current Catalog.
  */
 export type ActivityStore = Record<
   string,
@@ -56,6 +61,13 @@ export type ActivityStore = Record<
      * time. The job regenerates only when the Entity's cursor moves past it.
      */
     as_of: string;
+    /**
+     * Who wrote the sources it was made from, so a deletion or an opt-out can
+     * find it after Tier 0 has purged those messages. Bot-side like the rest:
+     * never shown, never logged. Absent on entries written before it existed,
+     * which count as unknown and are dropped (`keepAttributed`).
+     */
+    authors?: string[];
   }
 >;
 
@@ -147,13 +159,120 @@ export const planActivity = (
   entities: Entity[],
   snapshotOf: (entityId: string) => StoredMessage[],
   store: ActivityStore,
+  /**
+   * Members who have turned processing off. Their messages are left out of
+   * the sources here, as well as in the boundary, so a source list holds only
+   * people who were opted in when it was read — which is what lets
+   * `mergeActivity` spot anyone who opted out while the run was going.
+   */
+  optedOut: ReadonlySet<string> = new Set(),
 ): Array<{ entity: Entity; sources: StoredMessage[] }> =>
   entities.flatMap((entity) => {
     const snapshot = snapshotOf(entity.id);
     return isActivityDue(entity, newestId(snapshot), store)
-      ? [{ entity, sources: recentSources(snapshot) }]
+      ? [{ entity, sources: recentSources(snapshot.filter((m) => !optedOut.has(m.authorId))) }]
       : [];
   });
+
+/**
+ * The store with only the entries whose authors are known and all still have
+ * processing on. Run by the purge and on every write, so an opt-out reaches
+ * summaries already made, not just future ones.
+ */
+export const keepAttributed = (store: ActivityStore, optedOut: ReadonlySet<string>): ActivityStore =>
+  Object.fromEntries(
+    Object.entries(store).filter(
+      ([, entry]) => entry.authors !== undefined && !entry.authors.some((a) => optedOut.has(a)),
+    ),
+  );
+
+export interface ProducedActivity {
+  entity: Entity;
+  sources: StoredMessage[];
+  summary: string | null;
+}
+
+/**
+ * Folds a run's summaries into the store as it is **now**, not as the run read
+ * it at the start, and leaves out any summary whose sources include someone
+ * who has since turned processing off.
+ *
+ * `/privacy delete-my-data` runs in the gateway while this pass may be
+ * running in another process. Writing back the copy read at the start would
+ * restore the entries a deletion just removed, and a summary of someone who
+ * opted out mid-run must not be kept. A left-out Entity is due again next
+ * run, and is summarised without them.
+ */
+export const mergeActivity = (
+  current: ActivityStore,
+  produced: ProducedActivity[],
+  optedOut: ReadonlySet<string>,
+): { store: ActivityStore; withheld: number } => {
+  const store = keepAttributed(current, optedOut);
+  let withheld = 0;
+  for (const { entity, sources, summary } of produced) {
+    if (sources.some((m) => optedOut.has(m.authorId))) {
+      withheld++;
+      continue;
+    }
+    store[entity.id] = {
+      summary,
+      as_of: entity.last_message_id!,
+      authors: [...new Set(sources.map((m) => m.authorId))],
+    };
+  }
+  return { store, withheld };
+};
+
+/**
+ * Writes a run's summaries. Everything that takes a moment — opening bot.db,
+ * reading Tier 0 — happens first; activity.json is read last, right before it
+ * is written, so a deletion made while the run went is not written over.
+ *
+ * A summary whose sources are no longer all in Tier 0 is left out: someone
+ * deleted their data mid-run (and may since have opted back in), and their
+ * deleted words must not come back as a summary.
+ *
+ * ponytail: a deletion that lands between the Tier 0 check and the read of
+ * activity.json — milliseconds — still gets its summary written. Deleting
+ * turns processing off, so the next purge (within one cycle, six hours) drops
+ * it; unless the member has opted back in by then, when it stays until the
+ * Entity moves. Move activity into tier0.db for a transaction if that matters.
+ */
+export const commitActivity = (
+  produced: ProducedActivity[],
+  deps: {
+    optedOut: () => ReadonlySet<string>;
+    stored: (entityId: string) => StoredMessage[];
+    read: () => ActivityStore;
+    write: (store: ActivityStore) => void;
+  },
+): { withheld: number } => {
+  const optedOut = deps.optedOut();
+  const held = produced.filter(({ entity, sources }) => {
+    const ids = new Set(deps.stored(entity.id).map((m) => m.messageId));
+    return sources.every((m) => ids.has(m.messageId));
+  });
+  const { store, withheld } = mergeActivity(deps.read(), held, optedOut);
+  deps.write(store);
+  return { withheld: withheld + produced.length - held.length };
+};
+
+/**
+ * The store without entries for Entities that have left the Catalog or are no
+ * longer eligible — withheld, or monitored (Staff, 2026-10-15). Run by the
+ * purge, every cycle.
+ */
+export const pruneActivity = (store: ActivityStore, catalog: Entity[]): ActivityStore => {
+  const byId = new Map(catalog.map((e) => [e.id, e]));
+  const monitored = new Set(DEFAULT_MONITORED_CHANNELS);
+  return Object.fromEntries(
+    Object.entries(store).filter(([id]) => {
+      const entity = byId.get(id);
+      return entity !== undefined && isEnrichable(entity, byId, monitored);
+    }),
+  );
+};
 
 export type ActivityRejection =
   | { reason: "too-long"; words: number }

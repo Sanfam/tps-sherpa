@@ -9,15 +9,19 @@ import {
   MessageFlags,
 } from "discord-api-types/v10";
 import { describe, expect, it } from "vitest";
+import type { ActivityStore } from "../llm/activity.ts";
 import { createBoundary, type ChatPort } from "../llm/boundary.ts";
-import { retrying } from "../llm/session.ts";
+import { PRIVACY_POLICY_PATH, retrying } from "../llm/session.ts";
 import type { Vocabulary } from "../llm/vocabulary.ts";
 import type { Entity } from "../sync/catalog.ts";
+import { initDurableStore } from "../sync/durable-store.ts";
 import type { RoleManifestEntry } from "../sync/ports.ts";
+import { openTier0 } from "../sync/tier0-store.ts";
 import { EMPTY_QUERY } from "./find.ts";
 import {
   CAP_REACHED,
   FIND_OFF,
+  FIND_OPTED_OUT,
   DEFAULT_FIND_DAILY_CAP,
   FAILED,
   NOT_A_MEMBER,
@@ -29,6 +33,7 @@ import {
   findDailyCap,
   handleInteraction,
 } from "./interactions.ts";
+import { MAX_EMBED_DESCRIPTION, NOTHING_DELETED, POLICY_INTRO, openPrivacy, renderDeleted } from "./privacy.ts";
 
 const GUILD = "400000000000000001";
 const MEMBER_ROLE = "400000000000000002";
@@ -96,6 +101,48 @@ const command = (
     },
   }) as unknown as APIInteraction;
 
+const INVOKER = "500000000000000001";
+
+/** `/privacy <sub>` with its options, as Discord nests them under the subcommand. */
+const privacyCommand = (
+  sub: string,
+  options: Record<string, string | boolean> = {},
+  over: { roles?: string[] } = {},
+): APIInteraction => {
+  const base = command("privacy", {}, over) as unknown as { data: object };
+  return {
+    ...base,
+    data: {
+      ...base.data,
+      options: [
+        {
+          name: sub,
+          type: ApplicationCommandOptionType.Subcommand,
+          options: Object.entries(options).map(([name, value]) => ({
+            name,
+            type: typeof value === "boolean" ? ApplicationCommandOptionType.Boolean : ApplicationCommandOptionType.String,
+            value,
+          })),
+        },
+      ],
+    },
+  } as unknown as APIInteraction;
+};
+
+/** `/privacy`'s real stores, on temp paths: bot.db, tier0.db, activity.json and the policy. */
+const tempPrivacy = (policy = "The policy.") => {
+  const dir = mkdtempSync(join(tmpdir(), "sherpa-privacy-"));
+  const paths = {
+    durable: join(dir, "bot.db"),
+    tier0: join(dir, "tier0.db"),
+    activity: join(dir, "activity.json"),
+    policy: join(dir, "privacy-policy.md"),
+  };
+  initDurableStore(paths.durable, { exclusionSeed: null, catalog: null, roleManifest: null });
+  writeFileSync(paths.policy, policy);
+  return { paths, privacy: openPrivacy(paths) };
+};
+
 const tempCap = (limit: number, now?: () => Date) => {
   const path = join(mkdtempSync(join(tmpdir(), "sherpa-cap-")), "find-usage.json");
   return { path, cap: dailyCap(path, limit, () => {}, now) };
@@ -103,9 +150,14 @@ const tempCap = (limit: number, now?: () => Date) => {
 
 /** A Sherpa wired to fixtures: a real boundary over a fake wire, a real cap on a temp file. */
 const harness = (
-  opts: { reply?: string | (() => string); limit?: number; roles?: RoleManifestEntry[] } & Partial<
-    Pick<Sherpa, "loadCatalog" | "loadVocabulary">
-  > = {},
+  opts: {
+    reply?: string | (() => string);
+    limit?: number;
+    roles?: RoleManifestEntry[];
+    policy?: string;
+    /** The invoker has turned processing off. */
+    optedOut?: boolean;
+  } & Partial<Pick<Sherpa, "loadCatalog" | "loadVocabulary" | "loadActivity">> = {},
 ) => {
   const calls: string[] = [];
   const logs: string[] = [];
@@ -117,11 +169,15 @@ const harness = (
     },
   };
   const { cap, path } = tempCap(opts.limit ?? 10);
+  const { privacy, paths } = tempPrivacy(opts.policy);
+  if (opts.optedOut) privacy.set(INVOKER, "processing", false);
   const sherpa: Sherpa = {
     guildId: GUILD,
     loadCatalog: opts.loadCatalog ?? (() => catalog),
     loadRoleManifest: () => opts.roles ?? manifest,
     loadVocabulary: opts.loadVocabulary ?? (() => vocabulary),
+    loadActivity: opts.loadActivity ?? (() => ({})),
+    privacy,
     askFor: (c) =>
       createBoundary({
         chat,
@@ -141,7 +197,7 @@ const harness = (
     });
     return sent.replies.at(-1)?.content;
   };
-  return { run, sent, calls, logs, capPath: path };
+  return { run, sent, calls, logs, capPath: path, privacy, paths };
 };
 
 describe("every reply is ephemeral", () => {
@@ -157,7 +213,14 @@ describe("every reply is ephemeral", () => {
       ["find, not a Member", {}, command("find", { interests: QUERY }, { roles: [OTHER_ROLE] })],
       ["lately", {}, command("lately")],
       ["lately, topic", {}, command("lately", { topic: "gaming" })],
-      ["unknown command", {}, command("privacy")],
+      ["find, processing off", { optedOut: true }, command("find", { interests: QUERY })],
+      ["privacy, policy", {}, privacyCommand("policy")],
+      ["privacy, settings", {}, privacyCommand("settings")],
+      ["privacy, opt-out", {}, privacyCommand("opt-out", { setting: "processing" })],
+      ["privacy, opt-in", {}, privacyCommand("opt-in", { setting: "approach" })],
+      ["privacy, delete unconfirmed", {}, privacyCommand("delete-my-data", { confirm: false })],
+      ["privacy, delete", {}, privacyCommand("delete-my-data", { confirm: true })],
+      ["unknown command", {}, command("nope")],
     ];
     const contents = new Set<string>();
     for (const [, opts, interaction] of branches) {
@@ -184,6 +247,184 @@ describe("every reply is ephemeral", () => {
     await run(command("find", {}, { dataType: ApplicationCommandType.User }));
     expect(sent.defers).toEqual([]);
     expect(sent.replies).toEqual([]);
+  });
+});
+
+describe("/privacy", () => {
+  const seed = (paths: { tier0: string; activity: string }) => {
+    const tier0 = openTier0(paths.tier0);
+    const m = (entityId: string, messageId: string, authorId: string) => ({
+      entityId,
+      messageId,
+      authorId,
+      authorIsBot: false,
+      content: "distinctive-member-text",
+      createdAt: "",
+      window: "head" as const,
+    });
+    tier0.record("e1", "1", [m("e1", "m1", INVOKER), m("e1", "m2", "someone-else")]);
+    tier0.record("e2", "1", [m("e2", "m3", INVOKER), m("e2", "m4", INVOKER)]);
+    tier0.record("e3", "1", [m("e3", "m5", "someone-else")]);
+    tier0.close();
+    const activity: ActivityStore = {
+      e1: { summary: "fed by them", as_of: "1", authors: ["someone-else"] },
+      e3: { summary: "not fed by them", as_of: "1", authors: ["someone-else"] },
+      // Their messages there are already purged from Tier 0; only the record says so.
+      e4: { summary: "fed by them, long ago", as_of: "1", authors: [INVOKER] },
+    };
+    writeFileSync(paths.activity, JSON.stringify(activity));
+  };
+  const remaining = (path: string) => {
+    const tier0 = openTier0(path);
+    const authors = ["e1", "e2", "e3"].flatMap((id) => tier0.messagesFor(id).map((m) => m.authorId));
+    tier0.close();
+    return authors.sort();
+  };
+
+  it("is open to someone without the Member role", async () => {
+    const { run } = harness();
+    const reply = await run(privacyCommand("settings", {}, { roles: [OTHER_ROLE] }));
+    expect(reply).toContain("Your Sherpa settings:");
+    expect(reply).toContain("Reading what you write: on.");
+  });
+
+  it("sends the policy in an embed, and refuses one too long for it rather than cutting it", async () => {
+    const { run, sent } = harness({ policy: "Sherpa keeps little." });
+    expect(await run(privacyCommand("policy"))).toBe(POLICY_INTRO);
+    expect(sent.replies[0]!.embeds).toEqual([{ description: "Sherpa keeps little." }]);
+
+    const long = harness({ policy: "p".repeat(MAX_EMBED_DESCRIPTION + 1) });
+    expect(await long.run(privacyCommand("policy"))).toBe(FAILED);
+    expect(long.sent.replies[0]!.embeds).toBeUndefined();
+  });
+
+  it("answers a subcommand it does not know as unknown", async () => {
+    const { run } = harness();
+    expect(await run(privacyCommand("nope"))).toBe(UNKNOWN);
+    expect(await run(privacyCommand("opt-out", { setting: "everything" }))).toBe(UNKNOWN);
+  });
+
+  it("turns a setting off and back on, for the invoker only", async () => {
+    const { run, privacy } = harness();
+    await run(privacyCommand("opt-out", { setting: "approach" }));
+    expect(privacy.settings(INVOKER)).toEqual({ approach: false, processing: true });
+    expect(privacy.settings("someone-else")).toEqual({ approach: true, processing: true });
+    await run(privacyCommand("opt-in", { setting: "approach" }));
+    expect(privacy.settings(INVOKER).approach).toBe(true);
+  });
+
+  it("deletes nothing without confirm, and says so", async () => {
+    const { run, paths, privacy } = harness();
+    seed(paths);
+    expect(await run(privacyCommand("delete-my-data", { confirm: false }))).toBe(NOTHING_DELETED);
+    expect(remaining(paths.tier0)).toHaveLength(5);
+    expect(Object.keys(JSON.parse(readFileSync(paths.activity, "utf8")))).toEqual(["e1", "e3", "e4"]);
+    expect(privacy.settings(INVOKER).processing).toBe(true);
+  });
+
+  it("reports summaries cleared even when Tier 0 had already let their messages go", () => {
+    expect(renderDeleted({ messages: 2, places: 1, summaries: 0, checkpointed: false })).toContain(
+      "wiped at its next cleanup, within six hours",
+    );
+    expect(renderDeleted({ messages: 2, places: 1, summaries: 0, checkpointed: true })).not.toContain("next cleanup");
+    expect(renderDeleted({ messages: 0, places: 0, summaries: 1, checkpointed: true })).toMatch(
+      /^Done\. Sherpa had none of your messages stored, and cleared 1 activity summary they fed into/,
+    );
+  });
+
+  it("leaves processing off when deleting the messages fails, so a retry is safe", () => {
+    const { paths, privacy } = tempPrivacy();
+    // A directory where Tier 0 should be: opening it throws.
+    const broken = openPrivacy({ ...paths, tier0: mkdtempSync(join(tmpdir(), "not-a-db-")) });
+    expect(() => broken.deleteMyData(INVOKER)).toThrow();
+    expect(privacy.settings(INVOKER).processing).toBe(false);
+  });
+
+  it("erases their messages even when activity.json is corrupt, and still reports the failure", () => {
+    const { paths, privacy } = tempPrivacy();
+    const other = openTier0(paths.tier0);
+    other.record("e1", "1", [
+      { entityId: "e1", messageId: "m1", authorId: INVOKER, authorIsBot: false, content: "distinctive-erased-text", createdAt: "", window: "head" },
+    ]);
+    writeFileSync(paths.activity, "{ not json");
+    expect(() => privacy.deleteMyData(INVOKER)).toThrow(/JSON/);
+    expect(other.authoredIn(INVOKER)).toEqual([]);
+    for (const file of [paths.tier0, `${paths.tier0}-wal`])
+      expect(readFileSync(file).includes("distinctive-erased-text")).toBe(false);
+    other.close();
+  });
+
+  it("checkpoints Tier 0, so the deletion reaches the file while another process holds it open", () => {
+    const { paths, privacy } = tempPrivacy();
+    const other = openTier0(paths.tier0);
+    other.record("e1", "1", [
+      { entityId: "e1", messageId: "m1", authorId: INVOKER, authorIsBot: false, content: "distinctive-erased-text", createdAt: "", window: "head" },
+    ]);
+    expect(privacy.deleteMyData(INVOKER)).toMatchObject({ messages: 1, checkpointed: true });
+    for (const file of [paths.tier0, `${paths.tier0}-wal`])
+      expect(readFileSync(file).includes("distinctive-erased-text")).toBe(false);
+    other.close();
+  });
+
+  it("deletes their messages and the summaries those fed, turns processing off, and echoes nothing", async () => {
+    const { run, paths, privacy, logs } = harness();
+    seed(paths);
+    const reply = (await run(privacyCommand("delete-my-data", { confirm: true })))!;
+
+    expect(remaining(paths.tier0)).toEqual(["someone-else", "someone-else"]);
+    expect(Object.keys(JSON.parse(readFileSync(paths.activity, "utf8")))).toEqual(["e3"]);
+    expect(privacy.settings(INVOKER).processing).toBe(false);
+
+    expect(reply).toContain("3 messages of yours from 2 places");
+    expect(reply).toContain("cleared 2 activity summaries");
+    expect(reply).toContain("within 30 days");
+    expect(reply).toContain("`/privacy opt-in processing`");
+    for (const text of [reply, logs.join("\n")]) {
+      expect(text).not.toContain("distinctive-member-text");
+      expect(text).not.toContain("fed by them");
+    }
+    expect(logs.join("\n")).not.toContain(INVOKER);
+  });
+});
+
+describe("/find with processing off", () => {
+  const broken = () => {
+    throw new Error("unreadable");
+  };
+
+  it("says so and how to turn it back on, before reading the Catalog or calling a model", async () => {
+    const { run, calls, capPath } = harness({ optedOut: true, loadCatalog: broken, loadVocabulary: broken });
+    expect(await run(command("find", { interests: QUERY }))).toBe(FIND_OPTED_OUT);
+    expect(calls).toHaveLength(0);
+    expect(() => readFileSync(capPath)).toThrow();
+  });
+
+  it("says /find is off first, when it is off for everyone", async () => {
+    const { run } = harness({ optedOut: true, limit: 0 });
+    expect(await run(command("find", { interests: QUERY }))).toBe(FIND_OFF);
+  });
+
+  it("works again once processing is back on", async () => {
+    const { run, calls } = harness({ optedOut: true });
+    await run(privacyCommand("opt-in", { setting: "processing" }));
+    expect(await run(command("find", { interests: QUERY }))).toContain("<#100000000000000001>");
+    expect(calls).toHaveLength(1);
+  });
+
+  it("leaves /lately alone", async () => {
+    const { run } = harness({ optedOut: true });
+    expect(await run(command("lately"))).toContain("Active lately");
+  });
+});
+
+describe("/lately through the dispatcher", () => {
+  it("shows activity summaries, and logs a count, never their text", async () => {
+    const { run, logs } = harness({
+      loadActivity: () => ({ "100000000000000001": { summary: "distinctive-activity-text", as_of: "1" } }),
+    });
+    expect(await run(command("lately"))).toContain("↳ Lately: distinctive-activity-text");
+    expect(logs.join("\n")).not.toContain("distinctive-activity-text");
+    expect(logs).toEqual([expect.stringMatching(/places=2 activity=1$/)]);
   });
 });
 
@@ -308,5 +549,28 @@ describe("command definitions", () => {
     expect(lately!.options[0]!.choices).toEqual([{ name: "Gaming", value: "gaming" }]);
     const big = { ...vocabulary, topics: Array.from({ length: 26 }, (_, i) => ({ slug: `t${i}`, label: `T${i}`, description: "" })) };
     expect(() => commandDefinitions(big)).toThrow(/26 Topics/);
+  });
+});
+
+describe("the /privacy definition", () => {
+  it("offers each subcommand, a required setting, and a required confirm", () => {
+    const privacy = commandDefinitions(vocabulary)[2] as {
+      name: string;
+      options: Array<{ name: string; options?: Array<{ name: string; type: number; required: boolean; choices?: unknown }> }>;
+    };
+    expect(privacy.name).toBe("privacy");
+    expect(privacy.options.map((o) => o.name)).toEqual(["policy", "settings", "opt-out", "opt-in", "delete-my-data"]);
+    for (const sub of ["opt-out", "opt-in"]) {
+      const [setting] = privacy.options.find((o) => o.name === sub)!.options!;
+      expect(setting).toMatchObject({ name: "setting", required: true });
+      expect((setting!.choices as Array<{ value: string }>).map((c) => c.value)).toEqual(["approach", "processing"]);
+    }
+    expect(privacy.options.at(-1)!.options).toEqual([
+      expect.objectContaining({ name: "confirm", type: ApplicationCommandOptionType.Boolean, required: true }),
+    ]);
+  });
+
+  it("fits the policy Staff wrote in one embed", () => {
+    expect(readFileSync(PRIVACY_POLICY_PATH, "utf8").length).toBeLessThanOrEqual(MAX_EMBED_DESCRIPTION);
   });
 });

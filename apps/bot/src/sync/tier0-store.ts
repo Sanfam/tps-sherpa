@@ -3,8 +3,28 @@
  *
  * Uses Node's built-in `node:sqlite` — no dependency. Nothing here is backed
  * up: the volume is disposable and the rebuild path is a re-run of the capture.
+ * Nothing is kept for more than seven days either: see `purge.ts`.
  */
+import { mkdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+
+export const TIER0_PATH =
+  process.env["TIER0_PATH"] ?? resolve(import.meta.dirname, "../../.data/tier0.db");
+
+const HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * How old a message may be and still be held. The promise is seven days, by
+ * when it was written. Capture stores nothing older than this, and the purge,
+ * at the start of each cycle, deletes what has aged past it since. Cycles start
+ * six hours apart, so a message can wait up to one cycle past this before a
+ * purge sees it: 6 days + 6 hours = 6.25 days. The other 18 hours absorb a
+ * cycle that overruns or a restart. Two ways past seven days, both accepted
+ * (Staff, 2026-10-15): a bot down for longer than that, or a single cycle that
+ * runs longer than that. Either way the next cycle purges first.
+ */
+export const RETAIN_MS = 6 * 24 * HOUR_MS;
 
 export interface StoredMessage {
   entityId: string;
@@ -24,9 +44,16 @@ export interface StoredMessage {
 }
 
 export const openTier0 = (path: string) => {
+  if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
+  // Secure delete so a purged or deleted message is zeroed in the file, not
+  // left readable in a free page. The busy timeout because a deletion request
+  // arrives through the gateway while a capture may be writing from another
+  // process.
   db.exec(`
     PRAGMA journal_mode = WAL;
+    PRAGMA secure_delete = ON;
+    PRAGMA busy_timeout = 5000;
     CREATE TABLE IF NOT EXISTS captured_entity (
       entity_id       TEXT PRIMARY KEY,
       last_message_id TEXT,
@@ -126,6 +153,42 @@ export const openTier0 = (path: string) => {
         createdAt: r.created_at,
         window: r.window,
       })),
+
+    /**
+     * Deletes every message written before `cutoff` (an ISO time). By when it
+     * was written, not when it was captured: capture refetches the same
+     * windows, so a capture-time clock restarts on years-old text. Cursors
+     * stay — an Entity whose newest message has not moved has nothing recent
+     * to fetch. Text comparison works because Discord timestamps are UTC
+     * ISO 8601; one that is missing sorts first and is deleted.
+     */
+    dropWrittenBefore: (cutoff: string): number =>
+      Number(db.prepare("DELETE FROM message WHERE created_at < ?").run(cutoff).changes),
+
+    /** The Entities holding anything this author wrote. */
+    authoredIn: (authorId: string): string[] =>
+      (
+        db.prepare("SELECT DISTINCT entity_id FROM message WHERE author_id = ?").all(authorId) as Array<{
+          entity_id: string;
+        }>
+      ).map((r) => r.entity_id),
+
+    /**
+     * Deletes everything this author wrote. Cursors are left alone: their
+     * messages are gone, and a recapture would only drop them again.
+     */
+    deleteAuthor: (authorId: string): number =>
+      Number(db.prepare("DELETE FROM message WHERE author_id = ?").run(authorId).changes),
+
+    /**
+     * Moves the write-ahead log into the file and empties it. Secure delete
+     * zeroes a row in the page written to the log; until a checkpoint, the
+     * file itself still holds the old page — and while another process holds
+     * the database open, closing does not checkpoint. False when a reader got
+     * in the way: the next checkpoint finishes it.
+     */
+    checkpoint: (): boolean =>
+      (db.prepare("PRAGMA wal_checkpoint(TRUNCATE)").get() as { busy: number }).busy === 0,
 
     stats: () => {
       // CAST AS BLOB: LENGTH() on text counts characters, and this figure is

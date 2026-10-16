@@ -7,12 +7,13 @@
  * snowflakes, but it publishes `#unknown-channel` where a real name belonged —
  * a quiet degradation, which is the kind this module exists to prevent.
  */
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import type { Entity } from "../sync/catalog.ts";
-import { readCurrent } from "../sync/durable-store.ts";
+import { readCurrent, readProcessingOptOuts } from "../sync/durable-store.ts";
 import type { NameLookup } from "../sync/normalise.ts";
 import type { RoleManifestEntry } from "../sync/ports.ts";
+import type { ActivityStore } from "./activity.ts";
 import { createBoundary, type Boundary } from "./boundary.ts";
 import { openAiWire, wireFromEnv } from "./openai-wire.ts";
 
@@ -26,6 +27,8 @@ export const VOCABULARY_PROPOSAL_PATH = contentPath("config/topics.proposed.json
 export const DATA_DIR = resolve(import.meta.dirname, "../../.data");
 /** Activity summaries. Bot-side only — see activity.ts. */
 export const ACTIVITY_PATH = resolve(DATA_DIR, "activity.json");
+/** Owner-authorized (2026-10-15) and edited by hand; nothing in the pipeline writes it. */
+export const PRIVACY_POLICY_PATH = contentPath("privacy-policy.md");
 
 export const readIfPresent = (path: string): string | null => {
   try {
@@ -37,6 +40,21 @@ export const readIfPresent = (path: string): string | null => {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;
   }
+};
+
+export const readActivity = (path: string = ACTIVITY_PATH): ActivityStore =>
+  JSON.parse(readIfPresent(path) ?? "{}") as ActivityStore;
+
+/**
+ * Written beside the file and renamed into place: the gateway reads it for
+ * `/lately` and edits it for a deletion while a pipeline step may be writing
+ * it, and none of them may ever see half a file.
+ */
+export const writeActivity = (store: ActivityStore, path: string = ACTIVITY_PATH): void => {
+  mkdirSync(dirname(path), { recursive: true });
+  const partial = `${path}.${process.pid}.tmp`;
+  writeFileSync(partial, `${JSON.stringify(store, null, 2)}\n`);
+  renameSync(partial, path);
 };
 
 /** The current generation, from the bot's durable store (ADR-0001). */
@@ -84,6 +102,13 @@ export const openBoundary = (
       models,
       catalog,
       names: nameLookup(catalog),
+      // Read fresh for every source, not once for the boundary: an enrichment
+      // pass runs for minutes, and an opt-out made part-way stops the next
+      // call. Every boundary gets it: there is no way to build one that has
+      // not heard who opted out.
+      // ponytail: one bot.db open per source, ~1ms; a kept read connection if
+      // a pass ever sends enough sources for that to show.
+      hasOptedOut: (authorId) => readProcessingOptOuts().has(authorId),
       warn: (m) => console.warn(m),
     }),
     models,

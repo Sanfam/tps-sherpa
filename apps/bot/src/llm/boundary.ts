@@ -88,10 +88,10 @@ export interface BoundaryDeps {
    */
   memberNames?: Iterable<string>;
   /**
-   * Whether a member has asked not to be remembered. Defaults to "nobody has",
-   * which is true: opt-out has no store until members can set it in Phase 3.
-   * It is wired in here now so the check happens BEFORE the call by
-   * construction, rather than being retrofitted onto a working pipeline.
+   * Whether a member has turned processing off (`/privacy`). `openBoundary`
+   * wires it to the durable store for every boundary the bot builds; the
+   * default of "nobody has" is for tests. The check happens BEFORE the call
+   * by construction.
    */
   hasOptedOut?: (authorId: string) => boolean;
   /** Overrides the monitored-channel carve-out. Tests only. */

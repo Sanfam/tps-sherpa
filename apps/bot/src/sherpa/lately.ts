@@ -2,19 +2,24 @@
  * `/lately`: what has been active in the last fortnight. No model call — it is
  * the Catalog's `last_activity_at`, sorted and rendered from a template.
  *
- * Each place is described by its identity summary, never its activity summary.
- * Activity summaries are derived from member conversation and are bot-side
- * only (Staff, 2026-10-05; activity.ts): nothing may become a second way out
- * for them, and the boundary does not yet catch a member's name said in
- * conversation. Showing them here is a decision for Staff, not a default.
+ * Each place is described by its identity summary and, beneath it, its
+ * activity summary when there is one (Staff, 2026-10-15). Only for places
+ * listed here, which are `/find`'s candidates in the current Catalog, so an
+ * entry left over for an Entity since withheld or gone is never shown. The
+ * reply is ephemeral and goes only to Members; activity text never goes to a
+ * log (activity.ts).
  */
+import type { ActivityStore } from "../llm/activity.ts";
 import type { Topic } from "../llm/vocabulary.ts";
 import type { Entity } from "../sync/catalog.ts";
 import { ACTIVE_WITHIN_DAYS, activityBucket } from "../sync/facets.ts";
-import { candidatesOf, placeLine } from "./find.ts";
+import { candidatesOf, clip, placeLine } from "./find.ts";
 
 /** A screenful. More than this is a list to scroll, not a nudge. */
 export const MAX_LATELY = 8;
+
+/** Discord's ceiling on a message's content. */
+export const MAX_MESSAGE_CHARS = 2000;
 
 /**
  * The same candidates `/find` may name, so the two commands cannot disagree
@@ -36,18 +41,37 @@ export const latelyPlaces = (
     .sort((a, b) => b.last_activity_at!.localeCompare(a.last_activity_at!))
     .slice(0, MAX_LATELY);
 
-const lineFor = (entity: Entity): string =>
-  placeLine(
+const lineFor = (entity: Entity, activity: ActivityStore): string => {
+  const line = placeLine(
     entity,
     undefined,
     // Discord renders this in the reader's own terms ("3 days ago").
     ` <t:${Math.floor(new Date(entity.last_activity_at!).getTime() / 1000)}:R>`,
   );
+  const lately = activity[entity.id]?.summary;
+  return lately ? `${line}\n   ↳ Lately: ${clip(lately)}` : line;
+};
 
-export const renderLately = (places: Entity[], topic: Topic | null): string =>
-  places.length === 0
-    ? topic
+/**
+ * Places that would push the reply past Discord's limit are left off the end,
+ * rather than the reply failing: eight places with both summaries at full
+ * length come to about 2,900 characters, of which five fit.
+ */
+export const renderLately = (
+  places: Entity[],
+  topic: Topic | null,
+  activity: ActivityStore = {},
+): string => {
+  if (places.length === 0)
+    return topic
       ? `Nothing tagged ${topic.label} has been active in the last ${ACTIVE_WITHIN_DAYS} days. ` +
-        "Try `/lately` without a topic, or `/find` to look by interest."
-      : `Nothing has been active in the last ${ACTIVE_WITHIN_DAYS} days.`
-    : [topic ? `Active lately in ${topic.label}:` : "Active lately:", ...places.map(lineFor)].join("\n");
+          "Try `/lately` without a topic, or `/find` to look by interest."
+      : `Nothing has been active in the last ${ACTIVE_WITHIN_DAYS} days.`;
+  let reply = topic ? `Active lately in ${topic.label}:` : "Active lately:";
+  for (const place of places) {
+    const next = `${reply}\n${lineFor(place, activity)}`;
+    if (next.length > MAX_MESSAGE_CHARS) break;
+    reply = next;
+  }
+  return reply;
+};

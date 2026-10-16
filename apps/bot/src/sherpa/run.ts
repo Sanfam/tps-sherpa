@@ -1,11 +1,12 @@
 /**
  * Papa Sherpa's long-running process: a gateway connection that answers
- * `/find` and `/lately`.
+ * `/find`, `/lately` and `/privacy`.
  *
  *   node --env-file=.env src/sherpa/run.ts
  *
- * Register the commands first (register.ts). The Catalog and the role
- * manifest are read from disk on every command, so a sync or an enrichment
+ * Register the commands first (register.ts; serve.ts does it at startup). The
+ * Catalog, the role manifest, activity summaries and privacy settings are read
+ * from disk on every command, so a sync or an enrichment
  * run takes effect without a restart.
  *
  * `Guilds` is the only intent. Slash commands arrive regardless of intents,
@@ -18,17 +19,23 @@ import { REST } from "@discordjs/rest";
 import { WebSocketManager } from "@discordjs/ws";
 import { GatewayDispatchEvents, GatewayIntentBits } from "discord-api-types/v10";
 import {
+  ACTIVITY_PATH,
   DATA_DIR,
+  PRIVACY_POLICY_PATH,
   VOCABULARY_PATH,
   loadCatalog,
   loadRoleManifest,
   openBoundary,
+  readActivity,
   readIfPresent,
   retrying,
 } from "../llm/session.ts";
 import { parseVocabulary } from "../llm/vocabulary.ts";
+import { DURABLE_STORE_PATH } from "../sync/durable-store.ts";
+import { TIER0_PATH } from "../sync/tier0-store.ts";
 import { FIND_TIMEOUT_MS } from "./find.ts";
 import { dailyCap, findDailyCap, handleInteraction, type Sherpa } from "./interactions.ts";
+import { openPrivacy } from "./privacy.ts";
 
 const token = process.env["DISCORD_BOT_TOKEN"];
 const guildId = process.env["DISCORD_GUILD_ID"];
@@ -45,6 +52,13 @@ const sherpa: Sherpa = {
   loadCatalog,
   loadRoleManifest,
   loadVocabulary: () => parseVocabulary(readIfPresent(VOCABULARY_PATH)),
+  loadActivity: () => readActivity(),
+  privacy: openPrivacy({
+    durable: DURABLE_STORE_PATH,
+    tier0: TIER0_PATH,
+    activity: ACTIVITY_PATH,
+    policy: PRIVACY_POLICY_PATH,
+  }),
   askFor: (catalog) => openBoundary(catalog, {}, FIND_TIMEOUT_MS).boundary.ask,
   retrying: (work) => retrying(work, log),
   cap: dailyCap(resolve(DATA_DIR, "find-usage.json"), limit, log),

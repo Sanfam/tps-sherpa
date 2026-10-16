@@ -20,10 +20,10 @@ Every credential gets three homes:
 
 | Credential | Purpose | Runtime location | Durable copy | Expires | Owners |
 |---|---|---|---|---|---|
-| `DISCORD_BOT_TOKEN` | Papa Sherpa reads the guild and (later) posts | ⚠️ local `.env` only — **not yet in Railway** | ⚠️ TODO | Never (rotate on exposure) | ⚠️ TODO |
+| `DISCORD_BOT_TOKEN` | Papa Sherpa reads the guild and (later) posts | Railway `bot` service variables (2026-10-15) and local `.env` | ⚠️ TODO | Never (rotate on exposure) | ⚠️ TODO |
 | `GITHUB_MACHINE_TOKEN` | **Retired by ADR-0001** — the bot no longer commits. Revoke once a human confirms nothing else uses it | ⚠️ local `.env` only | ⚠️ TODO | **No expiry set** *(verified 2026-09-02)* | ⚠️ TODO |
 | Litestream object-storage keys | Replicate durable SQLite files to R2 (or B2), one bucket-scoped key per service (ADR-0001) | ⚠️ not yet minted | ⚠️ TODO | ⚠️ TODO | ⚠️ TODO |
-| `LLM_API_KEY` | Every model call — tagging, summaries | ⚠️ local `.env` only (as `OPENROUTER_API_KEY`) — **not yet in Railway** | ⚠️ TODO | Provider-managed | ⚠️ TODO |
+| `LLM_API_KEY` | Every model call — tagging, summaries | Railway `bot` service variables (2026-10-15) and local `.env` (as `OPENROUTER_API_KEY`) | ⚠️ TODO | Provider-managed | ⚠️ TODO |
 | Discord application | Owns the bot; invisible until it is lost | Discord developer portal | n/a — account ownership | n/a | ⚠️ TODO |
 | Railway project | Hosting | n/a | n/a | n/a | ⚠️ TODO |
 | Cloudflare account | DNS, proxy, R2 | n/a | n/a | n/a | ⚠️ TODO |

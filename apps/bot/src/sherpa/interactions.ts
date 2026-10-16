@@ -10,6 +10,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import {
   type APIChatInputApplicationCommandInteraction,
+  type APIEmbed,
   type APIInteraction,
   ApplicationCommandOptionType,
   ApplicationCommandType,
@@ -17,6 +18,7 @@ import {
   MessageFlags,
   type RESTPutAPIApplicationGuildCommandsJSONBody,
 } from "discord-api-types/v10";
+import type { ActivityStore } from "../llm/activity.ts";
 import type { Boundary } from "../llm/boundary.ts";
 import type { Vocabulary } from "../llm/vocabulary.ts";
 import type { Entity } from "../sync/catalog.ts";
@@ -24,6 +26,7 @@ import { MEMBER_ROLE_NAME } from "../sync/discord-adapter.ts";
 import type { RoleManifestEntry } from "../sync/ports.ts";
 import { EMPTY_QUERY, MAX_QUERY_LENGTH, findPlaces, renderFind } from "./find.ts";
 import { latelyPlaces, renderLately } from "./lately.ts";
+import { type Answer, PRIVACY_COMMAND, type Privacy, answerPrivacy } from "./privacy.ts";
 
 /** Discord's ceiling on a command option's choices. */
 const MAX_CHOICES = 25;
@@ -63,19 +66,23 @@ export const commandDefinitions = (vocabulary: Vocabulary): RESTPutAPIApplicatio
         },
       ],
     },
+    PRIVACY_COMMAND,
   ];
 };
 
 /** The only shape anything here sends to Discord. */
 export interface EphemeralReply {
   content: string;
+  /** Only the privacy policy, which is longer than a message can be. */
+  embeds?: APIEmbed[];
   flags: MessageFlags.Ephemeral;
   /** A template never pings, whatever a summary or a name happens to contain. */
   allowed_mentions: { parse: [] };
 }
 
-export const reply = (content: string): EphemeralReply => ({
+export const reply = (content: string, embeds?: APIEmbed[]): EphemeralReply => ({
   content,
+  ...(embeds ? { embeds } : {}),
   flags: MessageFlags.Ephemeral,
   allowed_mentions: { parse: [] },
 });
@@ -165,6 +172,9 @@ export const CAP_REACHED =
   "Sherpa has answered all the `/find` questions it can for today. Try again tomorrow, " +
   "or use `/lately` to see what's active.";
 export const FIND_OFF = "`/find` is switched off for now. Use `/lately` to see what's active.";
+export const FIND_OPTED_OUT =
+  "You've turned off Sherpa reading what you write, and `/find` needs that to read your request. " +
+  "To turn it back on: `/privacy opt-in processing`. `/lately` works either way.";
 export const FAILED = "Something went wrong on Sherpa's side. Try again in a minute.";
 export const UNKNOWN = "Sherpa doesn't know that command.";
 
@@ -180,6 +190,9 @@ export interface Sherpa {
   loadCatalog: () => Entity[];
   loadRoleManifest: () => RoleManifestEntry[];
   loadVocabulary: () => Vocabulary;
+  /** Activity summaries, for `/lately`. Bot-side only (activity.ts). */
+  loadActivity: () => ActivityStore;
+  privacy: Privacy;
   /** A boundary built against this Catalog, so its carve-out checks see what the candidates came from. */
   askFor: (catalog: Entity[]) => Boundary["ask"];
   /** One retry, as every other paid call gets. */
@@ -198,8 +211,15 @@ const stringOption = (interaction: APIChatInputApplicationCommandInteraction, na
 const answer = async (
   interaction: APIChatInputApplicationCommandInteraction,
   sherpa: Sherpa,
-): Promise<string> => {
+): Promise<Answer> => {
   const tag = `[sherpa] /${interaction.data.name} ${interaction.id}`;
+  // Ahead of the Member gate: anyone in the guild may opt out or delete.
+  if (interaction.data.name === "privacy") {
+    const answered = answerPrivacy(interaction, sherpa.privacy, sherpa.log, tag);
+    if (answered !== null) return answered;
+    sherpa.log(`${tag} unknown subcommand`);
+    return UNKNOWN;
+  }
   if (!isMember(interaction, sherpa.guildId, sherpa.loadRoleManifest())) {
     sherpa.log(`${tag} refused: not a Member`);
     return NOT_A_MEMBER;
@@ -208,6 +228,12 @@ const answer = async (
   if (interaction.data.name === "find" && sherpa.cap.limit === 0) {
     sherpa.log(`${tag} refused: /find is off`);
     return FIND_OFF;
+  }
+  // Also before the Catalog, and after "off": telling someone to opt back in
+  // for a command that is off for everyone would send them round in a circle.
+  if (interaction.data.name === "find" && !sherpa.privacy.settings(interaction.member!.user.id).processing) {
+    sherpa.log(`${tag} refused: processing is off`);
+    return FIND_OPTED_OUT;
   }
   const catalog = sherpa.loadCatalog();
   const vocabulary = sherpa.loadVocabulary();
@@ -248,8 +274,12 @@ const answer = async (
     const slug = stringOption(interaction, "topic");
     const topic = vocabulary.topics.find((t) => t.slug === slug) ?? null;
     const places = latelyPlaces(catalog, topic, sherpa.now?.());
-    sherpa.log(`${tag} topic=${topic?.slug ?? "-"} places=${places.length}`);
-    return renderLately(places, topic);
+    const activity = sherpa.loadActivity();
+    sherpa.log(
+      `${tag} topic=${topic?.slug ?? "-"} places=${places.length} ` +
+        `activity=${places.filter((p) => activity[p.id]?.summary).length}`,
+    );
+    return renderLately(places, topic, activity);
   }
 
   sherpa.log(`${tag} unknown command`);
@@ -273,14 +303,16 @@ export const handleInteraction = async (
     return;
   const command = interaction as APIChatInputApplicationCommandInteraction;
   await discord.defer({ flags: MessageFlags.Ephemeral });
-  let content: string;
+  let answered: Answer;
   try {
-    content = await answer(command, sherpa);
+    answered = await answer(command, sherpa);
   } catch (error) {
     sherpa.log(
       `[sherpa] /${command.data.name} ${command.id} failed: ${(error as Error).message.slice(0, 160)}`,
     );
-    content = FAILED;
+    answered = FAILED;
   }
-  await discord.followUp(reply(content));
+  await discord.followUp(
+    typeof answered === "string" ? reply(answered) : reply(answered.content, answered.embeds),
+  );
 };

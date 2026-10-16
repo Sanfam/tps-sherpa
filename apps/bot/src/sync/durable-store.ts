@@ -1,7 +1,7 @@
 /**
  * The bot's durable store: the current Catalog generation, its role manifest,
- * and the exclusions (ADR-0001). Later, opt-outs and the rest of the durable
- * state the handoff names.
+ * the exclusions, and members' privacy preferences (ADR-0001). Later, the rest
+ * of the durable state the handoff names.
  *
  * Separate from the Tier 0 cache on purpose. Litestream replicates whole
  * databases, and this is the one that gets replicated; Tier 0 must not be.
@@ -27,6 +27,40 @@ export interface Generation {
 }
 
 /**
+ * Tables added after the first deployed initialisation. Applied on every open,
+ * after the marker check, so a deployed store gains them in place and is never
+ * re-initialised for them — and a missing or unmarked store is still refused
+ * before anything is created in it.
+ *
+ * `preference`: one row per member and setting, written only when a member
+ * sets one; no row means allowed — every member starts opted in and can opt
+ * out at any time (Staff, 2026-10-15). Kept through every purge and every deletion request: it is what
+ * honours them (ADR-0001, erasure policy).
+ */
+const MIGRATIONS = `
+  CREATE TABLE IF NOT EXISTS preference (
+    member_id  TEXT NOT NULL,
+    setting    TEXT NOT NULL CHECK (setting IN ('approach', 'processing')),
+    allowed    INTEGER NOT NULL CHECK (allowed IN (0, 1)),
+    changed_at TEXT NOT NULL,
+    PRIMARY KEY (member_id, setting)
+  );
+`;
+
+/**
+ * What a member may turn off.
+ *
+ * - `approach`: Sherpa may message them unprompted. Nothing does yet; the
+ *   introductions responder will read it.
+ * - `processing`: Sherpa may read and process what they write — Tier 0
+ *   capture of their messages, their words in activity summaries, and their
+ *   own words (a `/find` query included) sent to a model.
+ */
+export const SETTINGS = ["approach", "processing"] as const;
+export type Setting = (typeof SETTINGS)[number];
+export type Preferences = Record<Setting, boolean>;
+
+/**
  * The Entity is stored whole, as today's Catalog schema: that schema is the
  * data contract the snapshot carries, so a new field is not a migration.
  */
@@ -49,14 +83,19 @@ const SCHEMA = `
     id INTEGER PRIMARY KEY CHECK (id = 1),
     at TEXT NOT NULL
   );
+  ${MIGRATIONS}
 `;
 
 /**
  * Freed pages and cells are zeroed rather than left readable in the file, so a
  * deleted row does not survive into a replica. Per connection, so every
  * connection sets it — the erasure policy depends on it.
+ *
+ * The busy timeout because the gateway writes preferences while a pipeline
+ * step may be mid-write in another process: a member's opt-out should wait a
+ * moment for the lock, not fail.
  */
-const PRAGMAS = "PRAGMA journal_mode = WAL; PRAGMA secure_delete = ON;";
+const PRAGMAS = "PRAGMA journal_mode = WAL; PRAGMA secure_delete = ON; PRAGMA busy_timeout = 5000;";
 
 /**
  * The startup contract. Runs before anything reads or migrates the file.
@@ -85,6 +124,7 @@ export const openDurableStore = (path: string = DURABLE_STORE_PATH) => {
     );
   }
   db.exec(PRAGMAS);
+  db.exec(MIGRATIONS);
 
   return {
     /** The current generation, or null before the first complete sync. */
@@ -158,22 +198,69 @@ export const openDurableStore = (path: string = DURABLE_STORE_PATH) => {
       });
     },
 
+    /** A member's settings. Anything they never set is allowed. */
+    preferences: (memberId: string): Preferences => {
+      const rows = db
+        .prepare("SELECT setting, allowed FROM preference WHERE member_id = ?")
+        .all(memberId) as Array<{ setting: Setting; allowed: number }>;
+      const set = new Map(rows.map((r) => [r.setting, r.allowed === 1]));
+      return { approach: set.get("approach") ?? true, processing: set.get("processing") ?? true };
+    },
+
+    /** Records a setting. Its time moves only when its value does. */
+    setPreference: (memberId: string, setting: Setting, allowed: boolean) => {
+      db.prepare(
+        `INSERT INTO preference (member_id, setting, allowed, changed_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT (member_id, setting) DO UPDATE
+           SET allowed = excluded.allowed, changed_at = excluded.changed_at
+           WHERE allowed != excluded.allowed`,
+      ).run(memberId, setting, allowed ? 1 : 0, new Date().toISOString());
+    },
+
+    /** Every member who has turned processing off. */
+    processingOptOuts: (): Set<string> =>
+      new Set(
+        (
+          db
+            .prepare("SELECT member_id FROM preference WHERE setting = 'processing' AND allowed = 0")
+            .all() as Array<{ member_id: string }>
+        ).map((r) => r.member_id),
+      ),
+
     close: () => db.close(),
   };
 };
 
-/** Opens the store, reads the current generation, and closes it again. */
-export const readCurrent = (path: string = DURABLE_STORE_PATH): Generation => {
+export type DurableStore = ReturnType<typeof openDurableStore>;
+
+/** Opens the store for one piece of work and closes it again, whatever happens. */
+export const withDurableStore = <T>(
+  work: (store: DurableStore) => T,
+  path: string = DURABLE_STORE_PATH,
+): T => {
   const store = openDurableStore(path);
   try {
-    const current = store.current();
-    if (!current)
-      throw new Error("The durable store holds no Catalog yet. Run a sync first.");
-    return current;
+    return work(store);
   } finally {
     store.close();
   }
 };
+
+/** Opens the store, reads the current generation, and closes it again. */
+export const readCurrent = (path: string = DURABLE_STORE_PATH): Generation =>
+  withDurableStore((store) => {
+    const current = store.current();
+    if (!current)
+      throw new Error("The durable store holds no Catalog yet. Run a sync first.");
+    return current;
+  }, path);
+
+/**
+ * Who has turned processing off, read fresh. Every path that stores or sends
+ * a member's words reads this: capture, the purge, and every boundary.
+ */
+export const readProcessingOptOuts = (path: string = DURABLE_STORE_PATH): Set<string> =>
+  withDurableStore((store) => store.processingOptOuts(), path);
 
 /**
  * First initialisation: the ADR's explicit first-run flag, as a one-off

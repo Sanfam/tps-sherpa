@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Entity } from "./catalog.ts";
-import { projectedCalls, selectForCapture, type CaptureState } from "./tier0.ts";
+import { openTier0 } from "./tier0-store.ts";
+import { captureEach, projectedCalls, selectForCapture, toStored, type CaptureState } from "./tier0.ts";
 
 const entity = (over: Partial<Entity> & { id: string }): Entity => ({
   type: "post",
@@ -113,5 +114,67 @@ describe("selectForCapture", () => {
 describe("projectedCalls", () => {
   it("is two calls per Entity: one head window, one tail", () => {
     expect(projectedCalls(1195)).toBe(2390);
+  });
+});
+
+describe("toStored", () => {
+  it("never stores a member with processing off, and keeps bots flagged as before", () => {
+    const raw = (id: string, authorId: string, authorIsBot = false) => ({
+      id,
+      authorId,
+      authorIsBot,
+      content: "text",
+      createdAt: new Date().toISOString(),
+      window: "head" as const,
+    });
+    const stored = toStored("e1", [raw("1", "in"), raw("2", "out"), raw("3", "bot", true)], new Set(["out"]));
+    expect(stored.map((m) => [m.messageId, m.entityId, m.authorIsBot])).toEqual([
+      ["1", "e1", false],
+      ["3", "e1", true],
+    ]);
+  });
+});
+
+describe("captureEach", () => {
+  const raw = (id: string, authorId: string) => ({
+    id,
+    authorId,
+    authorIsBot: false,
+    content: "text",
+    createdAt: new Date().toISOString(),
+    window: "head" as const,
+  });
+
+  it("hears an opt-out made mid-run before storing the next Entity", async () => {
+    let optedOut = new Set<string>();
+    const store = openTier0(":memory:");
+    await captureEach({
+      entities: [entity({ id: "e1" }), entity({ id: "e2" })],
+      fetch: async (id) => {
+        // The gateway records the opt-out while e2 is being fetched.
+        if (id === "e2") optedOut = new Set(["member"]);
+        return [raw(`${id}-m`, "member"), raw(`${id}-o`, "other")];
+      },
+      store,
+      optedOut: () => new Set(optedOut),
+    });
+    expect(store.messagesFor("e1").map((m) => m.authorId).sort()).toEqual(["member", "other"]);
+    expect(store.messagesFor("e2").map((m) => m.authorId)).toEqual(["other"]);
+    store.close();
+  });
+
+  it("leaves an Entity uncaptured when the opt-outs cannot be read, rather than storing it unchecked", async () => {
+    const store = openTier0(":memory:");
+    const result = await captureEach({
+      entities: [entity({ id: "e1" })],
+      fetch: async () => [raw("m", "member")],
+      store,
+      optedOut: () => {
+        throw new Error("database is locked");
+      },
+    });
+    expect(result.failed.map((f) => f.id)).toEqual(["e1"]);
+    expect(store.state().size).toBe(0);
+    store.close();
   });
 });

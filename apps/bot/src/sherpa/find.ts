@@ -202,7 +202,7 @@ export const findPlaces = async (request: {
   return { ...result, candidates: candidates.length };
 };
 
-const clip = (text: string, max = MAX_SUMMARY_CHARS): string =>
+export const clip = (text: string, max = MAX_SUMMARY_CHARS): string =>
   text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
 
 /**
