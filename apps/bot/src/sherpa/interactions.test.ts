@@ -407,7 +407,7 @@ describe("/find with processing off", () => {
   it("works again once processing is back on", async () => {
     const { run, calls } = harness({ optedOut: true });
     await run(privacyCommand("opt-in", { setting: "processing" }));
-    expect(await run(command("find", { interests: QUERY }))).toContain("<#100000000000000001>");
+    expect(await run(command("find", { interests: QUERY }))).toContain("**Rocket League** ([open](https://discord.com/channels/1/100000000000000001))");
     expect(calls).toHaveLength(1);
   });
 
@@ -431,7 +431,7 @@ describe("/lately through the dispatcher", () => {
 describe("the Member gate", () => {
   it("answers a Member holding any role named Member", async () => {
     const { run, calls } = harness();
-    expect(await run(command("find", { interests: QUERY }))).toContain("<#100000000000000001>");
+    expect(await run(command("find", { interests: QUERY }))).toContain("**Rocket League** ([open](https://discord.com/channels/1/100000000000000001))");
     expect(calls).toHaveLength(1);
   });
 

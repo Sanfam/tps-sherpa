@@ -210,11 +210,11 @@ describe("parseFind", () => {
 });
 
 describe("renderFind", () => {
-  it("lists two or more matches as mentions, the human summary ahead of the generated one", () => {
+  it("lists two or more matches, the human summary ahead of the generated one", () => {
     const reply = renderFind({ matches: [flight, rocket], topics: [vocabulary.topics[0]!] });
-    expect(reply).toContain(`<#${flight.id}> — Staff-written blurb about sims.`);
+    expect(reply).toContain(`**Flight Simulators** ([open](${flight.url})) — Staff-written blurb about sims.`);
     expect(reply).not.toContain("Generated blurb.");
-    expect(reply).toContain(`<#${rocket.id}> — Car football`);
+    expect(reply).toContain(`**Rocket League** ([open](${rocket.url})) — Car football`);
     expect(reply).toContain("Topics: Gaming");
     expect(reply).not.toContain(MORE_DETAIL);
   });
@@ -222,19 +222,63 @@ describe("renderFind", () => {
   it("says so with one match, rather than padding", () => {
     const reply = renderFind({ matches: [rocket], topics: [] });
     expect(reply).toMatch(/^I found one place/);
-    expect(reply).toContain(`<#${rocket.id}>`);
+    expect(reply).toContain(`**Rocket League** ([open](${rocket.url}))`);
     expect(reply).toContain(MORE_DETAIL);
+  });
+
+  it("names a Post or Thread in text with a separate link, which an archived one needs; a Forum keeps its mention", () => {
+    // A client that has not loaded an archived Thread renders `<#id>` as "#unknown".
+    const thread = entity({ id: "10", name: "Weekly raid", type: "thread", parent_id: null });
+    const reply = renderFind({ matches: [flight, thread, games], topics: [] });
+    expect(reply).toContain(`• **Flight Simulators** ([open](${flight.url}))`);
+    expect(reply).not.toContain(`<#${flight.id}>`);
+    expect(reply).toContain(`• **Weekly raid** ([open](${thread.url}))`);
+    expect(reply).not.toContain(`<#${thread.id}>`);
+    expect(reply).toContain(`• <#${games.id}>`);
+  });
+
+  it("keeps a member-written name inert and on one line", () => {
+    const sly = entity({
+      id: "8",
+      name: "a](https://evil.example) *b* @everyone 🚙\n• Fake place",
+      summary_generated: "S.",
+    });
+    const reply = renderFind({ matches: [sly, rocket], topics: [] });
+    expect(reply.split("\n")[1]).toBe(
+      `• **a\\]\\(https\\://evil.example\\) \\*b\\* \\@everyone 🚙 • Fake place** ([open](${sly.url})) — S.`,
+    );
+    expect(reply.match(/^• /gm)).toHaveLength(2);
+  });
+
+  it("doubles a trailing backslash, so it cannot escape the closing bold", () => {
+    const slash = entity({ id: "11", name: "ends in \\", summary_generated: "S." });
+    expect(renderFind({ matches: [slash, rocket], topics: [] })).toContain("• **ends in \\\\** ([open](");
+  });
+
+  it("falls back to the mention when a Post has no deep link", () => {
+    const bare = entity({ id: "9", name: "Bare", url: "" });
+    expect(renderFind({ matches: [bare, rocket], topics: [] })).toContain(`• <#${bare.id}>`);
+  });
+
+  it("leaves whole places off the end rather than pass Discord's limit", () => {
+    const long = (i: number) =>
+      entity({ id: `7${i}`, name: "*".repeat(100), summary_generated: "y".repeat(400) });
+    const reply = renderFind({ matches: [1, 2, 3, 4, 5].map(long), topics: [vocabulary.topics[0]!] });
+    expect(reply.length).toBeLessThanOrEqual(2000);
+    expect(reply.match(/^• /gm)!.length).toBeLessThan(5);
+    expect(reply.endsWith("Topics: Gaming")).toBe(true);
   });
 
   it("asks for more with no match, and invents none", () => {
     const reply = renderFind({ matches: [], topics: [] });
-    expect(reply).not.toContain("<#");
+    expect(reply).not.toMatch(/<#|\]\(/);
     expect(reply).toContain(MORE_DETAIL);
   });
 
   it("clips a long override", () => {
     const long = entity({ id: "9", name: "x", summary_override: "word ".repeat(100) });
-    expect(renderFind({ matches: [long, rocket], topics: [] }).split("\n")[1]!.length).toBeLessThan(170);
+    const line = renderFind({ matches: [long, rocket], topics: [] }).split("\n")[1]!;
+    expect(line.split(" — ")[1]!.length).toBeLessThanOrEqual(150);
   });
 });
 
@@ -270,8 +314,8 @@ describe("/lately", () => {
 
   it("describes each place by what it is, with when it was last active", () => {
     const reply = renderLately([fresh, older], null);
-    expect(reply).toContain(`<#${fresh.id}> <t:${Math.floor(Date.parse(fresh.last_activity_at!) / 1000)}:R>`);
-    expect(reply).toContain(`<#${older.id}> <t:`);
+    expect(reply).toContain(`**fresh** ([open](${fresh.url})) <t:${Math.floor(Date.parse(fresh.last_activity_at!) / 1000)}:R>`);
+    expect(reply).toContain(`**older** ([open](${older.url})) <t:`);
     expect(reply).toContain("— About it.");
   });
 

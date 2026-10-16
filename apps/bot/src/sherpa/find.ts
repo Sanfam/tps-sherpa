@@ -206,14 +206,43 @@ export const clip = (text: string, max = MAX_SUMMARY_CHARS): string =>
   text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
 
 /**
- * One place: a native mention (it survives renames), then anything to say
- * beside it, then the Catalog's own summary.
+ * A member-written name as plain text on one line: whitespace (newlines and
+ * the Unicode line separators included) collapsed, so a name cannot fake a
+ * second row, and Discord markdown escaped, so it cannot format or link.
+ */
+const plainName = (name: string): string =>
+  name.replace(/\s+/g, " ").trim().replace(/[\\[\]()*_~`|>#<@:-]/g, "\\$&");
+
+/**
+ * How a reply names a place. Channels and Forums get a native mention, which
+ * survives renames. Posts and Threads get their name in bold and a separate
+ * link: a client that has not loaded an archived Thread renders its mention
+ * as "#unknown", and most of the Catalog's Posts are archived. Whether one is
+ * archived right now cannot be read from the Catalog, which is up to a cycle
+ * old, so every Post and Thread is shown this way. The name is kept out of
+ * the link's own text, where Discord refuses emoji and shows escapes.
+ *
+ * A deep link that is not one falls back to the mention, which is never
+ * worse than before.
+ */
+const placeRef = (entity: Entity): string =>
+  (entity.type === "post" || entity.type === "thread") &&
+  entity.url.startsWith("https://discord.com/channels/")
+    ? `**${plainName(entity.name)}** ([open](${entity.url}))`
+    : `<#${entity.id}>`;
+
+/**
+ * One place: how it is named (above), then anything to say beside it, then
+ * the Catalog's own summary.
  */
 export const placeLine = (
   entity: Entity,
   summary: string | null = summaryOf(entity),
   beside = "",
-): string => `• <#${entity.id}>${beside}${summary ? ` — ${clip(summary)}` : ""}`;
+): string => `• ${placeRef(entity)}${beside}${summary ? ` — ${clip(summary)}` : ""}`;
+
+/** Discord's ceiling on a message's content. */
+export const MAX_MESSAGE_CHARS = 2000;
 
 export const MORE_DETAIL =
   "Tell me a bit more — a game, a hobby, a sport, a show, your line of work, or where you're " +
@@ -227,16 +256,16 @@ export const EMPTY_QUERY = `Tell me what you're into and I'll point you at place
  */
 export const renderFind = ({ matches, topics }: Pick<FindResult, "matches" | "topics">): string => {
   const topicLine = topics.length ? [`Topics: ${topics.map((t) => t.label).join(" · ")}`] : [];
-  if (matches.length >= MIN_CONFIDENT)
-    return ["Places that fit what you're into:", ...matches.map((e) => placeLine(e)), ...topicLine].join(
-      "\n",
-    );
-  return [
-    matches.length === 1
+  const confident = matches.length >= MIN_CONFIDENT;
+  const head = confident
+    ? "Places that fit what you're into:"
+    : matches.length === 1
       ? "I found one place that fits, not a handful:"
-      : "I couldn't find a place that clearly fits that.",
-    ...matches.map((e) => placeLine(e)),
-    ...topicLine,
-    MORE_DETAIL,
-  ].join("\n");
+      : "I couldn't find a place that clearly fits that.";
+  const tail = [...topicLine, ...(confident ? [] : [MORE_DETAIL])];
+  // Whole places come off the end, weakest first, rather than Discord
+  // refusing the reply: five long, heavily escaped names can pass the limit.
+  const lines = matches.map((e) => placeLine(e));
+  while (lines.length > 1 && [head, ...lines, ...tail].join("\n").length > MAX_MESSAGE_CHARS) lines.pop();
+  return [head, ...lines, ...tail].join("\n");
 };

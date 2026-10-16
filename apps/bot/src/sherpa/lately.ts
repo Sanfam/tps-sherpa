@@ -13,13 +13,12 @@ import type { ActivityStore } from "../llm/activity.ts";
 import type { Topic } from "../llm/vocabulary.ts";
 import type { Entity } from "../sync/catalog.ts";
 import { ACTIVE_WITHIN_DAYS, activityBucket } from "../sync/facets.ts";
-import { candidatesOf, clip, placeLine } from "./find.ts";
+import { MAX_MESSAGE_CHARS, candidatesOf, clip, placeLine } from "./find.ts";
+
+export { MAX_MESSAGE_CHARS };
 
 /** A screenful. More than this is a list to scroll, not a nudge. */
 export const MAX_LATELY = 8;
-
-/** Discord's ceiling on a message's content. */
-export const MAX_MESSAGE_CHARS = 2000;
 
 /**
  * The same candidates `/find` may name, so the two commands cannot disagree
@@ -55,7 +54,7 @@ const lineFor = (entity: Entity, activity: ActivityStore): string => {
 /**
  * Places that would push the reply past Discord's limit are left off the end,
  * rather than the reply failing: eight places with both summaries at full
- * length come to about 2,900 characters, of which five fit.
+ * length come to about 3,300 characters, of which four fit.
  */
 export const renderLately = (
   places: Entity[],
