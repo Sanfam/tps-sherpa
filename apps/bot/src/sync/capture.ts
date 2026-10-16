@@ -11,11 +11,10 @@
  * **The store is a disposable cache.** Nothing here is backed up. If the volume
  * is lost, delete nothing and re-run — the rebuild path is this command.
  */
-import { readFileSync } from "node:fs";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import type { Entity } from "./catalog.ts";
 import { discordRest } from "./discord-adapter.ts";
+import { readCurrent } from "./durable-store.ts";
 import { openTier0, type StoredMessage } from "./tier0-store.ts";
 import { GLOBAL_REQUEST_CEILING, projectedCalls, selectForCapture } from "./tier0.ts";
 
@@ -26,10 +25,7 @@ if (!token || !guildId) {
   process.exit(1);
 }
 
-const root = (rel: string) => resolve(import.meta.dirname, "../../../..", rel);
-const catalog: Entity[] = JSON.parse(
-  readFileSync(root("content/index/data.json"), "utf8"),
-);
+const { catalog } = readCurrent();
 
 const dbPath = process.env["TIER0_PATH"] ?? resolve(import.meta.dirname, "../../.data/tier0.db");
 mkdirSync(dirname(dbPath), { recursive: true });

@@ -15,8 +15,9 @@
  * corpus before freezing it. It still refuses anything marked `proposed`:
  * freeze a copy, try it, throw the copy away.
  *
- * `topics` and `summaries` read the local Catalog and write back into it —
- * no Discord call, so a retag or a reword is a local reprocess. All three are
+ * `topics` and `summaries` read the Catalog from the bot's durable store and
+ * write what they produce back into it — no Discord call, so a retag or a
+ * reword is a local reprocess. All three are
  * incremental: an Entity
  * whose identity has not changed keeps what the last run produced (the sync
  * drops those fields when it does change), so a scheduled run does nothing and
@@ -29,6 +30,7 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Entity } from "../sync/catalog.ts";
+import { DURABLE_STORE_PATH, openDurableStore } from "../sync/durable-store.ts";
 import { DEFAULT_MONITORED_CHANNELS } from "../sync/tier0.ts";
 import { openTier0 } from "../sync/tier0-store.ts";
 import {
@@ -39,7 +41,6 @@ import {
 } from "./activity.ts";
 import { classifySystemPrompt, needsClassifying, parseTags, reconcile } from "./classify.ts";
 import {
-  CATALOG_PATH,
   VOCABULARY_PATH,
   flag,
   loadCatalog,
@@ -290,8 +291,17 @@ if (job === "activity") {
     console.log(`\nWrote ${ACTIVITY_PATH} (bot-side; never committed)`);
   }
 } else if (dryRun) {
-  console.log(`\nDry run — ${CATALOG_PATH} untouched.`);
+  console.log(`\nDry run — ${DURABLE_STORE_PATH} untouched.`);
 } else {
-  writeFileSync(CATALOG_PATH, `${JSON.stringify(updated, null, 2)}\n`);
-  console.log(`\nWrote ${CATALOG_PATH}`);
+  // Only the fields this job owns, so a Staff override is never written over.
+  const store = openDurableStore();
+  store.patchEntities(
+    updated
+      .filter((e) => results.has(e.id))
+      .map(({ id, topics, topics_version, summary_generated }) =>
+        job === "topics" ? { id, topics, topics_version } : { id, summary_generated },
+      ),
+  );
+  store.close();
+  console.log(`\nWrote ${results.size} Entities to ${DURABLE_STORE_PATH}`);
 }

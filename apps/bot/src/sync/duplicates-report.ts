@@ -7,15 +7,12 @@
  * anywhere for the first time is a stop condition in the handoff, and that is
  * a separate, deliberate decision.
  */
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { Entity } from "./catalog.ts";
+import { readCurrent } from "./durable-store.ts";
 import { findDuplicateCandidates, formatForMods, type CapturedMessage } from "./duplicates.ts";
 
-const catalog: Entity[] = JSON.parse(
-  readFileSync(resolve(import.meta.dirname, "../../../../content/index/data.json"), "utf8"),
-);
+const { catalog } = readCurrent();
 const dbPath = process.env["TIER0_PATH"] ?? resolve(import.meta.dirname, "../../.data/tier0.db");
 const db = new DatabaseSync(dbPath);
 const messages = db

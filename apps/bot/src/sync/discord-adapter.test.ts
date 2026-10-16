@@ -17,7 +17,9 @@ const listThreads = (payload: { active: unknown[]; archived: unknown[] }, warn?:
     guildId: "1",
     warn,
     rest: fakeRest(payload) as never,
-  }).listThreads(["100"]);
+  })
+    .listThreads(["100"])
+    .then((r) => r.threads);
 
 describe("captureWindows", () => {
   it("marks a webhook's message as not a member's, even without the bot flag", async () => {
@@ -87,5 +89,47 @@ describe("listThreads", () => {
     expect(threads[0]).toMatchObject({ archived: false, locked: false });
     expect(warnings).toHaveLength(2);
     expect(warnings[0]).toContain("without thread_metadata.locked");
+  });
+
+  it("reports a container whose archived Threads Discord denies, rather than a shorter list", async () => {
+    // #28: reduced to a warning, the Posts behind a 50001 read as removed.
+    const port = discordRest({
+      token: "unused",
+      guildId: "1",
+      rest: {
+        get: async (route: string) => {
+          if (route.includes("/threads/active")) return { threads: [] };
+          if (route.includes("/channels/200/threads/archived"))
+            throw Object.assign(new Error("Missing Access"), { code: 50001 });
+          if (route.includes("/threads/archived/public"))
+            return { threads: [{ id: "101", name: "kept", parent_id: "100", type: 11 }], has_more: false };
+          return { content: "starter" };
+        },
+      } as never,
+    });
+
+    const { threads, failed } = await port.listThreads(["100", "200"]);
+
+    expect(threads.map((t) => t.id)).toEqual(["101"]);
+    expect(failed).toEqual([{ id: "200", reason: expect.stringContaining("50001") }]);
+  });
+
+  it("reports a container whose archived pages promise more without a cursor", async () => {
+    const port = discordRest({
+      token: "unused",
+      guildId: "1",
+      rest: {
+        get: async (route: string) => {
+          if (route.includes("/threads/active")) return { threads: [] };
+          if (route.includes("/threads/archived/public"))
+            return { threads: [{ id: "101", name: "no metadata", parent_id: "100", type: 11 }], has_more: true };
+          return { content: "starter" };
+        },
+      } as never,
+    });
+
+    const { failed } = await port.listThreads(["100"]);
+
+    expect(failed).toEqual([{ id: "100", reason: expect.stringContaining("no cursor") }]);
   });
 });
