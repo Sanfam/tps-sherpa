@@ -514,11 +514,9 @@ describe("thread state", () => {
 });
 
 describe("parsePrevious", () => {
-  it("starts empty only on an explicit first run", () => {
-    expect(parsePrevious(null, true)).toEqual([]);
-    expect(() => parsePrevious(null, false)).toThrow(/missing/);
-    expect(parsePrevious("[]", true)).toEqual([]);
-    expect(() => parsePrevious("[]", false)).toThrow(/empty/);
+  it("refuses an empty Catalog, which was truncated rather than established", () => {
+    // Starting empty is the durable store's business, marked at initialisation.
+    expect(() => parsePrevious("[]")).toThrow(/empty/);
   });
 
   const carried = {
@@ -541,15 +539,15 @@ describe("parsePrevious", () => {
       json({ ...carried, topics: "gaming" }),
       json({ ...carried, topics_version: "2" }),
     ])
-      expect(() => parsePrevious(raw, false)).toThrow(/not a list/);
-    expect(() => parsePrevious("[{", false)).toThrow();
+      expect(() => parsePrevious(raw)).toThrow(/not a list/);
+    expect(() => parsePrevious("[{")).toThrow();
   });
 
   it("refuses duplicate ids, which would pick one override silently", () => {
-    expect(() => parsePrevious(json(carried, carried), false)).toThrow(/duplicate/);
+    expect(() => parsePrevious(json(carried, carried))).toThrow(/duplicate/);
   });
 
   it("returns the Entities it was given", () => {
-    expect(parsePrevious(json(carried), false)).toEqual([carried]);
+    expect(parsePrevious(json(carried))).toEqual([carried]);
   });
 });

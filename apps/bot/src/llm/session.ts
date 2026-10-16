@@ -1,5 +1,5 @@
 /**
- * The pieces every LLM command needs: the local Catalog, the name lookup
+ * The pieces every LLM command needs: the stored Catalog, the name lookup
  * redaction runs against, and a boundary wired to the configured provider.
  *
  * Shared so the three commands cannot end up with three different ideas of
@@ -10,6 +10,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Entity } from "../sync/catalog.ts";
+import { readCurrent } from "../sync/durable-store.ts";
 import type { NameLookup } from "../sync/normalise.ts";
 import { createBoundary, type Boundary } from "./boundary.ts";
 import { openAiWire, wireFromEnv } from "./openai-wire.ts";
@@ -17,7 +18,6 @@ import { openAiWire, wireFromEnv } from "./openai-wire.ts";
 export const contentPath = (rel: string): string =>
   resolve(import.meta.dirname, "../../../../content", rel);
 
-export const CATALOG_PATH = contentPath("index/data.json");
 export const VOCABULARY_PATH = contentPath("config/topics.json");
 export const VOCABULARY_PROPOSAL_PATH = contentPath("config/topics.proposed.json");
 
@@ -33,17 +33,15 @@ export const readIfPresent = (path: string): string | null => {
   }
 };
 
-export const loadCatalog = (): Entity[] =>
-  JSON.parse(readFileSync(CATALOG_PATH, "utf8")) as Entity[];
+/** The current generation, from the bot's durable store (ADR-0001). */
+export const loadCatalog = (): Entity[] => readCurrent().catalog;
 
 /**
  * Every Entity is a `<#id>` target, so the lookup covers the whole Catalog —
  * Posts and Threads included, not just containers.
  */
 export const nameLookup = (catalog: Entity[]): NameLookup => {
-  const roles = JSON.parse(
-    readIfPresent(contentPath("config/roles.json")) ?? "[]",
-  ) as Array<{ name: string; ids: string[] }>;
+  const roles = readCurrent().roleManifest;
   return {
     channels: new Map(catalog.map((e) => [e.id, e.name])),
     roles: new Map(roles.flatMap((r) => r.ids.map((id) => [id, r.name] as const))),

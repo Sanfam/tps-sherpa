@@ -6,6 +6,7 @@ import type {
   RawChannel,
   RoleManifestEntry,
   RawThread,
+  SyncOutcome,
 } from "./ports.ts";
 
 export type EntityType = "channel" | "forum" | "post" | "thread";
@@ -117,19 +118,14 @@ export const identityKey = (entity: Entity, parent?: Entity | null): string =>
   ].join("\u0000");
 
 /**
- * Overrides are human-authored and carried forward from the previous Catalog,
- * so anything that reads as "no previous Catalog" writes every one away. Only
- * an explicit first run may start empty; a missing file otherwise means the
- * Catalog was lost, and valid JSON that is not a list of Entities is corrupt.
+ * Validates a previous Catalog carried in from a file: the one-time import of
+ * a local `content/index/data.json` when the durable store is first
+ * initialised. Overrides are human-authored and carried forward from it, so a
+ * file that is not a list of Entities aborts the import rather than starting
+ * from less than was there. Starting empty is the store's business, and its
+ * initialisation marker says so, not a missing or empty file.
  */
-export const parsePrevious = (raw: string | null, firstRun: boolean): Entity[] => {
-  if (raw === null) {
-    if (firstRun) return [];
-    throw new Error(
-      "The previous Catalog is missing. Refusing to sync: starting empty would " +
-        "drop every summary override. Set SYNC_FIRST_RUN=1 only for a first run.",
-    );
-  }
+export const parsePrevious = (raw: string): Entity[] => {
   const parsed: unknown = JSON.parse(raw);
   // Checks what is carried forward verbatim. Anything else malformed crashes
   // buildCatalog before a write, which already fails closed.
@@ -148,13 +144,13 @@ export const parsePrevious = (raw: string | null, firstRun: boolean): Entity[] =
     );
   };
   if (!Array.isArray(parsed) || !parsed.every(isEntity))
-    throw new Error("The previous Catalog is not a list of Entities. Refusing to sync.");
+    throw new Error("The previous Catalog is not a list of Entities. Refusing to import it.");
   // Duplicates would make the override lookup pick one silently.
   if (new Set(parsed.map((e: Entity) => e.id)).size !== parsed.length)
-    throw new Error("The previous Catalog has duplicate Entity ids. Refusing to sync.");
+    throw new Error("The previous Catalog has duplicate Entity ids. Refusing to import it.");
   // An established Catalog is never empty, so an empty one was truncated.
-  if (parsed.length === 0 && !firstRun)
-    throw new Error("The previous Catalog is empty. Refusing to sync; see SYNC_FIRST_RUN.");
+  if (parsed.length === 0)
+    throw new Error("The previous Catalog is empty. Refusing to import it.");
   return parsed as Entity[];
 };
 
@@ -187,6 +183,8 @@ export const buildCatalog = async (deps: {
   roleManifest: RoleManifestEntry[];
   /** IDs that were configured for exclusion AND actually matched something. */
   exclusionsApplied: string[];
+  /** Incomplete means this Catalog must not replace the previous one. */
+  outcome: SyncOutcome;
 }> => {
   if (!(await deps.discord.hasMessageContentIntent())) {
     throw new Error(
@@ -264,7 +262,7 @@ export const buildCatalog = async (deps: {
   // withheld Forum must never have its Posts read. Excluded containers are
   // enumerated too, for the name lookup alone; their Posts and Threads are
   // dropped below, so they never reach the Catalog.
-  const allThreads = await deps.discord.listThreads(
+  const { threads: allThreads, failed } = await deps.discord.listThreads(
     visibleContainers.filter((c) => c.contentReadable).map((c) => c.id),
   );
   const threads = allThreads.filter((t) => !excluded.has(t.id) && !excluded.has(t.parentId));
@@ -424,5 +422,6 @@ export const buildCatalog = async (deps: {
       ...visibleContainers.filter((c) => excluded.has(c.id)).map((c) => c.id),
       ...allThreads.filter((t) => excluded.has(t.id)).map((t) => t.id),
     ].sort(),
+    outcome: failed.length ? { complete: false, failed } : { complete: true },
   };
 };
