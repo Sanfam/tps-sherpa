@@ -6,7 +6,7 @@ const place = (n: number, summary = "x".repeat(400)): Entity => ({
   id: `1000000000000000${String(n).padStart(3, "0")}`,
   type: "post",
   name: `Place ${n}`,
-  url: "",
+  url: `https://discord.com/channels/1/1000000000000000${String(n).padStart(3, "0")}`,
   parent_id: null,
   description_status: "present",
   topic: null,
@@ -31,9 +31,9 @@ describe("renderLately with activity summaries", () => {
     });
     expect(reply).toBe(
       "Active lately:\n" +
-        `• <#${place(1).id}> <t:${T}:R> — Car football.\n` +
+        `• **Place 1** ([open](${place(1).url})) <t:${T}:R> — Car football.\n` +
         "   ↳ Lately: Planning a Saturday tournament.\n" +
-        `• <#${place(2).id}> <t:${T}:R> — Sims.`,
+        `• **Place 2** ([open](${place(2).url})) <t:${T}:R> — Sims.`,
     );
   });
 
@@ -42,8 +42,8 @@ describe("renderLately with activity summaries", () => {
     const activity = Object.fromEntries(places.map((p) => [p.id, { summary: "y".repeat(400), as_of: "1" }]));
     const reply = renderLately(places, null, activity);
     expect(reply.length).toBeLessThanOrEqual(MAX_MESSAGE_CHARS);
-    // Whole places are left off the end, not cut in half: five of eight fit.
+    // Whole places are left off the end, not cut in half: four of eight fit.
     expect(reply.endsWith("…")).toBe(true);
-    expect(reply.match(/^• /gm)).toHaveLength(5);
+    expect(reply.match(/^• /gm)).toHaveLength(4);
   });
 });
