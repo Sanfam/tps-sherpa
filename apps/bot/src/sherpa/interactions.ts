@@ -133,6 +133,7 @@ export const dailyCap = (
   warn: (m: string) => void,
   now: () => Date = () => new Date(),
 ) => ({
+  limit,
   take: (): boolean => {
     const day = now().toISOString().slice(0, 10);
     let used: number;
@@ -163,6 +164,7 @@ export const NOT_A_MEMBER =
 export const CAP_REACHED =
   "Sherpa has answered all the `/find` questions it can for today. Try again tomorrow, " +
   "or use `/lately` to see what's active.";
+export const FIND_OFF = "`/find` is switched off for now. Use `/lately` to see what's active.";
 export const FAILED = "Something went wrong on Sherpa's side. Try again in a minute.";
 export const UNKNOWN = "Sherpa doesn't know that command.";
 
@@ -201,6 +203,11 @@ const answer = async (
   if (!isMember(interaction, sherpa.guildId, sherpa.loadRoleManifest())) {
     sherpa.log(`${tag} refused: not a Member`);
     return NOT_A_MEMBER;
+  }
+  // Before anything is read: off means off, even with a broken Catalog.
+  if (interaction.data.name === "find" && sherpa.cap.limit === 0) {
+    sherpa.log(`${tag} refused: /find is off`);
+    return FIND_OFF;
   }
   const catalog = sherpa.loadCatalog();
   const vocabulary = sherpa.loadVocabulary();
