@@ -30,7 +30,7 @@ Sherpa is on for everyone by default. You can withdraw that consent at any time 
 • Discord, which carries every message.
 • Railway, which hosts the bot and its backups.
 • OpenRouter, which forwards model requests. Only providers that keep no data and don't train on it are used.
-• Cloudflare R2, when it starts holding backups.
+• Cloudflare R2, which holds the bot's backups.
 
 They process data only to provide their service to us. We don't share your information with any associated entity: no partner, sponsor or other community. **We will never sell, rent or trade any information you share.**
 

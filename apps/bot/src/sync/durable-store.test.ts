@@ -53,7 +53,7 @@ const established = async () => {
 
 describe("the startup contract", () => {
   it("refuses a missing store, names the init command, and creates nothing", () => {
-    expect(() => openDurableStore(path)).toThrow(/missing.*init-store\.ts.*not wired yet/s);
+    expect(() => openDurableStore(path)).toThrow(/missing.*`node apps\/bot\/src\/sync\/init-store\.ts`.*restores it from the replica/s);
     expect(existsSync(path)).toBe(false);
   });
 
@@ -371,6 +371,21 @@ describe("privacy preferences", () => {
     expect(() => openDurableStore(path)).toThrow(/no initialisation marker/);
     const db = new DatabaseSync(path);
     expect(db.prepare("SELECT name FROM sqlite_master").all()).toEqual([]);
+    db.close();
+  });
+});
+
+describe("the heartbeat", () => {
+  it("rewrites its one row, so the store changes even when nothing else does", () => {
+    initDurableStore(path, { exclusionSeed: seed, catalog: null, roleManifest: null });
+    const store = openDurableStore(path);
+    store.beat(new Date("2026-10-17T00:00:00Z"));
+    store.beat(new Date("2026-10-17T03:00:00Z"));
+    store.close();
+    const db = new DatabaseSync(path);
+    expect(db.prepare("SELECT id, at FROM heartbeat").all()).toEqual([
+      { id: 1, at: "2026-10-17T03:00:00.000Z" },
+    ]);
     db.close();
   });
 });
