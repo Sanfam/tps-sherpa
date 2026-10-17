@@ -31,7 +31,9 @@ Priorities, in order:
    the code does not do. A wrong doc misleads the next agent, so docs and config
    are in scope exactly like code.
 3. **Tests that do not bite** — a test that would pass against a broken
-   implementation is decoration. Say so.
+   implementation is decoration. Say so. So is a test that only restates the
+   code it covers: `AGENTS.md` keeps tests for failures that are invisible or
+   complex.
 4. **The class, not the instance** — if one caller has the bug, check them all.
 
 What this project has actually shipped past reviewers before: permission models
