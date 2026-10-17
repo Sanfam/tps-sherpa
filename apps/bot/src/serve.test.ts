@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { RETAIN_MS } from "./sync/tier0-store.ts";
-import { EVERY_MS, STEPS, runCycle } from "./serve.ts";
+import { EVERY_MS, STEPS, entrypointRefusal, runCycle } from "./serve.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -38,5 +38,16 @@ describe("the pipeline cycle", () => {
 
   it("keeps raw text under seven days: retention plus one cycle's wait", () => {
     expect(RETAIN_MS + EVERY_MS).toBeLessThan(7 * DAY_MS);
+  });
+});
+
+describe("the entrypoint guard", () => {
+  it("refuses on Railway unless start.sh started it", () => {
+    expect(entrypointRefusal({ RAILWAY_ENVIRONMENT_ID: "env-id" })).toMatch(/start\.sh/);
+    expect(entrypointRefusal({ RAILWAY_ENVIRONMENT_ID: "env-id", BOT_STARTED_BY_ENTRYPOINT: "1" })).toBeNull();
+  });
+
+  it("leaves local development alone", () => {
+    expect(entrypointRefusal({})).toBeNull();
   });
 });

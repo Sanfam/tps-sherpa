@@ -1,7 +1,7 @@
 /**
  * First initialisation of the bot's durable store. Run once, ever:
  *
- *   node src/sync/init-store.ts
+ *   node apps/bot/src/sync/init-store.ts
  *
  * Refuses if the store already exists. Imports the exclusion seed from
  * `content/config/index-flags.json` — the only time that file is read — and,

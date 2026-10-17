@@ -1,0 +1,9 @@
+# Never into the image: secrets, local state, and anything rebuilt inside it.
+.env
+**/.env
+**/.data
+**/node_modules
+.git
+.claude
+content/index/data.json
+content/config/roles.json

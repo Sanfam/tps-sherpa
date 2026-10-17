@@ -59,6 +59,8 @@ The same contract applies to every durable file. It runs **before** the applicat
 
 Restore is rehearsed, and the command written down, before the first durable write on each service. For the bot, that means before the Catalog's first deployed write, not Phase 3.
 
+For the bot, the contract is `apps/bot/start.sh`, and the commands and the rehearsal are in [`docs/runbook.md`](../runbook.md).
+
 ### CMS
 
 The CMS choice reopens, under these criteria:
