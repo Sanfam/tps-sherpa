@@ -1,0 +1,12 @@
+---
+import { getEmDashCollection } from "emdash";
+
+let titles: string[] = [];
+try {
+	const { entries } = await getEmDashCollection("clubs");
+	titles = entries.map((e: { data: { title?: string } }) => e.data.title ?? "");
+} catch {
+	// No "clubs" collection until the test script creates it.
+}
+---
+<html><body><h1>Spike</h1><ul>{titles.map((t) => <li>{t}</li>)}</ul></body></html>

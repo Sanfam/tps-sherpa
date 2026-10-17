@@ -1,0 +1,18 @@
+{
+  "name": "@spike/auth-discord",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./admin": "./src/admin.tsx",
+    "./routes/*": "./src/routes/*",
+    "./external": "./src/external.ts",
+    "./site-session": "./src/site-session.ts",
+    "./secure-sqlite": "./src/secure-sqlite.ts"
+  },
+  "peerDependencies": {
+    "emdash": "*",
+    "react": "*"
+  }
+}
