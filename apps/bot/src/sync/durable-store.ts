@@ -19,7 +19,8 @@ import type { RoleManifestEntry, SyncOutcome } from "./ports.ts";
 export const DURABLE_STORE_PATH =
   process.env["BOT_DB_PATH"] ?? resolve(import.meta.dirname, "../../.data/bot.db");
 
-export const INIT_COMMAND = "node src/sync/init-store.ts";
+/** From the repo root, which is where the deployed bot runs. */
+export const INIT_COMMAND = "node apps/bot/src/sync/init-store.ts";
 
 export interface Generation {
   catalog: Entity[];
@@ -57,8 +58,17 @@ export interface Generation {
  * never stored (owner, 2026-10-16). Written when they opt out; removed when
  * they opt back in or delete their data. Members who opted out before this
  * table existed have none until they opt out again.
+ *
+ * `heartbeat`: one row, rewritten by the running bot (serve.ts). Litestream
+ * takes no snapshot of a database that has not changed, so without it a long
+ * pipeline outage would leave the replica's only snapshot to age out under the
+ * bucket's lifecycle rule, and a restore would have nothing to start from.
  */
 const MIGRATIONS = `
+  CREATE TABLE IF NOT EXISTS heartbeat (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    at TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS preference (
     member_id  TEXT NOT NULL,
     setting    TEXT NOT NULL CHECK (setting IN ('approach', 'processing')),
@@ -169,7 +179,7 @@ export const openDurableStore = (path: string = DURABLE_STORE_PATH) => {
     throw new Error(
       `The bot's durable store is missing at ${path}. Refusing to start. ` +
         `For a first initialisation only, run \`${INIT_COMMAND}\`. ` +
-        `Restore from a replica is not wired yet (ADR-0001).`,
+        `Deployed, apps/bot/start.sh restores it from the replica first; see docs/runbook.md (ADR-0001).`,
     );
   const db = new DatabaseSync(path);
   const hasMarkerTable = db
@@ -370,6 +380,11 @@ export const openDurableStore = (path: string = DURABLE_STORE_PATH) => {
     /** False if it was not monitored. */
     removeMonitored: (id: string): boolean =>
       db.prepare("DELETE FROM monitored_channel WHERE id = ?").run(id).changes > 0,
+
+    /** Rewrites the heartbeat row, so the store changes and Litestream snapshots it. */
+    beat: (at: Date = new Date()) => {
+      db.prepare("INSERT OR REPLACE INTO heartbeat (id, at) VALUES (1, ?)").run(at.toISOString());
+    },
 
     close: () => db.close(),
   };

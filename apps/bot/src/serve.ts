@@ -24,7 +24,7 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { openDurableStore } from "./sync/durable-store.ts";
+import { openDurableStore, withDurableStore } from "./sync/durable-store.ts";
 
 // ponytail: a fixed cadence; a config knob when someone needs another one.
 export const EVERY_MS = 6 * 60 * 60 * 1000;
@@ -51,9 +51,40 @@ export const runCycle = async (
   }
 };
 
+/**
+ * On Railway the bot must start through apps/bot/start.sh, which restores the
+ * durable store and runs the bot under replication. A Railway start command
+ * replaces that script without any error, so its absence is caught here: the
+ * reason to refuse, or null to start.
+ */
+export const entrypointRefusal = (env: NodeJS.ProcessEnv): string | null =>
+  env["RAILWAY_ENVIRONMENT_ID"] && env["BOT_STARTED_BY_ENTRYPOINT"] !== "1"
+    ? "Started on Railway without apps/bot/start.sh, so the durable store is not replicated. " +
+      "Refusing to start. Set the service's start command to `sh /app/apps/bot/start.sh` (docs/runbook.md)."
+    : null;
+
 if (import.meta.main) {
+  const refusal = entrypointRefusal(process.env);
+  if (refusal) {
+    console.error(`[serve] ${refusal}`);
+    process.exit(1);
+  }
+
   // The startup contract: a missing or uninitialised store stops the bot here.
   openDurableStore().close();
+
+  // Hourly, whether or not the pipeline works: a store that never changes is
+  // never snapshotted, and the bucket's lifecycle rule would then delete the
+  // only snapshot a restore needs (durable-store.ts, `heartbeat`).
+  const beat = () => {
+    try {
+      withDurableStore((store) => store.beat());
+    } catch (error) {
+      console.error("[serve] Heartbeat write failed:", error);
+    }
+  };
+  beat();
+  setInterval(beat, 60 * 60 * 1000);
 
   const run = ([script, ...args]: string[]) =>
     new Promise<number | null>((done) =>
