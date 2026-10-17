@@ -36,10 +36,10 @@ Only `bot.db` is replicated. `tier0.db`, `activity.json` and
 The erasure policy says a removed row leaves backups within 30 days. Three
 settings hold it, and all three must stay:
 
-- **The bucket's lifecycle rule** deletes every object 28 days after it was
+- **The bucket's lifecycle rule** deletes every object 30 days after it was
   written, whether or not the bot runs. R2 expires objects typically within a
-  day of that, best effort, so the rule leaves about two days of headroom
-  under 30, not a guarantee. Daily snapshots mean
+  day of that, best effort, so the real bound is about 31 days. The owner
+  accepted that (2026-10-17) rather than shorten the rule. Daily snapshots mean
   Litestream never needs anything that old. Object versioning stays off.
 - **Litestream retention** keeps 7 days of snapshots
   (`apps/bot/litestream.yml`), about 9 days in practice. It is best effort, not
@@ -157,7 +157,7 @@ deploy is watched in the logs: `[start] Using the durable store`, then
 
 ### After a long sync outage
 
-Litestream only snapshots a database that has changed. So that the 28-day
+Litestream only snapshots a database that has changed. So that the 30-day
 lifecycle rule never deletes the only snapshot, the running bot rewrites a
 one-row `heartbeat` table hourly, whether or not the pipeline works. While the
 bot runs, a fresh snapshot is taken every day.

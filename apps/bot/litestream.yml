@@ -21,10 +21,11 @@ dbs:
       # which Litestream reads itself.
 
 # Erasure policy (ADR-0001): a removed row must leave backups within 30 days.
-# The bucket's 28-day lifecycle rule is the bound that holds (docs/runbook.md):
+# The bucket's 30-day lifecycle rule is the bound that holds (docs/runbook.md):
 # R2 can answer a delete with success without deleting, so what Litestream
 # deletes is not proof. R2 expires objects typically within a day of the rule,
-# best effort, so 28 days leaves about two days of headroom, not a guarantee.
+# best effort, so the real bound is about 31 days; the owner accepted that
+# (2026-10-17) rather than shorten the rule.
 # The bot's hourly heartbeat keeps the store changing, so Litestream keeps
 # snapshotting daily and the rule never deletes the newest snapshot. This retention is best effort on top, until it has been
 # checked against the bucket. In 0.5.x it deletes snapshots older than this,
