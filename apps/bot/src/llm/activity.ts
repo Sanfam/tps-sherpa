@@ -15,11 +15,11 @@
  *
  * **Shown in `/lately` (Staff, 2026-10-15)** — ephemerally, to Members only,
  * which is the gated delivery path that was waited for. A member name said in
- * conversation ("thanks Dave") is still not caught by anything — the boundary
- * has no member-name cache — and that is the risk this accepted.
+ * conversation ("thanks Dave") is redacted only if it is in the member-name
+ * cache (`tier0-store.ts`): a nickname, or a name that is also a place or a
+ * Topic, is not — the risk this accepted.
  */
 import type { Entity } from "../sync/catalog.ts";
-import { DEFAULT_MONITORED_CHANNELS } from "../sync/tier0.ts";
 import type { StoredMessage } from "../sync/tier0-store.ts";
 import { isEnrichable } from "./subject.ts";
 import { wordCount } from "./summarise.ts";
@@ -263,9 +263,12 @@ export const commitActivity = (
  * longer eligible — withheld, or monitored (Staff, 2026-10-15). Run by the
  * purge, every cycle.
  */
-export const pruneActivity = (store: ActivityStore, catalog: Entity[]): ActivityStore => {
+export const pruneActivity = (
+  store: ActivityStore,
+  catalog: Entity[],
+  monitored: ReadonlySet<string>,
+): ActivityStore => {
   const byId = new Map(catalog.map((e) => [e.id, e]));
-  const monitored = new Set(DEFAULT_MONITORED_CHANNELS);
   return Object.fromEntries(
     Object.entries(store).filter(([id]) => {
       const entity = byId.get(id);

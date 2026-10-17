@@ -28,8 +28,7 @@
  * produced rather than a sample of a run you have already paid for.
  */
 import type { Entity } from "../sync/catalog.ts";
-import { DURABLE_STORE_PATH, openDurableStore, readProcessingOptOuts } from "../sync/durable-store.ts";
-import { DEFAULT_MONITORED_CHANNELS } from "../sync/tier0.ts";
+import { DURABLE_STORE_PATH, openDurableStore, readCurrent, readProcessingOptOuts } from "../sync/durable-store.ts";
 import { TIER0_PATH, openTier0 } from "../sync/tier0-store.ts";
 import {
   ACTIVITY_SYSTEM_PROMPT,
@@ -43,7 +42,6 @@ import {
   ACTIVITY_PATH,
   VOCABULARY_PATH,
   flag,
-  loadCatalog,
   openBoundary,
   readActivity,
   readIfPresent,
@@ -65,16 +63,19 @@ const dryRun = flag("dry-run") !== null;
 /** Eight at a time. Enough to finish a 1,200-Entity pass, gentle on the provider. */
 const CONCURRENCY = 8;
 
-const catalog = loadCatalog();
+// Which generation this pass read: its results are written back only onto
+// that one (`patchEntities`, #31).
+const { catalog, generatedAt } = readCurrent();
 const byId = new Map(catalog.map((e) => [e.id, e]));
-const monitored = new Set(DEFAULT_MONITORED_CHANNELS);
 const warn = (m: string) => console.warn(m);
 
 // Classification runs cheap, summaries run strong: the one-time job that sets
 // something in stone gets the better model, and steady state does not.
 // Activity is volatile and high-volume, so it runs cheap too.
 const role = job === "summaries" ? ("strong" as const) : ("cheap" as const);
-const { boundary, models } = openBoundary(catalog, { [role]: flag("model") ?? undefined });
+// Throws, and so exits non-zero before any call, if a monitored channel is
+// missing from the Catalog (#33).
+const { boundary, models, monitored } = openBoundary(catalog, { [role]: flag("model") ?? undefined });
 
 const vocabularyPath = flag("vocabulary") || VOCABULARY_PATH;
 const vocabulary = job === "topics" ? parseVocabulary(readIfPresent(vocabularyPath)) : null;
@@ -304,14 +305,21 @@ if (job === "activity") {
   console.log(`\nDry run — ${DURABLE_STORE_PATH} untouched.`);
 } else {
   // Only the fields this job owns, so a Staff override is never written over.
+  // A sync that replaced the Catalog while this ran makes this throw
+  // (`GenerationChanged`), so the process exits non-zero and `serve.ts` ends
+  // the cycle; the next one starts from the new generation.
   const store = openDurableStore();
-  store.patchEntities(
-    updated
-      .filter((e) => results.has(e.id))
-      .map(({ id, topics, topics_version, summary_generated }) =>
-        job === "topics" ? { id, topics, topics_version } : { id, summary_generated },
-      ),
-  );
-  store.close();
+  try {
+    store.patchEntities(
+      generatedAt,
+      updated
+        .filter((e) => results.has(e.id))
+        .map(({ id, topics, topics_version, summary_generated }) =>
+          job === "topics" ? { id, topics, topics_version } : { id, summary_generated },
+        ),
+    );
+  } finally {
+    store.close();
+  }
   console.log(`\nWrote ${results.size} Entities to ${DURABLE_STORE_PATH}`);
 }

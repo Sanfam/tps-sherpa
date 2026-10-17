@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Entity } from "./catalog.ts";
 import { initDurableStore, withDurableStore } from "./durable-store.ts";
-import { purgeActivity, purgeTier0, runPurge, snowflakeTime } from "./purge.ts";
+import { purgeActivity, purgeMonitored, purgeTier0, runPurge, snowflakeTime } from "./purge.ts";
 import { captureEach, selectForCapture } from "./tier0.ts";
 import { RETAIN_MS, openTier0, type StoredMessage } from "./tier0-store.ts";
 
@@ -47,6 +47,26 @@ const entry = { summary: "s", as_of: minted(1), authors: ["a1"] };
 
 afterEach(() => vi.useRealTimers());
 
+describe("purgeMonitored", () => {
+  it("drops what was captured from a channel Staff since monitored, its Threads, and their authors' names", () => {
+    const tier0 = openTier0(":memory:");
+    tier0.record("intro", "1", [{ ...msg("intro", "m1", "a1"), authorNames: ["Jughfer"] }]);
+    tier0.record("thread", "1", [msg("thread", "m2", "a2")]);
+    tier0.record("other", "1", [msg("other", "m3", "a3")]);
+    const catalog = [entity("intro"), { ...entity("thread"), parent_id: "intro" }, entity("other")];
+
+    const result = purgeMonitored({ tier0, monitored: new Set(["intro"]), catalog });
+
+    expect(result.dropped).toBe(2);
+    expect(tier0.stats().messages).toBe(1);
+    expect(tier0.messagesFor("other")).toHaveLength(1);
+    expect(tier0.memberNames()).toEqual([]);
+    // Cursors go too, so a channel no longer monitored is captured afresh.
+    expect([...tier0.state().keys()]).toEqual(["other"]);
+    tier0.close();
+  });
+});
+
 describe("purgeTier0", () => {
   it("drops what was written more than RETAIN_MS ago, and keeps the cursor", () => {
     const tier0 = openTier0(":memory:");
@@ -82,11 +102,11 @@ describe("purgeActivity", () => {
     const activity = { kept: entry, gone: entry, hidden: entry };
     const catalog = [entity("kept"), { ...entity("hidden"), description_status: "withheld" } as Entity];
 
-    const pruned = purgeActivity(activity, new Set(), catalog, NOW);
+    const pruned = purgeActivity(activity, new Set(), catalog, NOW, new Set());
     expect(Object.keys(pruned.activity)).toEqual(["kept"]);
     expect(pruned.dropped).toBe(2);
 
-    expect(purgeActivity(activity, new Set(), null, NOW)).toEqual({ activity, dropped: 0 });
+    expect(purgeActivity(activity, new Set(), null, NOW, new Set())).toEqual({ activity, dropped: 0 });
   });
 
   it("drops entries an opted-out member fed, and entries with no recorded authors", () => {
@@ -95,13 +115,13 @@ describe("purgeActivity", () => {
       others: { ...entry, authors: ["a1"] },
       unknown: { summary: "s", as_of: minted(1) },
     };
-    expect(Object.keys(purgeActivity(activity, new Set(["out"]), null, NOW).activity)).toEqual(["others"]);
+    expect(Object.keys(purgeActivity(activity, new Set(["out"]), null, NOW, new Set()).activity)).toEqual(["others"]);
   });
 
   it("expires entries older than /lately's window, so their authors go with them", () => {
     expect(snowflakeTime(minted(3))).toBe(NOW.getTime() - 3 * 86_400_000);
     const activity = { fresh: { ...entry, as_of: minted(13) }, stale: { ...entry, as_of: minted(15) }, junk: { ...entry, as_of: "x" } };
-    const pruned = purgeActivity(activity, new Set(), null, NOW);
+    const pruned = purgeActivity(activity, new Set(), null, NOW, new Set());
     expect(Object.keys(pruned.activity)).toEqual(["fresh"]);
     expect(pruned.dropped).toBe(2);
   });
@@ -140,6 +160,7 @@ describe("capture and purge together", () => {
     const raw = (id: string, createdAt: string) => ({
       id,
       authorId: "a1",
+      authorNames: [] as string[],
       authorIsBot: false,
       content: `text-${id}`,
       createdAt,
@@ -150,7 +171,7 @@ describe("capture and purge together", () => {
     const tier0 = openTier0(":memory:");
     const capture = async (lastMessageId: string) => {
       const catalog = [{ ...entity("e1"), last_message_id: lastMessageId }];
-      const { capture: due } = selectForCapture(catalog, tier0.state());
+      const { capture: due } = selectForCapture(catalog, tier0.state(), { monitored: new Set() });
       await captureEach({ entities: due, fetch: async () => windows, store: tier0, optedOut: () => new Set() });
       return tier0.messagesFor("e1").map((m) => m.messageId);
     };

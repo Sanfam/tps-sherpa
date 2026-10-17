@@ -14,9 +14,9 @@ import { createBoundary, type ChatPort } from "../llm/boundary.ts";
 import { PRIVACY_POLICY_PATH, retrying } from "../llm/session.ts";
 import type { Vocabulary } from "../llm/vocabulary.ts";
 import type { Entity } from "../sync/catalog.ts";
-import { initDurableStore } from "../sync/durable-store.ts";
+import { MONITORED_SEED, initDurableStore, readMonitored, withDurableStore } from "../sync/durable-store.ts";
 import type { RoleManifestEntry } from "../sync/ports.ts";
-import { openTier0 } from "../sync/tier0-store.ts";
+import { RETAIN_MS, openTier0 } from "../sync/tier0-store.ts";
 import { EMPTY_QUERY } from "./find.ts";
 import {
   CAP_REACHED,
@@ -33,7 +33,17 @@ import {
   findDailyCap,
   handleInteraction,
 } from "./interactions.ts";
-import { MAX_EMBED_DESCRIPTION, NOTHING_DELETED, POLICY_INTRO, openPrivacy, renderDeleted } from "./privacy.ts";
+import { NOT_STAFF, openMonitored } from "./monitored.ts";
+import {
+  BACKFILL_OPT_IN_FIRST,
+  BACKFILL_PENDING,
+  BACKFILL_REQUESTED,
+  MAX_EMBED_DESCRIPTION,
+  NOTHING_DELETED,
+  POLICY_INTRO,
+  openPrivacy,
+  renderDeleted,
+} from "./privacy.ts";
 
 const GUILD = "400000000000000001";
 const MEMBER_ROLE = "400000000000000002";
@@ -171,6 +181,10 @@ const harness = (
   const { cap, path } = tempCap(opts.limit ?? 10);
   const { privacy, paths } = tempPrivacy(opts.policy);
   if (opts.optedOut) privacy.set(INVOKER, "processing", false);
+  // The real seed's Channel is not in these fixtures; a test that wants one
+  // missing adds it back.
+  const monitored = openMonitored(paths.durable);
+  for (const c of MONITORED_SEED) monitored.remove(c.id);
   const sherpa: Sherpa = {
     guildId: GUILD,
     loadCatalog: opts.loadCatalog ?? (() => catalog),
@@ -178,11 +192,14 @@ const harness = (
     loadVocabulary: opts.loadVocabulary ?? (() => vocabulary),
     loadActivity: opts.loadActivity ?? (() => ({})),
     privacy,
+    monitored,
+    loadMonitored: (c) => readMonitored(c, paths.durable),
     askFor: (c) =>
       createBoundary({
         chat,
         models: { strong: "s", cheap: "c" },
         catalog: c,
+        monitored: readMonitored(c, paths.durable),
         names: { channels: new Map(), roles: new Map() },
       }).ask,
     retrying: (work) => retrying(work),
@@ -559,7 +576,7 @@ describe("the /privacy definition", () => {
       options: Array<{ name: string; options?: Array<{ name: string; type: number; required: boolean; choices?: unknown }> }>;
     };
     expect(privacy.name).toBe("privacy");
-    expect(privacy.options.map((o) => o.name)).toEqual(["policy", "settings", "opt-out", "opt-in", "delete-my-data"]);
+    expect(privacy.options.map((o) => o.name)).toEqual(["policy", "settings", "opt-out", "opt-in", "backfill", "delete-my-data"]);
     for (const sub of ["opt-out", "opt-in"]) {
       const [setting] = privacy.options.find((o) => o.name === sub)!.options!;
       expect(setting).toMatchObject({ name: "setting", required: true });
@@ -572,5 +589,158 @@ describe("the /privacy definition", () => {
 
   it("fits the policy Staff wrote in one embed", () => {
     expect(readFileSync(PRIVACY_POLICY_PATH, "utf8").length).toBeLessThanOrEqual(MAX_EMBED_DESCRIPTION);
+  });
+});
+
+describe("names kept for an opted-out member", () => {
+  /** The interaction as Discord sends it: username, display name, server nickname. */
+  const named = (sub: string, options: Record<string, string | boolean>, roles?: string[]) => {
+    const base = privacyCommand(sub, options, roles ? { roles } : {}) as unknown as { member: { user: object } };
+    return {
+      ...base,
+      member: { ...base.member, nick: "Papa G", user: { ...base.member.user, username: "gonzo", global_name: "Gonzo Rex" } },
+    } as unknown as APIInteraction;
+  };
+  const kept = (durable: string) => withDurableStore((s) => s.optedOutNames().sort(), durable);
+
+  it("are kept only for a Member — anyone else's opt-out still works, but keeps no names", async () => {
+    const { run, privacy, paths } = harness();
+    await run(named("opt-out", { setting: "processing" }, [OTHER_ROLE]));
+    expect(privacy.settings(INVOKER).processing).toBe(false);
+    expect(kept(paths.durable)).toEqual([]);
+  });
+
+  it("keeps none, and still opts out, before any sync has written a manifest", async () => {
+    const { run, privacy, paths } = harness({ roles: [] });
+    await run(named("opt-out", { setting: "processing" }));
+    expect(privacy.settings(INVOKER).processing).toBe(false);
+    expect(kept(paths.durable)).toEqual([]);
+  });
+
+  it("are taken from the opt-out itself, and only for processing", async () => {
+    const { run, paths } = harness();
+    await run(named("opt-out", { setting: "approach" }));
+    expect(kept(paths.durable)).toEqual([]);
+    await run(named("opt-out", { setting: "processing" }));
+    expect(kept(paths.durable)).toEqual(["Gonzo Rex", "Papa G", "gonzo"]);
+  });
+
+  it("go when they opt back in", async () => {
+    const { run, paths } = harness();
+    await run(named("opt-out", { setting: "processing" }));
+    await run(named("opt-in", { setting: "processing" }));
+    expect(kept(paths.durable)).toEqual([]);
+  });
+
+  it("go with delete-my-data", async () => {
+    const { run, paths } = harness();
+    await run(named("opt-out", { setting: "processing" }));
+    await run(named("delete-my-data", { confirm: true }));
+    expect(kept(paths.durable)).toEqual([]);
+  });
+});
+
+describe("/privacy backfill", () => {
+  it("records nothing for someone with processing off, and says to opt in first", async () => {
+    const { run, paths } = harness({ optedOut: true });
+    expect(await run(privacyCommand("backfill"))).toBe(BACKFILL_OPT_IN_FIRST);
+    expect(withDurableStore((s) => s.pendingBackfills(), paths.durable)).toEqual([]);
+  });
+
+  it("records one request per member, a repeat is a no-op, and opting out drops it", async () => {
+    const { run, paths } = harness();
+    expect(await run(privacyCommand("backfill"))).toBe(BACKFILL_REQUESTED);
+    expect(await run(privacyCommand("backfill"))).toBe(BACKFILL_PENDING);
+    expect(withDurableStore((s) => s.pendingBackfills(), paths.durable).map((r) => r.memberId)).toEqual([INVOKER]);
+    await run(privacyCommand("opt-out", { setting: "processing" }));
+    expect(withDurableStore((s) => s.pendingBackfills(), paths.durable)).toEqual([]);
+  });
+
+  it("is dropped by delete-my-data too", async () => {
+    const { run, paths } = harness();
+    await run(privacyCommand("backfill"));
+    await run(privacyCommand("delete-my-data", { confirm: true }));
+    expect(withDurableStore((s) => s.pendingBackfills(), paths.durable)).toEqual([]);
+  });
+
+  it("promises no more than Tier 0 keeps", () => {
+    expect(BACKFILL_REQUESTED).toContain(`last ${RETAIN_MS / 86_400_000} days`);
+  });
+});
+
+/** `/monitored <sub>`, with a channel option when given one. */
+/** `permissions` is the invoker's computed bitfield; "32" is Manage Server. */
+const monitoredCommand = (sub: string, channel?: string, permissions: string | undefined = "32"): APIInteraction => {
+  const base = command("monitored") as unknown as { data: object; member: object };
+  return {
+    ...base,
+    member: { ...base.member, permissions },
+    data: {
+      ...base.data,
+      options: [
+        {
+          name: sub,
+          type: ApplicationCommandOptionType.Subcommand,
+          options: channel ? [{ name: "channel", type: ApplicationCommandOptionType.Channel, value: channel }] : [],
+        },
+      ],
+    },
+  } as unknown as APIInteraction;
+};
+
+describe("monitored channels fail closed", () => {
+  it("/find and /lately refuse, without a model call, while a configured id is missing from the Catalog", async () => {
+    const { run, calls, logs, paths } = harness();
+    withDurableStore((s) => s.addMonitored("100000000000000099", "gone", "500000000000000002"), paths.durable);
+    expect(await run(command("find", { interests: QUERY }))).toBe(FAILED);
+    expect(await run(command("lately"))).toBe(FAILED);
+    expect(calls).toHaveLength(0);
+    expect(logs.join("\n")).toContain("Monitored channel 100000000000000099 is not in the current Catalog");
+  });
+
+  it("keeps a monitored channel out of /find's prompt and /lately", async () => {
+    const { run, calls, paths } = harness();
+    withDurableStore((s) => s.addMonitored("100000000000000001", "Rocket League", "500000000000000002"), paths.durable);
+    await run(command("find", { interests: QUERY }));
+    expect(calls[0]).not.toContain("Rocket League");
+    expect(await run(command("lately"))).not.toContain("<#100000000000000001>");
+  });
+});
+
+describe("/monitored", () => {
+  it("is registered for Manage Server only", () => {
+    const monitored = commandDefinitions(vocabulary).find((c) => c.name === "monitored")!;
+    expect(monitored.default_member_permissions).toBe("32");
+  });
+
+  it("adds a channel in the Catalog, recording who, and refuses one that is not", async () => {
+    const channel = entity({ id: "100000000000000003", name: "👋︱intros", type: "channel" });
+    const { run, paths } = harness({ loadCatalog: () => [...catalog, channel] });
+    expect(await run(monitoredCommand("add", "100000000000000098"))).toMatch(/isn't a channel/);
+    // A Post: the carve-out reaches only one level down from what it names.
+    expect(await run(monitoredCommand("add", "100000000000000001"))).toMatch(/isn't a channel/);
+    expect(await run(monitoredCommand("add", channel.id))).toMatch(/^Done/);
+    expect(withDurableStore((s) => s.monitoredChannels(), paths.durable)).toEqual([
+      expect.objectContaining({ id: channel.id, name: "👋︱intros", addedBy: INVOKER }),
+    ]);
+    expect(await run(monitoredCommand("list"))).toContain(`<#${channel.id}>`);
+  });
+
+  it("logs a removal loudly, with who did it", async () => {
+    const channel = entity({ id: "100000000000000003", name: "👋︱intros", type: "channel" });
+    const { run, logs } = harness({ loadCatalog: () => [...catalog, channel] });
+    await run(monitoredCommand("add", channel.id));
+    expect(await run(monitoredCommand("remove", channel.id))).toMatch(/no longer monitored/);
+    expect(logs.at(-1)).toMatch(new RegExp(`MONITORED CHANNEL REMOVED ${channel.id} by ${INVOKER}`));
+  });
+
+  it("refuses an invoker without Manage Server, even if Discord let the command through", async () => {
+    const channel = entity({ id: "100000000000000003", name: "👋︱intros", type: "channel" });
+    const { run, paths } = harness({ loadCatalog: () => [...catalog, channel] });
+    // Send Messages only; nothing; and an Administrator, who may.
+    expect(await run(monitoredCommand("add", channel.id, "2048"))).toBe(NOT_STAFF);
+    expect(await run(monitoredCommand("list", undefined, ""))).toBe(NOT_STAFF);
+    expect(withDurableStore((s) => s.monitoredChannels(), paths.durable)).toEqual([]);
+    expect(await run(monitoredCommand("add", channel.id, "8"))).toMatch(/^Done/);
   });
 });

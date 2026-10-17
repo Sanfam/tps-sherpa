@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildCatalog } from "./catalog.ts";
-import { initDurableStore, openDurableStore } from "./durable-store.ts";
+import { GenerationChanged, MONITORED_SEED, initDurableStore, openDurableStore, readMonitored } from "./durable-store.ts";
 import { fixtureDiscord } from "./fixture-discord.ts";
 import { ChannelType } from "./ports.ts";
 
@@ -184,13 +184,128 @@ describe("enrichment writes", () => {
   it("patches only the fields given, leaving a Staff override in place", async () => {
     await established();
     const store = openDurableStore(path);
-    store.patchEntities([{ id: "201", summary_generated: "A Post about cars." }, { id: "gone" }]);
+    const { generatedAt } = store.current()!;
+    store.patchEntities(generatedAt, [{ id: "201", summary_generated: "A Post about cars." }, { id: "gone" }]);
     store.close();
     expect(readCatalog().find((e) => e.id === "201")).toMatchObject({
       summary_generated: "A Post about cars.",
       summary_override: "Staff wrote this",
     });
     expect(readCatalog()).toHaveLength(3);
+  });
+});
+
+/**
+ * Sync and enrichment on two connections to one file, as two processes would
+ * be (#31). The sync's replace is what `run.ts` does; the enrichment reads a
+ * generation, works, then patches.
+ */
+describe("sync and enrichment interleaved", () => {
+  const renamed = async () =>
+    (await sync(fixtureDiscord({ ...guild, threads: [{ ...guild.threads[0]!, name: "Rocket League 2" }] }))).catalog;
+
+  it("refuses a patch when a sync replaced the generation after enrichment read it, writing nothing", async () => {
+    await established();
+    const enrichment = openDurableStore(path);
+    const syncing = openDurableStore(path);
+    const read = enrichment.current()!;
+    await new Promise((r) => setTimeout(r, 2)); // a later generated_at
+    syncing.replaceCatalog({ catalog: read.catalog, roleManifest: [], outcome: { complete: true } });
+    expect(() =>
+      enrichment.patchEntities(read.generatedAt, [{ id: "100", summary_generated: "stale" }]),
+    ).toThrow(GenerationChanged);
+    enrichment.close();
+    syncing.close();
+    expect(readCatalog().find((e) => e.id === "100")!.summary_generated).toBeNull();
+  });
+
+  it("lets a sync after a patch win cleanly, and a second patch from the old read is refused", async () => {
+    await established();
+    const enrichment = openDurableStore(path);
+    const syncing = openDurableStore(path);
+    const read = enrichment.current()!;
+    enrichment.patchEntities(read.generatedAt, [{ id: "100", summary_generated: "fresh" }]);
+    await new Promise((r) => setTimeout(r, 2));
+    const next = await renamed();
+    syncing.replaceCatalog({ catalog: next, roleManifest: [], outcome: { complete: true } });
+    expect(readCatalog()).toEqual(next);
+    expect(() => enrichment.patchEntities(read.generatedAt, [{ id: "100", summary_generated: "x" }])).toThrow(
+      /changed under this run/,
+    );
+    enrichment.close();
+    syncing.close();
+  });
+
+  it("never patches a renamed Entity with a result computed for its old name", async () => {
+    await established();
+    const enrichment = openDurableStore(path);
+    const syncing = openDurableStore(path);
+    const read = enrichment.current()!;
+    await new Promise((r) => setTimeout(r, 2));
+    syncing.replaceCatalog({ catalog: await renamed(), roleManifest: [], outcome: { complete: true } });
+    expect(() =>
+      enrichment.patchEntities(read.generatedAt, [{ id: "201", summary_generated: "About Rocket League." }]),
+    ).toThrow(GenerationChanged);
+    enrichment.close();
+    syncing.close();
+    expect(readCatalog().find((e) => e.id === "201")).toMatchObject({
+      name: "Rocket League 2",
+      summary_generated: null,
+    });
+  });
+});
+
+describe("monitored channels", () => {
+  const ids = () => {
+    const store = openDurableStore(path);
+    const list = store.monitoredChannels().map((c) => c.id);
+    store.close();
+    return list;
+  };
+
+  it("are seeded once, into a store initialised before the table existed", async () => {
+    await established();
+    // As the deployed store was: initialised, marked, without #33's tables.
+    const old = new DatabaseSync(path);
+    old.exec("DROP TABLE monitored_channel; DROP TABLE seeded;");
+    old.close();
+    expect(ids()).toEqual(MONITORED_SEED.map((c) => c.id));
+  });
+
+  it("are never re-seeded after Staff removed everything", async () => {
+    await established();
+    const store = openDurableStore(path);
+    for (const c of MONITORED_SEED) store.removeMonitored(c.id);
+    store.close();
+    expect(ids()).toEqual([]);
+  });
+
+  it("refuse, naming the id, when one is missing from the Catalog — and are ids only", async () => {
+    const catalog = await established();
+    expect(() => readMonitored(catalog, path)).toThrow(new RegExp(`${MONITORED_SEED[0]!.id} is not in the current Catalog`));
+    const store = openDurableStore(path);
+    for (const c of MONITORED_SEED) store.removeMonitored(c.id);
+    store.addMonitored("200", "games", "staff");
+    store.close();
+    expect([...readMonitored(catalog, path)]).toEqual(["200"]);
+  });
+});
+
+describe("backfill requests", () => {
+  it("clears only the requests a capture read at its start", async () => {
+    await established();
+    const store = openDurableStore(path);
+    store.requestBackfill("a");
+    store.requestBackfill("b");
+    const atStart = store.pendingBackfills();
+    // Mid-run: b opts out and asks again, so b's new request was not served.
+    store.setPreference("b", "processing", false);
+    store.setPreference("b", "processing", true);
+    await new Promise((r) => setTimeout(r, 2));
+    store.requestBackfill("b");
+    store.clearBackfills(atStart);
+    expect(store.pendingBackfills().map((r) => r.memberId)).toEqual(["b"]);
+    store.close();
   });
 });
 

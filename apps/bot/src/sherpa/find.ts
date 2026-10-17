@@ -12,7 +12,6 @@ import type { Boundary } from "../llm/boundary.ts";
 import { isEnrichable } from "../llm/subject.ts";
 import type { Topic, Vocabulary } from "../llm/vocabulary.ts";
 import type { Entity } from "../sync/catalog.ts";
-import { DEFAULT_MONITORED_CHANNELS } from "../sync/tier0.ts";
 
 /** Enough to cover a member who mentions four things, short enough to read. */
 export const MAX_MATCHES = 5;
@@ -49,7 +48,7 @@ const MAX_SUMMARY_CHARS = 150;
 export const isCandidate = (
   entity: Entity,
   byId: Map<string, Entity>,
-  monitored: ReadonlySet<string> = new Set(DEFAULT_MONITORED_CHANNELS),
+  monitored: ReadonlySet<string>,
 ): boolean =>
   isEnrichable(entity, byId, monitored) &&
   entity.thread_state !== "locked" &&
@@ -68,9 +67,10 @@ export const NOT_DESTINATIONS: ReadonlySet<string> = new Set([
   "1121511095518122164", // ✅︱micro-polls
 ]);
 
-export const candidatesOf = (catalog: Entity[]): Entity[] => {
+/** `monitored` from `readMonitored`, which refuses a list the Catalog cannot place. */
+export const candidatesOf = (catalog: Entity[], monitored: ReadonlySet<string>): Entity[] => {
   const byId = new Map(catalog.map((e) => [e.id, e]));
-  return catalog.filter((e) => isCandidate(e, byId));
+  return catalog.filter((e) => isCandidate(e, byId, monitored));
 };
 
 /** The human correction wins, as on the Index. */
@@ -181,11 +181,12 @@ export const findPlaces = async (request: {
   query: string;
   invokerId: string;
   catalog: Entity[];
+  monitored: ReadonlySet<string>;
   vocabulary: Vocabulary;
   ask: Boundary["ask"];
 }): Promise<FindResult & { candidates: number }> => {
   const query = request.query.trim().slice(0, MAX_QUERY_LENGTH);
-  const candidates = candidatesOf(request.catalog);
+  const candidates = candidatesOf(request.catalog, request.monitored);
   if (!query || candidates.length === 0) return { ...NOTHING, candidates: candidates.length };
 
   const byId = new Map(request.catalog.map((e) => [e.id, e]));

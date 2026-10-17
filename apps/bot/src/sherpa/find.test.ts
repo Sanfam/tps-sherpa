@@ -67,6 +67,7 @@ const withheld = entity({
 });
 const intro = entity({ id: "100000000000000006", name: "👋︱introductions", type: "channel" });
 const introThread = entity({ id: "100000000000000007", name: "New here", type: "thread", parent_id: intro.id });
+const monitored: ReadonlySet<string> = new Set([intro.id]);
 const orphan = entity({ id: "100000000000000008", name: "Lost post", parent_id: "199999999999999999" });
 
 const catalog = [games, rocket, flight, locked, withheld, intro, introThread, orphan];
@@ -89,10 +90,11 @@ const askWith = (chat: ChatPort, hasOptedOut?: (id: string) => boolean) =>
     catalog,
     names: { channels: new Map(), roles: new Map() },
     hasOptedOut,
+    monitored,
   }).ask;
 
 const find = (query: string, chat: ChatPort, hasOptedOut?: (id: string) => boolean) =>
-  findPlaces({ query, invokerId: "500000000000000001", catalog, vocabulary, ask: askWith(chat, hasOptedOut) });
+  findPlaces({ query, invokerId: "500000000000000001", catalog, monitored, vocabulary, ask: askWith(chat, hasOptedOut) });
 
 /** The keys the prompt assigned, by Entity name — so a fixture can answer by name. */
 const keyOf = (user: string, name: string): string => {
@@ -103,7 +105,7 @@ const keyOf = (user: string, name: string): string => {
 
 describe("/find candidates", () => {
   it("offers open and closed places, and never the withheld, monitored, locked or orphaned", () => {
-    expect(candidatesOf(catalog).map((e) => e.name)).toEqual([
+    expect(candidatesOf(catalog, monitored).map((e) => e.name)).toEqual([
       "🎮︱game-talk",
       "Rocket League",
       "Flight Simulators",
@@ -115,7 +117,7 @@ describe("/find candidates", () => {
     const polls = entity({ id: "1121511095518122164", name: "✅︱micro-polls", type: "channel" });
     const suggestion = entity({ id: "100000000000000011", name: "Sim racing channel?", parent_id: suggestions.id });
     const poll = entity({ id: "100000000000000012", name: "Pineapple on pizza?", type: "thread", parent_id: polls.id });
-    expect(candidatesOf([suggestions, polls, suggestion, poll]).map((e) => e.name)).toEqual([
+    expect(candidatesOf([suggestions, polls, suggestion, poll], monitored).map((e) => e.name)).toEqual([
       "🗳︱suggestions",
       "✅︱micro-polls",
     ]);
@@ -130,7 +132,7 @@ describe("findPlaces", () => {
     expect(found.matches).toEqual([]);
     // Not even the boundary: an empty query is answered before anything is built.
     const ask = () => Promise.reject(new Error("asked"));
-    await expect(findPlaces({ query, invokerId: "1", catalog, vocabulary, ask })).resolves.toMatchObject({
+    await expect(findPlaces({ query, invokerId: "1", catalog, monitored, vocabulary, ask })).resolves.toMatchObject({
       matches: [],
     });
   });
@@ -298,18 +300,18 @@ describe("/lately", () => {
   const lately = [activeForum, older, fresh, stale, quietLock, intro, activeIntro, activeWithheld];
 
   it("lists the last fortnight's places, newest first, from the same candidates as /find", () => {
-    expect(latelyPlaces(lately, null, now).map((e) => e.name)).toEqual(["fresh", "older"]);
+    expect(latelyPlaces(lately, monitored, null, now).map((e) => e.name)).toEqual(["fresh", "older"]);
   });
 
   it("filters by Topic", () => {
-    expect(latelyPlaces(lately, vocabulary.topics[0]!, now).map((e) => e.name)).toEqual(["fresh"]);
+    expect(latelyPlaces(lately, monitored, vocabulary.topics[0]!, now).map((e) => e.name)).toEqual(["fresh"]);
   });
 
   it(`stops at ${MAX_LATELY}`, () => {
     const many = Array.from({ length: 12 }, (_, i) =>
       recent({ id: `3${i}`, name: `p${i}`, last_activity_at: daysAgo(i / 2) }),
     );
-    expect(latelyPlaces([games, ...many], null, now)).toHaveLength(MAX_LATELY);
+    expect(latelyPlaces([games, ...many], monitored, null, now)).toHaveLength(MAX_LATELY);
   });
 
   it("describes each place by what it is, with when it was last active", () => {

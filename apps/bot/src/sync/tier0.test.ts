@@ -22,9 +22,14 @@ const entity = (over: Partial<Entity> & { id: string }): Entity => ({
   ...over,
 });
 
+/** The introductions channel's id in these fixtures. */
+const INTRO = "70";
+const select = (catalog: Entity[], state: CaptureState, over: { recaptureSince?: Date } = {}) =>
+  selectForCapture(catalog, state, { monitored: new Set([INTRO]), ...over });
+
 describe("selectForCapture", () => {
   it("captures Posts and Threads", () => {
-    const d = selectForCapture(
+    const d = select(
       [entity({ id: "1", type: "post" }), entity({ id: "2", type: "thread" })],
       new Map(),
     );
@@ -32,12 +37,12 @@ describe("selectForCapture", () => {
   });
 
   it("captures Channels too — they are Entities that need describing", () => {
-    const d = selectForCapture([entity({ id: "1", type: "channel" })], new Map());
+    const d = select([entity({ id: "1", type: "channel" })], new Map());
     expect(d.capture.map((e) => e.id)).toEqual(["1"]);
   });
 
   it("never captures a Forum, which has no messages of its own", () => {
-    const d = selectForCapture([entity({ id: "2", type: "forum" })], new Map());
+    const d = select([entity({ id: "2", type: "forum" })], new Map());
     expect(d.capture).toEqual([]);
     expect(d.skippedNoOwnContent).toBe(1);
   });
@@ -46,9 +51,9 @@ describe("selectForCapture", () => {
     // The privacy carve-out that actually exists: a member introducing
     // themselves is having a conversation, not authoring a description. That
     // content is extract-and-discard and must never be stored.
-    const d = selectForCapture(
+    const d = select(
       [
-        entity({ id: "1", type: "channel", name: "👋︱introductions" }),
+        entity({ id: INTRO, type: "channel", name: "👋︱introductions" }),
         entity({ id: "2", type: "channel", name: "🖥︱pc-gaming" }),
       ],
       new Map(),
@@ -57,13 +62,42 @@ describe("selectForCapture", () => {
     expect(d.skippedMonitored).toBe(1);
   });
 
+  it("matches a monitored channel by id, so a rename cannot undo it (#33)", () => {
+    const d = select(
+      [
+        entity({ id: INTRO, type: "channel", name: "👋︱intros-renamed" }),
+        entity({ id: "2", type: "thread", name: "Hi all", parent_id: INTRO }),
+        // The old name on another Channel carves out nothing.
+        entity({ id: "3", type: "channel", name: "👋︱introductions" }),
+      ],
+      new Map(),
+    );
+    expect(d.capture.map((e) => e.id)).toEqual(["3"]);
+  });
+
+  it("recaptures an unmoved Entity active since a backfill's cutoff, and only those", () => {
+    const state: CaptureState = new Map([
+      ["1", { lastMessageId: "500" }],
+      ["2", { lastMessageId: "500" }],
+    ]);
+    const d = select(
+      [
+        entity({ id: "1", last_activity_at: "2026-10-15T00:00:00.000Z" }),
+        entity({ id: "2", last_activity_at: "2026-09-01T00:00:00.000Z" }),
+      ],
+      state,
+      { recaptureSince: new Date("2026-10-10T00:00:00.000Z") },
+    );
+    expect(d.capture.map((e) => e.id)).toEqual(["1"]);
+  });
+
   it("never captures a Thread INSIDE a monitored channel", () => {
     // This is where the actual introductions are. Matching only on the
     // channel's own name would capture exactly what the carve-out protects.
-    const d = selectForCapture(
+    const d = select(
       [
-        entity({ id: "1", type: "channel", name: "👋︱introductions" }),
-        entity({ id: "2", type: "thread", name: "Jughfer intro", parent_id: "1" }),
+        entity({ id: INTRO, type: "channel", name: "👋︱introductions" }),
+        entity({ id: "2", type: "thread", name: "Jughfer intro", parent_id: INTRO }),
         entity({ id: "3", type: "thread", name: "Wingspan", parent_id: "9" }),
       ],
       new Map(),
@@ -76,7 +110,7 @@ describe("selectForCapture", () => {
     // Discord answers a denied history with 200 and an empty array, so an
     // empty result would look like a successful read of an empty Entity.
     // The decision has to come from the Catalog, not the response.
-    const d = selectForCapture(
+    const d = select(
       [entity({ id: "1", description_status: "withheld" })],
       new Map(),
     );
@@ -86,19 +120,19 @@ describe("selectForCapture", () => {
 
   it("skips an Entity whose newest message has not moved", () => {
     const state: CaptureState = new Map([["1", { lastMessageId: "500" }]]);
-    const d = selectForCapture([entity({ id: "1", last_message_id: "500" })], state);
+    const d = select([entity({ id: "1", last_message_id: "500" })], state);
     expect(d.capture).toEqual([]);
     expect(d.skippedUnchanged).toBe(1);
   });
 
   it("re-captures an Entity that has been posted in since", () => {
     const state: CaptureState = new Map([["1", { lastMessageId: "500" }]]);
-    const d = selectForCapture([entity({ id: "1", last_message_id: "600" })], state);
+    const d = select([entity({ id: "1", last_message_id: "600" })], state);
     expect(d.capture.map((e) => e.id)).toEqual(["1"]);
   });
 
   it("captures an Entity it has never seen", () => {
-    const d = selectForCapture([entity({ id: "1" })], new Map());
+    const d = select([entity({ id: "1" })], new Map());
     expect(d.capture.map((e) => e.id)).toEqual(["1"]);
   });
 
@@ -106,7 +140,7 @@ describe("selectForCapture", () => {
     // A never-posted-in Entity has a null last_message_id. Once recorded as
     // null it must stop being re-fetched every run.
     const state: CaptureState = new Map([["1", { lastMessageId: null }]]);
-    const d = selectForCapture([entity({ id: "1", last_message_id: null })], state);
+    const d = select([entity({ id: "1", last_message_id: null })], state);
     expect(d.capture).toEqual([]);
   });
 });
@@ -120,6 +154,7 @@ describe("projectedCalls", () => {
 describe("toStored", () => {
   it("never stores a member with processing off, and keeps bots flagged as before", () => {
     const raw = (id: string, authorId: string, authorIsBot = false) => ({
+      authorNames: [] as string[],
       id,
       authorId,
       authorIsBot,
@@ -137,6 +172,7 @@ describe("toStored", () => {
 
 describe("captureEach", () => {
   const raw = (id: string, authorId: string) => ({
+    authorNames: [] as string[],
     id,
     authorId,
     authorIsBot: false,

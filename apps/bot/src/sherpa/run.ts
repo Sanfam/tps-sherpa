@@ -1,6 +1,6 @@
 /**
  * Papa Sherpa's long-running process: a gateway connection that answers
- * `/find`, `/lately` and `/privacy`.
+ * `/find`, `/lately`, `/privacy` and `/monitored`.
  *
  *   node --env-file=.env src/sherpa/run.ts
  *
@@ -31,10 +31,11 @@ import {
   retrying,
 } from "../llm/session.ts";
 import { parseVocabulary } from "../llm/vocabulary.ts";
-import { DURABLE_STORE_PATH } from "../sync/durable-store.ts";
+import { DURABLE_STORE_PATH, readMonitored } from "../sync/durable-store.ts";
 import { TIER0_PATH } from "../sync/tier0-store.ts";
 import { FIND_TIMEOUT_MS } from "./find.ts";
 import { dailyCap, findDailyCap, handleInteraction, type Sherpa } from "./interactions.ts";
+import { openMonitored } from "./monitored.ts";
 import { openPrivacy } from "./privacy.ts";
 
 const token = process.env["DISCORD_BOT_TOKEN"];
@@ -59,6 +60,8 @@ const sherpa: Sherpa = {
     activity: ACTIVITY_PATH,
     policy: PRIVACY_POLICY_PATH,
   }),
+  monitored: openMonitored(DURABLE_STORE_PATH),
+  loadMonitored: (catalog) => readMonitored(catalog),
   askFor: (catalog) => openBoundary(catalog, {}, FIND_TIMEOUT_MS).boundary.ask,
   retrying: (work) => retrying(work, log),
   cap: dailyCap(resolve(DATA_DIR, "find-usage.json"), limit, log),

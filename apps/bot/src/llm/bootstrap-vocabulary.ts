@@ -17,7 +17,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve as resolvePath } from "node:path";
 import { createHash } from "node:crypto";
 import type { Entity } from "../sync/catalog.ts";
-import { isMonitored, DEFAULT_MONITORED_CHANNELS } from "../sync/tier0.ts";
+import { isMonitored } from "../sync/tier0.ts";
 import { subjectText } from "./subject.ts";
 import {
   MANDATORY_TOPICS,
@@ -104,9 +104,21 @@ if (perStratum !== undefined && (!Number.isInteger(perStratum) || perStratum < 1
 const CACHE_DIR = resolvePath(import.meta.dirname, "../../.data/vocab-bootstrap");
 const fresh = flag("fresh") !== null;
 
+/**
+ * Seven minutes per call. This is the heaviest prompt in the project and a
+ * single derivation was measured at 205s answering properly, so the 180s
+ * default was aborting work that was going to succeed.
+ */
+const BOOTSTRAP_TIMEOUT_MS = 420_000;
+
 const catalog = loadCatalog();
 const byId = new Map(catalog.map((e) => [e.id, e]));
-const monitored = new Set(DEFAULT_MONITORED_CHANNELS);
+// First, so the sample is filtered with the monitored set the boundary enforces.
+const { boundary, models, monitored } = openBoundary(
+  catalog,
+  { strong: flag("model") ?? undefined },
+  BOOTSTRAP_TIMEOUT_MS,
+);
 
 // Monitored conversation must never reach a model. The boundary would refuse
 // it anyway; excluding it here means the command completes rather than dying
@@ -141,17 +153,6 @@ if (readIfPresent(VOCABULARY_PATH))
       `deliberate global act: bump its version and retag the whole corpus.`,
   );
 
-/**
- * Seven minutes per call. This is the heaviest prompt in the project and a
- * single derivation was measured at 205s answering properly, so the 180s
- * default was aborting work that was going to succeed.
- */
-const BOOTSTRAP_TIMEOUT_MS = 420_000;
-const { boundary, models } = openBoundary(
-  catalog,
-  { strong: flag("model") ?? undefined },
-  BOOTSTRAP_TIMEOUT_MS,
-);
 /**
  * A stage resumes only if what it would send is byte-identical to what the
  * cached answer was produced from: the model, the prompt and the context.

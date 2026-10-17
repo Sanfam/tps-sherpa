@@ -11,7 +11,6 @@
  */
 import { describe, expect, it } from "vitest";
 import type { Entity } from "../sync/catalog.ts";
-import { DEFAULT_MONITORED_CHANNELS } from "../sync/tier0.ts";
 import { isEnrichable } from "./subject.ts";
 
 const entity = (over: Partial<Entity> & { id: string; name: string }): Entity => ({
@@ -44,7 +43,8 @@ const ordinary = entity({ id: "50", name: "Wingspan", topic: "Bird game." });
 
 const catalog = [intro, introThread, withheld, ordinary];
 const byId = new Map(catalog.map((e) => [e.id, e]));
-const monitored = new Set(DEFAULT_MONITORED_CHANNELS);
+// By id: the store holds ids (#33).
+const monitored = new Set([intro.id]);
 
 /** The predicate `enrich.ts` applies before any job sees an Entity. */
 const eligible = (e: Entity) => isEnrichable(e, byId, monitored);
