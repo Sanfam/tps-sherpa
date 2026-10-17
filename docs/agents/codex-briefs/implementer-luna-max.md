@@ -31,10 +31,8 @@ node scripts/check-content.mjs
 Do not report success on unverified work. If something fails, say so and include
 the output. If you skipped a step, say that too.
 
-Tests: non-trivial logic leaves one runnable check behind — the smallest thing
-that fails if the logic breaks. Prove the test bites by breaking the code,
-watching it fail, and restoring. A test that passes against a broken
-implementation is decoration.
+Tests follow the YAGNI rule in `AGENTS.md`: only for failures that are
+invisible or complex, and proven to bite.
 
 **Stop and report instead of proceeding** if the work would touch member PII or
 child data, require a new credential or scope, add a vendor, contradict a locked
