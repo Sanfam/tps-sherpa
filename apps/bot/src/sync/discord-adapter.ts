@@ -319,7 +319,7 @@ export const discordRest = (config: {
     captureWindows: async (entityId: string): Promise<RawCapturedMessage[]> => {
       type Msg = {
         id: string;
-        author?: { id?: string; bot?: boolean };
+        author?: { id?: string; bot?: boolean; username?: string; global_name?: string | null };
         /** Set when a webhook posted it. Not a member's words either. */
         webhook_id?: string;
         content?: string;
@@ -342,6 +342,9 @@ export const discordRest = (config: {
         id: m.id,
         authorId: m.author?.id ?? "",
         authorIsBot: m.author?.bot === true || Boolean(m.webhook_id),
+        authorNames: [...new Set([m.author?.username, m.author?.global_name])].filter(
+          (n): n is string => typeof n === "string" && n.trim() !== "",
+        ),
         content: m.content ?? "",
         createdAt: m.timestamp ?? "",
         window,

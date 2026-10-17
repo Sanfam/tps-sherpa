@@ -54,6 +54,7 @@ const boundary = (chat: ChatPort, over: Partial<Parameters<typeof createBoundary
     chat,
     models: { strong: "test-strong", cheap: "test-cheap" },
     catalog: [post, intro, introThread],
+    monitored: new Set([intro.id]),
     names,
     ...over,
   });
@@ -112,6 +113,14 @@ describe("output validation", () => {
     await expect(
       boundary(chat, { memberNames: ["Schwagle"] }).ask(ask),
     ).rejects.toThrow(/names a member/i);
+  });
+
+  it("does not refuse its own system prompt for an ordinary word that is also a member's name", async () => {
+    // A member called "games" must not stop every call whose instruction says "games".
+    const { chat } = fixtureChat('{"ok":true}');
+    const wordy = { ...ask, system: "Suggest games and places. Answer in JSON." };
+
+    await expect(boundary(chat, { memberNames: ["games"] }).ask(wordy)).resolves.toEqual({ ok: true });
   });
 
   it("looks inside nested output, not just the top level", async () => {
@@ -253,6 +262,15 @@ describe("what never reaches a model", () => {
 
     expect(calls[0]?.user).not.toMatch(/Schwagle/i);
     expect(calls[0]?.user).toBe("@member runs this one\nask @member about it");
+  });
+
+  it("replaces a longer name whole, whatever order the cache gives it in", async () => {
+    const { chat, calls } = fixtureChat('{"ok":true}');
+    await boundary(chat, { memberNames: ["Dave", "Dave Smith"] }).ask({
+      ...ask,
+      sources: [{ authorId: "1", authorIsBot: false, content: "thanks Dave Smith" }],
+    });
+    expect(calls[0]?.user).toBe("thanks @member");
   });
 
   it("refuses a system prompt carrying member-shaped text", async () => {

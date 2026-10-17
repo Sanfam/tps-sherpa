@@ -1,4 +1,4 @@
-**Papa Sherpa privacy policy** · effective 2026-10-15
+**Papa Sherpa privacy policy** · effective 2026-10-16
 
 Papa Sherpa is the Papa Squad's own bot. Papa Squad Staff run it. It reads the server so it can point members to the places that suit them.
 
@@ -7,14 +7,16 @@ Sherpa is on for everyone by default. You can withdraw that consent at any time 
 • `opt-out approach`: Sherpa won't approach you on its own.
 • `opt-out processing`: Sherpa stops keeping your messages and sending them to its AI model. `/find` is off for you while this is set.
 • `opt-in approach` or `opt-in processing`: switches either back on.
+• `backfill`: after opting back in, Sherpa re-reads your messages from the last 6 days within about six hours. Older messages can't be recovered.
 • `settings`: shows your current choices.
 • `delete-my-data`: erases the messages Sherpa has kept from you and turns processing off.
 
 **What Sherpa holds**
 • Places: the server's channels, forums and posts, with short summaries. Staff can withhold or exclude any of them. A Post is described by its opening message. Opting out or deleting your data does not yet remove that: delete the Post in Discord, or ask Staff to exclude it.
-• Recent messages: their text and author, used to summarise what each place has been talking about lately. Summaries describe places, not people.
+• Recent messages: their text and author, including the author's Discord username and display name, used to summarise what each place has been talking about lately. Names are kept only while Sherpa holds a message of yours, and only to keep them out of what goes to the AI model. Summaries describe places, not people.
 • Your `/find` question: sent to the model to answer you, then dropped. It isn't stored or logged.
 • Your choices in `/privacy`.
+• If you opt out of processing: your username, display name and server nickname, only so they're kept out of what other members' messages send to the AI model. Removed when you opt back in or delete your data, and from backups within 30 days.
 
 **How long it's kept**
 • Raw message text: at most 7 days.

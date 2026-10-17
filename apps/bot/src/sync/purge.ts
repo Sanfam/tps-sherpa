@@ -12,6 +12,8 @@
  * - **Nothing from a member with processing off stays.** Capture already
  *   drops them; this sweeps up anything stored by a capture that was running
  *   when they opted out.
+ * - **Nothing from a monitored channel stays**, nor from a Thread inside one
+ *   — what was captured before Staff added it with `/monitored`.
  * - **Activity summaries go with their Entity, and with their authors.** An
  *   entry for an Entity that has left the Catalog or is no longer eligible is
  *   dropped, and so is one any of whose authors has turned processing off, or
@@ -28,7 +30,7 @@ import { keepAttributed, pruneActivity, type ActivityStore } from "../llm/activi
 import { ACTIVITY_PATH, readActivity, writeActivity } from "../llm/session.ts";
 import type { Entity } from "./catalog.ts";
 import { ACTIVE_WITHIN_DAYS } from "./facets.ts";
-import { DURABLE_STORE_PATH, withDurableStore } from "./durable-store.ts";
+import { DURABLE_STORE_PATH, readMonitoredIds, withDurableStore } from "./durable-store.ts";
 import { RETAIN_MS, TIER0_PATH, openTier0 } from "./tier0-store.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -44,6 +46,22 @@ export const purgeTier0 = (deps: {
   let swept = 0;
   for (const id of deps.optedOut) swept += deps.tier0.deleteAuthor(id);
   return { aged, swept, checkpointed: deps.tier0.checkpoint() };
+};
+
+/**
+ * Anything Tier 0 holds from a monitored channel or a Thread inside one —
+ * there when Staff add a channel to `/monitored` after it was captured. By the
+ * stored ids, unchecked: a missing one only means less to find. Null Catalog:
+ * the channels themselves only, since no Thread can be placed.
+ */
+export const purgeMonitored = (deps: {
+  tier0: ReturnType<typeof openTier0>;
+  monitored: ReadonlySet<string>;
+  catalog: Entity[] | null;
+}): { dropped: number; checkpointed: boolean } => {
+  const ids = new Set(deps.monitored);
+  for (const e of deps.catalog ?? []) if (e.parent_id && deps.monitored.has(e.parent_id)) ids.add(e.id);
+  return { dropped: deps.tier0.deleteEntities(ids), checkpointed: deps.tier0.checkpoint() };
 };
 
 /** Activity's half. Null Catalog: before the first complete sync, nothing to check Entities against. */
@@ -65,10 +83,16 @@ export const purgeActivity = (
   optedOut: ReadonlySet<string>,
   catalog: Entity[] | null,
   now: Date = new Date(),
+  /**
+   * The configured ids as stored, unchecked: removing more is the safe
+   * direction, so a monitored channel missing from the Catalog must not stop
+   * the purge — or the sync after it, which is what brings the Channel back.
+   */
+  monitored: ReadonlySet<string>,
 ): { activity: ActivityStore; dropped: number } => {
   const cutoff = now.getTime() - ACTIVE_WITHIN_DAYS * DAY_MS;
   const current = Object.fromEntries(Object.entries(activity).filter(([, e]) => snowflakeTime(e.as_of) >= cutoff));
-  const kept = keepAttributed(catalog ? pruneActivity(current, catalog) : current, optedOut);
+  const kept = keepAttributed(catalog ? pruneActivity(current, catalog, monitored) : current, optedOut);
   return { activity: kept, dropped: Object.keys(activity).length - Object.keys(kept).length };
 };
 
@@ -94,13 +118,32 @@ export const runPurge = (
   // Not `readCurrent`, which refuses an empty store: a fresh deployment has no
   // Catalog until its first sync, and that sync runs after this.
   const catalog = withDurableStore((s) => s.current()?.catalog ?? null, paths.durable);
+  const monitored = readMonitoredIds(paths.durable);
+
+  // After the Catalog is read, which places a Thread under its Channel; the
+  // aged and opted-out text is already gone by then.
+  const again = openTier0(paths.tier0);
+  try {
+    const result = purgeMonitored({ tier0: again, monitored, catalog });
+    log(`  from monitored channels and their Threads: ${result.dropped} messages dropped`);
+    if (!result.checkpointed) log("  checkpoint busy; the next purge completes it");
+  } finally {
+    again.close();
+  }
+
   // ponytail: the gateway can edit activity.json for a deletion while this
   // rewrites it, and the later write wins — milliseconds wide. A deletion
   // overwritten here turned processing off, so the next purge (one cycle, six
   // hours) drops the entry; unless the member has opted back in by then, when
   // it stays until the Entity moves. Move activity into tier0.db for a
   // transaction if it ever matters.
-  const { activity, dropped } = purgeActivity(readActivity(paths.activity), optedOut, catalog, now);
+  const { activity, dropped } = purgeActivity(
+    readActivity(paths.activity),
+    optedOut,
+    catalog,
+    now,
+    monitored,
+  );
   if (dropped) writeActivity(activity, paths.activity);
   log(`Activity: ${paths.activity}`);
   log(

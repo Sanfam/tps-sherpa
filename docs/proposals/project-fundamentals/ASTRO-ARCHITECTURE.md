@@ -386,7 +386,8 @@ Still true, and unaffected by the cut:
 
 **Activity summaries never enter the Catalog, and so never the site's snapshot** (Staff, 2026-10-05).
 They are derived from member conversation, the repository is public, and the
-boundary has no member-name cache, so a name said in conversation could
+boundary's member-name cache is partial (usernames and display names of recent
+authors only, not server nicknames; #32), so a name said in conversation could
 otherwise reach a public file. They wait bot-side until a gated delivery path
 exists — see #26. Built by `enrich.ts activity` from the newest Tier 0
 messages, bots and webhooks dropped, near-duplicates collapsed, and only once
@@ -425,6 +426,12 @@ member introducing themselves is having a conversation, not authoring a
 description. This extends to **Threads inside a monitored channel**, which is
 where the introductions actually are; matching only on the channel's own name
 would capture exactly what the rule protects.
+
+*(2026-10-16, #33)* The monitored list is keyed on channel **ids**, held in the
+bot's durable store, and edited by Staff with `/monitored` (Manage Server), so
+a rename cannot quietly lift the carve-out. It fails closed: if a configured id
+is missing from the Catalog, capture, enrichment and `/find` refuse rather than
+guess which Threads it held.
 
 Forums are skipped because they carry no messages of their own.
 

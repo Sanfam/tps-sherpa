@@ -35,6 +35,8 @@ const boundary = createBoundary({
   chat: openAiWire(wire),
   models,
   catalog: [subject],
+  // A synthetic one-Entity Catalog with nothing in it to monitor.
+  monitored: new Set(),
   names: { channels: new Map(), roles: new Map() },
   warn: (m) => console.warn(m),
 });

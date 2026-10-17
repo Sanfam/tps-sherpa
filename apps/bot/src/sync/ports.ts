@@ -71,6 +71,12 @@ export interface RawCapturedMessage {
   authorId: string;
   /** A bot or a webhook: either way, not a member's words. */
   authorIsBot: boolean;
+  /**
+   * The author's username and display name, as the message carries them. The
+   * only source of member names: there is no member list, which would need
+   * the privileged GuildMembers intent. A server nickname is not here.
+   */
+  authorNames: string[];
   content: string;
   createdAt: string;
   window: "head" | "tail";

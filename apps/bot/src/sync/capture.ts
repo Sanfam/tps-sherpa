@@ -14,10 +14,16 @@
  * Messages from a member who has turned processing off are never stored. The
  * opt-outs are read again for every Entity (`captureEach`), and the purge
  * sweeps anything stored in the moment before one was recorded.
+ *
+ * A pending `/privacy backfill` makes the run recapture every Entity active
+ * within the retention window, and is cleared when that run ends; an Entity
+ * that failed in it has its cursor dropped, so the next run captures it
+ * afresh. Monitored channels are read from the durable store, and a missing
+ * one stops the run before Discord is read.
  */
 import { discordRest } from "./discord-adapter.ts";
-import { readCurrent, readProcessingOptOuts } from "./durable-store.ts";
-import { TIER0_PATH, openTier0 } from "./tier0-store.ts";
+import { readCurrent, readMonitored, readProcessingOptOuts, withDurableStore } from "./durable-store.ts";
+import { RETAIN_MS, TIER0_PATH, openTier0 } from "./tier0-store.ts";
 import { GLOBAL_REQUEST_CEILING, captureEach, projectedCalls, selectForCapture } from "./tier0.ts";
 
 const token = process.env["DISCORD_BOT_TOKEN"];
@@ -28,11 +34,22 @@ if (!token || !guildId) {
 }
 
 const { catalog } = readCurrent();
+// Throws, so nothing is captured, if a monitored channel is missing from the
+// Catalog: its Threads could not be told apart from anyone else's (#33).
+const monitored = readMonitored(catalog);
+// Read once, at the start: only these are cleared at the end.
+const backfills = withDurableStore((s) => s.pendingBackfills());
 
 const store = openTier0(TIER0_PATH);
 const discord = discordRest({ token, guildId });
 
-const decision = selectForCapture(catalog, process.argv.includes("--full") ? new Map() : store.state());
+const decision = selectForCapture(catalog, process.argv.includes("--full") ? new Map() : store.state(), {
+  monitored,
+  // A backfill re-reads every Entity that may hold a message young enough to
+  // keep, whether or not it moved, so a member who opted back in is read again.
+  ...(backfills.length ? { recaptureSince: new Date(Date.now() - RETAIN_MS) } : {}),
+});
+if (backfills.length) console.log(`Backfills requested    : ${backfills.length} (recapturing the last ${RETAIN_MS / 86_400_000} days)`);
 console.log(`Catalog Entities        : ${catalog.length}`);
 console.log(`  Forums (no own content): ${decision.skippedNoOwnContent}`);
 console.log(`  monitored channels     : ${decision.skippedMonitored} (extract-and-discard — never stored)`);
@@ -77,4 +94,14 @@ console.log(
 );
 console.log(`Path                    : ${TIER0_PATH}  (disposable — re-run to rebuild)`);
 if (failed.length) console.log(`Failed                  : ${failed.length} (re-run to retry — they were not recorded)`);
+// Cleared once the run has finished, failures or not: holding a request for
+// one Entity that always fails would recapture six days every cycle. But a
+// backfill selects Entities that have not moved, whose cursor would skip them
+// next run, so a failed one's cursor (and anything held for it) is dropped
+// first: the next run captures it like a new Entity.
+if (backfills.length) {
+  store.deleteEntities(failed.map((f) => f.id));
+  withDurableStore((s) => s.clearBackfills(backfills));
+  console.log(`Backfills done          : ${backfills.length}${failed.length ? ` (${failed.length} failed Entities reset for the next run)` : ""}`);
+}
 store.close();

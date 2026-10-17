@@ -10,12 +10,14 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { Entity } from "../sync/catalog.ts";
-import { readCurrent, readProcessingOptOuts } from "../sync/durable-store.ts";
+import { readCurrent, readMonitored, readProcessingOptOuts, withDurableStore } from "../sync/durable-store.ts";
 import type { NameLookup } from "../sync/normalise.ts";
 import type { RoleManifestEntry } from "../sync/ports.ts";
+import { TIER0_PATH, openTier0 } from "../sync/tier0-store.ts";
 import type { ActivityStore } from "./activity.ts";
-import { createBoundary, type Boundary } from "./boundary.ts";
+import { createBoundary, namePattern, type Boundary } from "./boundary.ts";
 import { openAiWire, wireFromEnv } from "./openai-wire.ts";
+import { parseVocabulary } from "./vocabulary.ts";
 
 export const contentPath = (rel: string): string =>
   resolve(import.meta.dirname, "../../../../content", rel);
@@ -75,6 +77,66 @@ export const nameLookup = (catalog: Entity[]): NameLookup => {
   };
 };
 
+/** Shorter than this, a name is a word fragment, and refusing it would refuse half of English. */
+export const MIN_MEMBER_NAME_LENGTH = 3;
+
+/**
+ * The member names a boundary may act on.
+ *
+ * The boundary refuses any answer containing one, and replaces each in what it
+ * sends, so a name that is also an ordinary word in this Catalog — a member
+ * called "Battlefield", or "Dad" — would break every call about that place and
+ * blank it out of every prompt. Left out: names under three characters, and
+ * names that appear, whole-word and in any case, in Staff-controlled text — a
+ * Channel or Forum name, a Topic label or slug. Never a Post or Thread title:
+ * members write those, so an intro Thread called "Jughfer intro" would switch
+ * off redaction of Jughfer, and anyone could do the same for any name.
+ *
+ * ponytail: a member whose name collides with a Channel, a Forum or a Topic is
+ * not redacted, in or out. One whose name is in a Post's title has that Post's
+ * summary refused by output validation, so it stays unsummarised — closed, not
+ * open. A per-name allowlist Staff can edit, if either ever matters.
+ */
+export const usableMemberNames = (
+  names: Iterable<string>,
+  catalog: Entity[],
+  topics: Iterable<string>,
+): string[] => {
+  const staffText = catalog.filter((e) => e.type === "channel" || e.type === "forum").map((e) => e.name);
+  const text = [...staffText, ...topics].join("\n");
+  return [...new Set([...names].map((n) => n.trim()))].filter(
+    (n) => [...n].length >= MIN_MEMBER_NAME_LENGTH && !namePattern(n).test(text),
+  );
+};
+
+/**
+ * The member-name cache (`tier0-store.ts`) and the names kept for members
+ * with processing off (`opted_out_name` in the durable store), less the names
+ * `usableMemberNames` leaves out. Read fresh for each boundary: both change
+ * while the bot runs.
+ */
+export const readMemberNames = (catalog: Entity[], tier0Path: string = TIER0_PATH): string[] => {
+  const tier0 = openTier0(tier0Path);
+  let names: string[];
+  try {
+    names = tier0.memberNames();
+  } finally {
+    tier0.close();
+  }
+  names.push(...withDurableStore((s) => s.optedOutNames()));
+  // No frozen vocabulary is no Topics to collide with; a broken one throws.
+  const frozen = readIfPresent(VOCABULARY_PATH);
+  const topics = frozen ? parseVocabulary(frozen).topics.flatMap((t) => [t.label, t.slug]) : [];
+  return usableMemberNames(names, catalog, topics);
+};
+
+/**
+ * A boundary over this Catalog, with everything the bot knows wired in: the
+ * monitored channels, the member-name cache, and who has opted out. Throws,
+ * before anything is sent, if a monitored channel is missing from the
+ * Catalog (`readMonitored`). The monitored set is returned too, so a caller's
+ * own eligibility filter uses exactly the set its boundary enforces.
+ */
 export const openBoundary = (
   catalog: Entity[],
   /**
@@ -92,16 +154,24 @@ export const openBoundary = (
    * passes waiting minutes on anything that hangs.
    */
   timeoutMs?: number,
-): { boundary: Boundary; models: Record<"strong" | "cheap", string>; baseUrl: string } => {
+): {
+  boundary: Boundary;
+  models: Record<"strong" | "cheap", string>;
+  baseUrl: string;
+  monitored: ReadonlySet<string>;
+} => {
   const { wire, models: configured } = wireFromEnv();
   const models = { ...configured, ...Object.fromEntries(Object.entries(override).filter(([, v]) => v)) };
+  const monitored = readMonitored(catalog);
   return {
     boundary: createBoundary({
       // An explicit LLM_TIMEOUT_MS still wins: it is the operator's override.
       chat: openAiWire(timeoutMs && !process.env["LLM_TIMEOUT_MS"] ? { ...wire, timeoutMs } : wire),
       models,
       catalog,
+      monitored,
       names: nameLookup(catalog),
+      memberNames: readMemberNames(catalog),
       // Read fresh for every source, not once for the boundary: an enrichment
       // pass runs for minutes, and an opt-out made part-way stops the next
       // call. Every boundary gets it: there is no way to build one that has
@@ -113,6 +183,7 @@ export const openBoundary = (
     }),
     models,
     baseUrl: wire.baseUrl,
+    monitored,
   };
 };
 

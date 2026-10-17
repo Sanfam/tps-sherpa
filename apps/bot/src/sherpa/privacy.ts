@@ -21,7 +21,7 @@ import {
 } from "discord-api-types/v10";
 import { readActivity, writeActivity } from "../llm/session.ts";
 import { SETTINGS, type Preferences, type Setting, withDurableStore } from "../sync/durable-store.ts";
-import { openTier0 } from "../sync/tier0-store.ts";
+import { RETAIN_MS, openTier0 } from "../sync/tier0-store.ts";
 
 /** Discord's ceiling on an embed's description. */
 export const MAX_EMBED_DESCRIPTION = 4096;
@@ -46,6 +46,11 @@ export const PRIVACY_COMMAND: RESTPostAPIChatInputApplicationCommandsJSONBody = 
     { name: "settings", type: ApplicationCommandOptionType.Subcommand, description: "See your Sherpa settings." },
     { name: "opt-out", type: ApplicationCommandOptionType.Subcommand, description: "Turn something off.", options: [settingOption] },
     { name: "opt-in", type: ApplicationCommandOptionType.Subcommand, description: "Turn something back on.", options: [settingOption] },
+    {
+      name: "backfill",
+      type: ApplicationCommandOptionType.Subcommand,
+      description: "After opting back in: have Sherpa re-read your recent messages.",
+    },
     {
       name: "delete-my-data",
       type: ApplicationCommandOptionType.Subcommand,
@@ -74,7 +79,10 @@ export interface Deleted {
 export interface Privacy {
   policy: () => string;
   settings: (memberId: string) => Preferences;
-  set: (memberId: string, setting: Setting, allowed: boolean) => void;
+  /** `names`: kept with a processing opt-out, so others' text is redacted of them. */
+  set: (memberId: string, setting: Setting, allowed: boolean, names?: string[]) => void;
+  /** False if one was already pending. */
+  requestBackfill: (memberId: string) => boolean;
   deleteMyData: (memberId: string) => Deleted;
 }
 
@@ -87,8 +95,9 @@ export const openPrivacy = (paths: {
 }): Privacy => ({
   policy: () => readFileSync(paths.policy, "utf8"),
   settings: (memberId) => withDurableStore((s) => s.preferences(memberId), paths.durable),
-  set: (memberId, setting, allowed) =>
-    withDurableStore((s) => s.setPreference(memberId, setting, allowed), paths.durable),
+  set: (memberId, setting, allowed, names) =>
+    withDurableStore((s) => s.setPreference(memberId, setting, allowed, names), paths.durable),
+  requestBackfill: (memberId) => withDurableStore((s) => s.requestBackfill(memberId), paths.durable),
 
   /**
    * In an order that a failure part-way can only leave safer, and a retry can
@@ -125,6 +134,17 @@ export const openPrivacy = (paths: {
     return { messages, places: places.length, summaries: fed.length, checkpointed };
   },
 });
+
+/** What Tier 0 can still hold, in days: a backfill reaches no further back. */
+const RETAIN_DAYS = RETAIN_MS / (24 * 60 * 60 * 1000);
+
+export const BACKFILL_OPT_IN_FIRST =
+  "Turn reading back on first with `/privacy opt-in processing`, then run `/privacy backfill`. Nothing was requested.";
+export const BACKFILL_REQUESTED =
+  `Done. Within about six hours Sherpa will re-read your messages from the last ${RETAIN_DAYS} days. ` +
+  "Anything older than that can't be recovered.";
+export const BACKFILL_PENDING =
+  `You've already asked. Within about six hours Sherpa will re-read your messages from the last ${RETAIN_DAYS} days.`;
 
 export const POLICY_INTRO = "How Sherpa handles what you share. See your own settings with `/privacy settings`.";
 export const NOTHING_DELETED =
@@ -184,6 +204,13 @@ export const answerPrivacy = (
   privacy: Privacy,
   log: (m: string) => void,
   tag: string,
+  /**
+   * Whether the invoker holds the Member role (`isMember`), asked only when
+   * names would be kept. Anyone may opt out, but only a Member's names are
+   * kept: otherwise anyone could set their nickname to an ordinary word, opt
+   * out, and have that word redacted from every prompt.
+   */
+  isMember: () => boolean = () => false,
 ): Answer | null => {
   const memberId = interaction.member?.user.id ?? interaction.user?.id;
   const sub = interaction.data.options?.[0];
@@ -209,12 +236,32 @@ export const answerPrivacy = (
       const which = setting(option("setting"));
       if (!which) return null;
       const allowed = sub.name === "opt-in";
-      privacy.set(memberId, which, allowed);
+      // Their names from this interaction, no fetch: their own messages are no
+      // longer stored, so this is the only way they stay redacted elsewhere.
+      const user = interaction.member?.user ?? interaction.user;
+      const keepNames = which === "processing" && !allowed && isMember();
+      const names = keepNames
+        ? [user?.username, user?.global_name, interaction.member?.nick].filter(
+            (n): n is string => typeof n === "string" && n.trim() !== "",
+          )
+        : [];
+      privacy.set(memberId, which, allowed, names);
       log(`${tag} ${sub.name} ${which}`);
       return `Done. ${settingLine(which, allowed)}` +
         (which === "processing" && !allowed
           ? "\nMessages Sherpa already kept are cleared within 7 days, or right now with `/privacy delete-my-data`."
           : "");
+    }
+    case "backfill": {
+      // Recorded only for someone Sherpa may read: a request from someone
+      // opted out would be read the moment capture ran, against their choice.
+      if (!privacy.settings(memberId).processing) {
+        log(`${tag} backfill refused: processing is off`);
+        return BACKFILL_OPT_IN_FIRST;
+      }
+      const requested = privacy.requestBackfill(memberId);
+      log(`${tag} backfill ${requested ? "requested" : "already pending"}`);
+      return requested ? BACKFILL_REQUESTED : BACKFILL_PENDING;
     }
     case "delete-my-data": {
       if (option("confirm") !== true) {

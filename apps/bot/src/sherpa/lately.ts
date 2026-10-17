@@ -27,10 +27,11 @@ export const MAX_LATELY = 8;
  */
 export const latelyPlaces = (
   catalog: Entity[],
+  monitored: ReadonlySet<string>,
   topic: Topic | null,
   now: Date = new Date(),
 ): Entity[] =>
-  candidatesOf(catalog)
+  candidatesOf(catalog, monitored)
     .filter(
       (e) =>
         e.type !== "forum" &&

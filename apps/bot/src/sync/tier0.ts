@@ -33,17 +33,6 @@ export interface CaptureDecision {
 }
 
 /**
- * Channels the bot watches to build member profiles — archetypally
- * `👋︱introductions`. Their conversation is **extract-and-discard** under the
- * privacy model and must never be stored: a member introducing themselves is
- * having a conversation, not authoring a description.
- *
- * This is the carve-out the privacy model actually specifies. It is not a ban
- * on Channel content generally.
- */
-export const DEFAULT_MONITORED_CHANNELS = ["👋︱introductions"];
-
-/**
  * What Tier 0 may capture: Channels, Posts and Threads.
  *
  * Forums are excluded because they carry no messages of their own — their
@@ -56,9 +45,19 @@ const isCapturable = (e: Entity) =>
 /**
  * Whether an Entity's conversation is monitored, and so extract-and-discard.
  *
+ * Monitored channels are the ones the bot watches to build member profiles —
+ * archetypally `👋︱introductions`. Their conversation must never be stored or
+ * sent to a model: a member introducing themselves is having a conversation,
+ * not authoring a description. This is the carve-out the privacy model
+ * actually specifies, not a ban on Channel content generally.
+ *
+ * `monitored` holds Channel ids, read from the durable store (`readMonitored`).
+ * Ids only: a name match would let a rename — even of an emoji — turn the
+ * carve-out off (#33).
+ *
  * A Thread inside a monitored channel is monitored conversation too. The intro
- * threads are where the actual introductions are, so matching only on the
- * channel's own name would have captured exactly what the carve-out exists to
+ * threads are where the actual introductions are, so matching only the
+ * Channel itself would have captured exactly what the carve-out exists to
  * protect.
  *
  * Exported because Tier 0 is not the only place this has to hold: the LLM
@@ -70,17 +69,25 @@ export const isMonitored = (
   byId: Map<string, Entity>,
   monitored: ReadonlySet<string>,
 ): boolean => {
-  if (monitored.has(entity.name) || monitored.has(entity.id)) return true;
+  if (monitored.has(entity.id)) return true;
   const parent = entity.parent_id ? byId.get(entity.parent_id) : undefined;
-  return parent ? monitored.has(parent.name) || monitored.has(parent.id) : false;
+  return parent ? monitored.has(parent.id) : false;
 };
 
 export const selectForCapture = (
   catalog: Entity[],
   state: CaptureState,
-  options: { monitored?: readonly string[] } = {},
+  options: {
+    monitored: ReadonlySet<string>;
+    /**
+     * Capture an Entity whose newest message is at or after this, even if it
+     * has not moved since the last run: a backfill. Anything older would
+     * store nothing (`toStored`).
+     */
+    recaptureSince?: Date;
+  },
 ): CaptureDecision => {
-  const monitored = new Set(options.monitored ?? DEFAULT_MONITORED_CHANNELS);
+  const { monitored } = options;
   const byId = new Map(catalog.map((e) => [e.id, e]));
 
   const decision: CaptureDecision = {
@@ -112,7 +119,11 @@ export const selectForCapture = (
       continue;
     }
     const seen = state.get(entity.id);
-    if (seen && seen.lastMessageId === entity.last_message_id) {
+    const backfill =
+      options.recaptureSince !== undefined &&
+      entity.last_activity_at !== null &&
+      Date.parse(entity.last_activity_at) >= options.recaptureSince.getTime();
+    if (seen && seen.lastMessageId === entity.last_message_id && !backfill) {
       decision.skippedUnchanged++;
       continue;
     }
@@ -138,7 +149,8 @@ export const projectedCalls = (entityCount: number) =>
  * summarised or need deleting. So is a message older than `RETAIN_MS`: the
  * windows reach back to an Entity's opening, and the purge would only delete
  * it again. Bots and webhooks are kept and flagged, as before: they are
- * dropped where the text is used.
+ * dropped where the text is used. Author names go with a member's stored
+ * message, and only with one, for the member-name cache (`tier0-store.ts`).
  */
 export const toStored = (
   entityId: string,
@@ -155,6 +167,7 @@ export const toStored = (
       messageId: m.id,
       authorId: m.authorId,
       authorIsBot: m.authorIsBot,
+      authorNames: m.authorIsBot ? [] : m.authorNames,
       content: m.content,
       createdAt: m.createdAt,
       window: m.window,

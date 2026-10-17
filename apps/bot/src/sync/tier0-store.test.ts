@@ -13,6 +13,25 @@ const msg = (over: Partial<StoredMessage> & { entityId: string; messageId: strin
   ...over,
 });
 
+describe("the member-name cache", () => {
+  it("keeps a name exactly as long as its author has a message stored", () => {
+    const store = openTier0(":memory:");
+    store.record("e1", "1", [
+      msg({ entityId: "e1", messageId: "m1", authorId: "a1", authorNames: ["alpha", "Alpha A"] }),
+      msg({ entityId: "e1", messageId: "m2", authorId: "a2", authorNames: ["bravo"], createdAt: "2026-02-01T00:00:00.000Z" }),
+      msg({ entityId: "e1", messageId: "m3", authorId: "a3", authorNames: ["charlie"], createdAt: "2026-02-01T00:00:00.000Z" }),
+    ]);
+    expect(store.memberNames().sort()).toEqual(["Alpha A", "alpha", "bravo", "charlie"]);
+    store.dropWrittenBefore("2026-01-15T00:00:00.000Z"); // a1's only message ages out
+    expect(store.memberNames().sort()).toEqual(["bravo", "charlie"]);
+    store.deleteAuthor("a2");
+    expect(store.memberNames()).toEqual(["charlie"]);
+    store.record("e1", "2", []); // recaptured: a3's message is gone from Discord
+    expect(store.memberNames()).toEqual([]);
+    store.close();
+  });
+});
+
 describe("Tier 0 store", () => {
   it("reports what it has captured, so the next run can skip it", () => {
     const store = openTier0(":memory:");

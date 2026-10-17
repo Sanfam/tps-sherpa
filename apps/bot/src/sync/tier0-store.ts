@@ -4,6 +4,13 @@
  * Uses Node's built-in `node:sqlite` — no dependency. Nothing here is backed
  * up: the volume is disposable and the rebuild path is a re-run of the capture.
  * Nothing is kept for more than seven days either: see `purge.ts`.
+ *
+ * It also holds the member-name cache (#32): the usernames and display names
+ * on the members' messages stored here, so the LLM boundary can keep them out
+ * of what it sends and refuse them in what comes back. A name lives exactly as
+ * long as its author has a message here — every write that removes messages
+ * removes the names left without one — so it has no retention of its own, and
+ * a member with processing off, whose messages are never stored, has none.
  */
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -37,6 +44,8 @@ export interface StoredMessage {
    */
   authorId: string;
   authorIsBot: boolean;
+  /** Written to the member-name cache by `record`; not read back with the message. */
+  authorNames?: string[];
   content: string;
   createdAt: string;
   /** Which window it came from, so sampling can tell opening from recent. */
@@ -69,7 +78,29 @@ export const openTier0 = (path: string) => {
       window        TEXT NOT NULL,
       PRIMARY KEY (entity_id, message_id)
     );
+    CREATE TABLE IF NOT EXISTS member_name (
+      author_id TEXT NOT NULL,
+      name      TEXT NOT NULL,
+      PRIMARY KEY (author_id, name)
+    );
   `);
+  /** Names whose author has no message left. Run by every write that removes messages. */
+  const dropOrphanNames = db.prepare(
+    "DELETE FROM member_name WHERE author_id NOT IN (SELECT author_id FROM message)",
+  );
+  /** A deletion of messages, and of the names it orphans, as one. */
+  const removing = (remove: () => number | bigint): number => {
+    db.exec("BEGIN");
+    try {
+      const n = Number(remove());
+      dropOrphanNames.run();
+      db.exec("COMMIT");
+      return n;
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  };
 
   return {
     /** What a previous run already stored, for the incremental decision. */
@@ -102,12 +133,13 @@ export const openTier0 = (path: string) => {
         `INSERT OR REPLACE INTO captured_entity (entity_id, last_message_id, captured_at)
          VALUES (?, ?, ?)`,
       );
+      const insertName = db.prepare("INSERT OR IGNORE INTO member_name (author_id, name) VALUES (?, ?)");
       // One transaction per Entity: a crash mid-run leaves complete Entities
       // captured and the rest simply uncaptured, which the next run picks up.
       db.exec("BEGIN");
       try {
         clearEntity.run(entityId);
-        for (const m of messages)
+        for (const m of messages) {
           insertMessage.run(
             m.entityId,
             m.messageId,
@@ -117,6 +149,9 @@ export const openTier0 = (path: string) => {
             m.createdAt,
             m.window,
           );
+          for (const name of m.authorNames ?? []) insertName.run(m.authorId, name);
+        }
+        dropOrphanNames.run();
         // node:sqlite rejects undefined; a Catalog written before this field
         // existed has no value at all.
         markCaptured.run(entityId, lastMessageId ?? null, new Date().toISOString());
@@ -163,7 +198,7 @@ export const openTier0 = (path: string) => {
      * ISO 8601; one that is missing sorts first and is deleted.
      */
     dropWrittenBefore: (cutoff: string): number =>
-      Number(db.prepare("DELETE FROM message WHERE created_at < ?").run(cutoff).changes),
+      removing(() => db.prepare("DELETE FROM message WHERE created_at < ?").run(cutoff).changes),
 
     /** The Entities holding anything this author wrote. */
     authoredIn: (authorId: string): string[] =>
@@ -178,7 +213,28 @@ export const openTier0 = (path: string) => {
      * messages are gone, and a recapture would only drop them again.
      */
     deleteAuthor: (authorId: string): number =>
-      Number(db.prepare("DELETE FROM message WHERE author_id = ?").run(authorId).changes),
+      removing(() => db.prepare("DELETE FROM message WHERE author_id = ?").run(authorId).changes),
+
+    /**
+     * Deletes everything held for these Entities, cursors included, so one
+     * that stops being monitored is captured afresh rather than skipped.
+     */
+    deleteEntities: (entityIds: Iterable<string>): number => {
+      const messages = db.prepare("DELETE FROM message WHERE entity_id = ?");
+      const cursor = db.prepare("DELETE FROM captured_entity WHERE entity_id = ?");
+      return removing(() => {
+        let n = 0;
+        for (const id of entityIds) {
+          n += Number(messages.run(id).changes);
+          cursor.run(id);
+        }
+        return n;
+      });
+    },
+
+    /** Every cached member name, for the boundary. */
+    memberNames: (): string[] =>
+      (db.prepare("SELECT DISTINCT name FROM member_name").all() as Array<{ name: string }>).map((r) => r.name),
 
     /**
      * Moves the write-ahead log into the file and empties it. Secure delete

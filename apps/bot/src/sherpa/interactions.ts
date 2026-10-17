@@ -26,6 +26,7 @@ import { MEMBER_ROLE_NAME } from "../sync/discord-adapter.ts";
 import type { RoleManifestEntry } from "../sync/ports.ts";
 import { EMPTY_QUERY, MAX_QUERY_LENGTH, findPlaces, renderFind } from "./find.ts";
 import { latelyPlaces, renderLately } from "./lately.ts";
+import { MONITORED_COMMAND, type Monitored, answerMonitored } from "./monitored.ts";
 import { type Answer, PRIVACY_COMMAND, type Privacy, answerPrivacy } from "./privacy.ts";
 
 /** Discord's ceiling on a command option's choices. */
@@ -67,6 +68,7 @@ export const commandDefinitions = (vocabulary: Vocabulary): RESTPutAPIApplicatio
       ],
     },
     PRIVACY_COMMAND,
+    MONITORED_COMMAND,
   ];
 };
 
@@ -172,9 +174,10 @@ export const CAP_REACHED =
   "Sherpa has answered all the `/find` questions it can for today. Try again tomorrow, " +
   "or use `/lately` to see what's active.";
 export const FIND_OFF = "`/find` is switched off for now. Use `/lately` to see what's active.";
+/** Owner's decision (2026-10-16): back on, and a backfill, for `/find` to work. */
 export const FIND_OPTED_OUT =
-  "You've turned off Sherpa reading what you write, and `/find` needs that to read your request. " +
-  "To turn it back on: `/privacy opt-in processing`. `/lately` works either way.";
+  "You're opted out of Sherpa reading what you write, which `/find` needs. To use it, turn reading " +
+  "back on with `/privacy opt-in processing`, then run `/privacy backfill`. `/lately` works either way.";
 export const FAILED = "Something went wrong on Sherpa's side. Try again in a minute.";
 export const UNKNOWN = "Sherpa doesn't know that command.";
 
@@ -193,6 +196,13 @@ export interface Sherpa {
   /** Activity summaries, for `/lately`. Bot-side only (activity.ts). */
   loadActivity: () => ActivityStore;
   privacy: Privacy;
+  /** Staff's monitored-channel list, for `/monitored`. */
+  monitored: Monitored;
+  /**
+   * The monitored ids, checked against this Catalog (`readMonitored`). Throws
+   * when one is missing, so `/find` and `/lately` fail closed before any call.
+   */
+  loadMonitored: (catalog: Entity[]) => ReadonlySet<string>;
   /** A boundary built against this Catalog, so its carve-out checks see what the candidates came from. */
   askFor: (catalog: Entity[]) => Boundary["ask"];
   /** One retry, as every other paid call gets. */
@@ -215,7 +225,16 @@ const answer = async (
   const tag = `[sherpa] /${interaction.data.name} ${interaction.id}`;
   // Ahead of the Member gate: anyone in the guild may opt out or delete.
   if (interaction.data.name === "privacy") {
-    const answered = answerPrivacy(interaction, sherpa.privacy, sherpa.log, tag);
+    // The Member check only decides whether an opt-out keeps names, so a
+    // manifest that cannot be read (no sync yet) means "no", never a failed opt-out.
+    const member = () => {
+      try {
+        return isMember(interaction, sherpa.guildId, sherpa.loadRoleManifest());
+      } catch {
+        return false;
+      }
+    };
+    const answered = answerPrivacy(interaction, sherpa.privacy, sherpa.log, tag, member);
     if (answered !== null) return answered;
     sherpa.log(`${tag} unknown subcommand`);
     return UNKNOWN;
@@ -236,7 +255,17 @@ const answer = async (
     return FIND_OPTED_OUT;
   }
   const catalog = sherpa.loadCatalog();
+
+  // Staff-only: Discord hides it from others, and answerMonitored checks the bit (monitored.ts).
+  if (interaction.data.name === "monitored") {
+    const answered = answerMonitored(interaction, sherpa.monitored, catalog, sherpa.log, tag);
+    if (answered !== null) return answered;
+    sherpa.log(`${tag} unknown subcommand`);
+    return UNKNOWN;
+  }
+
   const vocabulary = sherpa.loadVocabulary();
+  const monitored = sherpa.loadMonitored(catalog);
 
   if (interaction.data.name === "find") {
     const query = stringOption(interaction, "interests") ?? "";
@@ -252,6 +281,7 @@ const answer = async (
           query,
           invokerId: interaction.member!.user.id,
           catalog,
+          monitored,
           vocabulary,
           ask,
         });
@@ -273,7 +303,7 @@ const answer = async (
   if (interaction.data.name === "lately") {
     const slug = stringOption(interaction, "topic");
     const topic = vocabulary.topics.find((t) => t.slug === slug) ?? null;
-    const places = latelyPlaces(catalog, topic, sherpa.now?.());
+    const places = latelyPlaces(catalog, monitored, topic, sherpa.now?.());
     const activity = sherpa.loadActivity();
     sherpa.log(
       `${tag} topic=${topic?.slug ?? "-"} places=${places.length} ` +

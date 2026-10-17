@@ -14,7 +14,7 @@
 import type { Entity } from "../sync/catalog.ts";
 import { resolveIdentifiers } from "../sync/normalise.ts";
 import type { NameLookup } from "../sync/normalise.ts";
-import { DEFAULT_MONITORED_CHANNELS, isMonitored } from "../sync/tier0.ts";
+import { isMonitored } from "../sync/tier0.ts";
 
 /**
  * Strong for one-time work that sets something in stone — deriving the Topic
@@ -80,11 +80,10 @@ export interface BoundaryDeps {
   /** For resolving `<#id>` and `<@&id>` to names before the call. */
   names: NameLookup;
   /**
-   * Display names that must never appear in output.
-   *
-   * Empty today: nothing fetches the guild's member list yet, so there is no
-   * cache to check against. The boundary says so once rather than letting an
-   * empty set read as a passing check.
+   * Member names: replaced on the way out, refused on the way back.
+   * `openBoundary` passes the member-name cache (`tier0-store.ts`). When it is
+   * empty the boundary says so once, rather than letting an empty set read as
+   * a passing check.
    */
   memberNames?: Iterable<string>;
   /**
@@ -94,8 +93,12 @@ export interface BoundaryDeps {
    * by construction.
    */
   hasOptedOut?: (authorId: string) => boolean;
-  /** Overrides the monitored-channel carve-out. Tests only. */
-  monitored?: readonly string[];
+  /**
+   * The monitored channels' ids (`readMonitored`). Required, as the Catalog
+   * is: a boundary that has not been told what is monitored must not exist,
+   * because an empty default would carve out nothing.
+   */
+  monitored: ReadonlySet<string>;
   warn?: (message: string) => void;
 }
 
@@ -110,7 +113,7 @@ const SNOWFLAKE = /\d{17,20}/;
  * that exists to catch it. Compiled once at construction so a name that
  * cannot form a pattern fails loudly then, not on the first model call.
  */
-const namePattern = (name: string): RegExp =>
+export const namePattern = (name: string): RegExp =>
   new RegExp(
     `(?<![\\p{L}\\p{N}])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}])`,
     "iu",
@@ -142,9 +145,13 @@ const strings = (value: unknown): string[] => {
 };
 
 export const createBoundary = (deps: BoundaryDeps) => {
-  const monitored = new Set(deps.monitored ?? DEFAULT_MONITORED_CHANNELS);
+  const { monitored } = deps;
   const hasOptedOut = deps.hasOptedOut ?? (() => false);
-  const memberNames = [...(deps.memberNames ?? [])].filter((n) => n.trim().length > 0);
+  // Longest first, so "Dave Smith" is replaced whole before "Dave" can leave
+  // "@member Smith" behind.
+  const memberNames = [...(deps.memberNames ?? [])]
+    .filter((n) => n.trim().length > 0)
+    .sort((a, b) => b.length - a.length);
   const namePatterns = memberNames.map(namePattern);
   const byId = new Map(deps.catalog.map((e) => [e.id, e]));
   let warnedAboutNames = false;
@@ -173,7 +180,7 @@ export const createBoundary = (deps: BoundaryDeps) => {
    * are retried and logged, and quoting the snowflake, the name or the line
    * around a mass mention would copy exactly what was refused into a log.
    */
-  const validate = (value: unknown): void => {
+  const validate = (value: unknown, checkNames = true): void => {
     for (const text of strings(value)) {
       if (SNOWFLAKE.test(text))
         throw new Error(
@@ -181,7 +188,7 @@ export const createBoundary = (deps: BoundaryDeps) => {
             `Refusing it — this is a containment failure, not a formatting one.`,
         );
       if (MASS_MENTION.test(text)) throw new Error(`Model output contains a mass mention.`);
-      if (namePatterns.some((pattern) => pattern.test(text)))
+      if (checkNames && namePatterns.some((pattern) => pattern.test(text)))
         throw new Error(`Model output names a member.`);
     }
   };
@@ -235,8 +242,11 @@ export const createBoundary = (deps: BoundaryDeps) => {
 
       // The system prompt is our own text, so it is validated rather than
       // redacted: rewriting an instruction can silently change what was asked
-      // for. Anything member-shaped in there is a bug in the caller.
-      validate(request.system);
+      // for. Anything member-shaped in there is a bug in the caller. Not
+      // against member names, though: the prompt is fixed text, and a member
+      // whose name is an ordinary word in it ("games", "work") would otherwise
+      // stop every call.
+      validate(request.system, false);
 
       const sourceParts = usable.map((s) => redactOutbound(s.content)).filter((p) => p.trim());
       const parts = [request.context ? redactOutbound(request.context) : "", ...sourceParts].filter(

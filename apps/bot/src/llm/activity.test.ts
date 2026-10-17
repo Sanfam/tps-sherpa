@@ -195,7 +195,7 @@ describe("pruneActivity", () => {
     const kept = entity("1");
     const withheld = { ...entity("1"), id: "501", description_status: "withheld" } as Entity;
     const entry = { summary: "s", as_of: "1" };
-    const pruned = pruneActivity({ "500": entry, "501": entry, "502": entry }, [kept, withheld]);
+    const pruned = pruneActivity({ "500": entry, "501": entry, "502": entry }, [kept, withheld], new Set());
     expect(Object.keys(pruned)).toEqual(["500"]);
   });
 });

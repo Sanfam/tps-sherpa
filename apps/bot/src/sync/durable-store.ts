@@ -1,7 +1,8 @@
 /**
  * The bot's durable store: the current Catalog generation, its role manifest,
- * the exclusions, and members' privacy preferences (ADR-0001). Later, the rest
- * of the durable state the handoff names.
+ * the exclusions, the monitored channels, and members' privacy preferences and
+ * backfill requests (ADR-0001). Later, the rest of the durable state the
+ * handoff names.
  *
  * Separate from the Tier 0 cache on purpose. Litestream replicates whole
  * databases, and this is the one that gets replicated; Tier 0 must not be.
@@ -36,6 +37,26 @@ export interface Generation {
  * sets one; no row means allowed — every member starts opted in and can opt
  * out at any time (Staff, 2026-10-15). Kept through every purge and every deletion request: it is what
  * honours them (ADR-0001, erasure policy).
+ *
+ * `monitored_channel`: the Channels whose conversation, and whose Threads',
+ * is extract-and-discard (#33). By id, so a rename cannot undo it; the name is
+ * as last seen, for the human reading the list. Staff edit it with
+ * `/monitored`. `seeded` records that its seed went in, so the seed reaches a
+ * store initialised before the table existed and is never re-applied over a
+ * list Staff have edited — an empty list after Staff removed everything is
+ * theirs, not a store that was never seeded (ADR-0001's marker, per seed).
+ *
+ * `backfill_request`: a member who opted back in asking for their recent
+ * messages to be read again (`/privacy backfill`). One row per member, until
+ * the next capture that runs to the end; dropped when they opt out.
+ *
+ * `opted_out_name`: the username, display name and server nickname of a
+ * member with processing off, and nothing else, kept only so they are
+ * redacted from other members' text and refused in model output — their own
+ * messages, which would otherwise carry their names into the Tier 0 cache, are
+ * never stored (owner, 2026-10-16). Written when they opt out; removed when
+ * they opt back in or delete their data. Members who opted out before this
+ * table existed have none until they opt out again.
  */
 const MIGRATIONS = `
   CREATE TABLE IF NOT EXISTS preference (
@@ -45,7 +66,45 @@ const MIGRATIONS = `
     changed_at TEXT NOT NULL,
     PRIMARY KEY (member_id, setting)
   );
+  CREATE TABLE IF NOT EXISTS monitored_channel (
+    id       TEXT PRIMARY KEY,
+    name     TEXT,
+    added_by TEXT NOT NULL,
+    added_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS seeded (
+    what TEXT PRIMARY KEY,
+    at   TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS backfill_request (
+    member_id    TEXT PRIMARY KEY,
+    requested_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS opted_out_name (
+    member_id TEXT NOT NULL,
+    name      TEXT NOT NULL,
+    PRIMARY KEY (member_id, name)
+  );
 `;
+
+/**
+ * The monitored-channel seed: `👋︱introductions`, by id (verified against the
+ * guild 2026-10-16). Applied once per store, on its first open after #33.
+ */
+export const MONITORED_SEED = [{ id: "1084293546183495720", name: "👋︱introductions" }];
+
+export interface MonitoredChannel {
+  id: string;
+  name: string | null;
+  addedBy: string;
+  addedAt: string;
+}
+
+/** A backfill request as it stood when a capture started. */
+export interface BackfillRequest {
+  memberId: string;
+  requestedAt: string;
+}
 
 /**
  * What a member may turn off.
@@ -125,6 +184,7 @@ export const openDurableStore = (path: string = DURABLE_STORE_PATH) => {
   }
   db.exec(PRAGMAS);
   db.exec(MIGRATIONS);
+  seedMonitored(db);
 
   return {
     /** The current generation, or null before the first complete sync. */
@@ -157,6 +217,12 @@ export const openDurableStore = (path: string = DURABLE_STORE_PATH) => {
      * Replaces the current generation, atomically. Only a complete sync may:
      * an Entity missing from a partial enumeration has not been confirmed
      * removed, and replacing would drop its override with it (#28).
+     *
+     * ponytail: no compare here (#31 is half closed). A sync that read the
+     * generation before an enrichment patched it writes over that patch; the
+     * next enrichment redoes it, which costs calls, not data. `serve.ts` runs
+     * the two one at a time; compare the generation the sync read if a run by
+     * hand ever overlaps it for real.
      */
     replaceCatalog: (next: {
       catalog: Entity[];
@@ -181,21 +247,33 @@ export const openDurableStore = (path: string = DURABLE_STORE_PATH) => {
      * Writes fields an enrichment pass produced onto Entities that still
      * exist, leaving everything else — overrides above all — as stored. Not
      * a new generation: nothing was read from Discord.
+     *
+     * Only onto the generation the pass read (`generatedAt`), compared inside
+     * the write transaction (#31). A sync that replaced it since may have
+     * renamed an Entity or changed its first post, and a summary or Topics
+     * computed for the old one must not land on the new. Refused whole: the
+     * pass re-runs against the new generation, which costs calls, not data.
+     * `serve.ts` already runs the two one at a time; this is what holds when a
+     * run by hand overlaps it.
      */
-    // ponytail: sync and enrichment are separate commands and nothing
-    // serialises them. A sync that replaces the generation mid-enrichment
-    // loses that run's output, and enrichment can patch a stale result onto an
-    // Entity whose identity has since changed. Safe while both are run by
-    // hand, one at a time; serialise them before either is scheduled (#31).
-    patchEntities: (patches: Array<Pick<Entity, "id"> & Partial<Entity>>) => {
+    patchEntities: (generatedAt: string, patches: Array<Pick<Entity, "id"> & Partial<Entity>>) => {
       const read = db.prepare("SELECT body FROM entity WHERE id = ?");
       const write = db.prepare("UPDATE entity SET body = ? WHERE id = ?");
-      transaction(db, () => {
-        for (const patch of patches) {
-          const row = read.get(patch.id) as { body: string } | undefined;
-          if (row) write.run(JSON.stringify({ ...JSON.parse(row.body), ...patch }), patch.id);
-        }
-      });
+      transaction(
+        db,
+        () => {
+          const current = db.prepare("SELECT generated_at FROM generation").get() as
+            | { generated_at: string }
+            | undefined;
+          if (current?.generated_at !== generatedAt)
+            throw new GenerationChanged(generatedAt, current?.generated_at ?? null);
+          for (const patch of patches) {
+            const row = read.get(patch.id) as { body: string } | undefined;
+            if (row) write.run(JSON.stringify({ ...JSON.parse(row.body), ...patch }), patch.id);
+          }
+        },
+        "IMMEDIATE",
+      );
     },
 
     /** A member's settings. Anything they never set is allowed. */
@@ -207,15 +285,35 @@ export const openDurableStore = (path: string = DURABLE_STORE_PATH) => {
       return { approach: set.get("approach") ?? true, processing: set.get("processing") ?? true };
     },
 
-    /** Records a setting. Its time moves only when its value does. */
-    setPreference: (memberId: string, setting: Setting, allowed: boolean) => {
-      db.prepare(
-        `INSERT INTO preference (member_id, setting, allowed, changed_at) VALUES (?, ?, ?, ?)
-         ON CONFLICT (member_id, setting) DO UPDATE
-           SET allowed = excluded.allowed, changed_at = excluded.changed_at
-           WHERE allowed != excluded.allowed`,
-      ).run(memberId, setting, allowed ? 1 : 0, new Date().toISOString());
+    /**
+     * Records a setting. Its time moves only when its value does. Turning
+     * processing off drops a pending backfill with it: nothing of theirs may
+     * be read.
+     *
+     * Any change to processing replaces the member's kept names with `names`:
+     * the ones an opt-out carries, none on opting back in, none on a deletion
+     * request (`opted_out_name`).
+     */
+    setPreference: (memberId: string, setting: Setting, allowed: boolean, names: string[] = []) => {
+      transaction(db, () => {
+        db.prepare(
+          `INSERT INTO preference (member_id, setting, allowed, changed_at) VALUES (?, ?, ?, ?)
+           ON CONFLICT (member_id, setting) DO UPDATE
+             SET allowed = excluded.allowed, changed_at = excluded.changed_at
+             WHERE allowed != excluded.allowed`,
+        ).run(memberId, setting, allowed ? 1 : 0, new Date().toISOString());
+        if (setting !== "processing") return;
+        db.prepare("DELETE FROM opted_out_name WHERE member_id = ?").run(memberId);
+        if (allowed) return;
+        db.prepare("DELETE FROM backfill_request WHERE member_id = ?").run(memberId);
+        const keep = db.prepare("INSERT OR IGNORE INTO opted_out_name (member_id, name) VALUES (?, ?)");
+        for (const name of names) keep.run(memberId, name);
+      });
     },
+
+    /** Names kept for members with processing off, for the boundary. */
+    optedOutNames: (): string[] =>
+      (db.prepare("SELECT DISTINCT name FROM opted_out_name").all() as Array<{ name: string }>).map((r) => r.name),
 
     /** Every member who has turned processing off. */
     processingOptOuts: (): Set<string> =>
@@ -227,9 +325,65 @@ export const openDurableStore = (path: string = DURABLE_STORE_PATH) => {
         ).map((r) => r.member_id),
       ),
 
+    /** Records a backfill request. False if one was already pending: a no-op. */
+    requestBackfill: (memberId: string): boolean =>
+      db
+        .prepare("INSERT OR IGNORE INTO backfill_request (member_id, requested_at) VALUES (?, ?)")
+        .run(memberId, new Date().toISOString()).changes > 0,
+
+    pendingBackfills: (): BackfillRequest[] =>
+      (
+        db.prepare("SELECT member_id, requested_at FROM backfill_request").all() as Array<{
+          member_id: string;
+          requested_at: string;
+        }>
+      ).map((r) => ({ memberId: r.member_id, requestedAt: r.requested_at })),
+
+    /**
+     * Clears the requests a capture read at its start, and only those: a
+     * member who opted out and asked again since has a newer request, which
+     * that capture may not have honoured.
+     */
+    clearBackfills: (served: BackfillRequest[]) => {
+      const clear = db.prepare("DELETE FROM backfill_request WHERE member_id = ? AND requested_at = ?");
+      transaction(db, () => {
+        for (const r of served) clear.run(r.memberId, r.requestedAt);
+      });
+    },
+
+    monitoredChannels: (): MonitoredChannel[] =>
+      (
+        db.prepare("SELECT id, name, added_by, added_at FROM monitored_channel ORDER BY added_at, id").all() as Array<{
+          id: string;
+          name: string | null;
+          added_by: string;
+          added_at: string;
+        }>
+      ).map((r) => ({ id: r.id, name: r.name, addedBy: r.added_by, addedAt: r.added_at })),
+
+    /** False if it was already monitored; who added it first is kept. */
+    addMonitored: (id: string, name: string, addedBy: string): boolean =>
+      db
+        .prepare("INSERT OR IGNORE INTO monitored_channel (id, name, added_by, added_at) VALUES (?, ?, ?, ?)")
+        .run(id, name, addedBy, new Date().toISOString()).changes > 0,
+
+    /** False if it was not monitored. */
+    removeMonitored: (id: string): boolean =>
+      db.prepare("DELETE FROM monitored_channel WHERE id = ?").run(id).changes > 0,
+
     close: () => db.close(),
   };
 };
+
+/** Thrown by `patchEntities` when a sync replaced the generation the pass read. */
+export class GenerationChanged extends Error {
+  constructor(read: string, current: string | null) {
+    super(
+      `The Catalog changed under this run (it read the generation of ${read}; the current one is ` +
+        `${current ?? "none"}). Nothing was written; re-run.`,
+    );
+  }
+}
 
 export type DurableStore = ReturnType<typeof openDurableStore>;
 
@@ -261,6 +415,34 @@ export const readCurrent = (path: string = DURABLE_STORE_PATH): Generation =>
  */
 export const readProcessingOptOuts = (path: string = DURABLE_STORE_PATH): Set<string> =>
   withDurableStore((store) => store.processingOptOuts(), path);
+
+/**
+ * The monitored-channel ids, checked against the Catalog they will be applied
+ * to. Every step that stores conversation or sends anything to a model reads
+ * them through here.
+ *
+ * Fails closed (#33): an id missing from the Catalog — the Channel deleted,
+ * hidden from the bot, excluded, or mistyped — means the Threads it should
+ * cover cannot be placed under it, so the carve-out cannot be vouched for.
+ * Capture, enrichment and `/find` refuse until Staff fix the list or the
+ * Channel comes back. The sync, which is what brings it back, does not read it.
+ */
+export const readMonitored = (catalog: Entity[], path: string = DURABLE_STORE_PATH): ReadonlySet<string> => {
+  const ids = readMonitoredIds(path);
+  const known = new Set(catalog.map((e) => e.id));
+  const missing = [...ids].filter((id) => !known.has(id));
+  if (missing.length)
+    throw new Error(
+      `Monitored channel ${missing.join(", ")} is not in the current Catalog, so its Threads cannot be ` +
+        "placed and the monitored-channel carve-out cannot be honoured. Refusing to run. If the Channel " +
+        "was deleted, hidden from the bot or excluded, Staff remove it with `/monitored remove`, or restore it.",
+    );
+  return ids;
+};
+
+/** The configured ids as stored, unchecked. Only for taking things away — the purge. */
+export const readMonitoredIds = (path: string = DURABLE_STORE_PATH): ReadonlySet<string> =>
+  new Set(withDurableStore((s) => s.monitoredChannels().map((c) => c.id), path));
 
 /**
  * First initialisation: the ADR's explicit first-run flag, as a one-off
@@ -353,8 +535,32 @@ const writeCatalog = (db: DatabaseSync, catalog: Entity[]) => {
   for (const e of catalog) insert.run(e.id, JSON.stringify(e));
 };
 
-const transaction = (db: DatabaseSync, work: () => void) => {
-  db.exec("BEGIN");
+/**
+ * The monitored-channel seed, once per store. Checked again inside an
+ * immediate transaction, so two processes opening the store at once cannot
+ * both apply it.
+ */
+const seedMonitored = (db: DatabaseSync) => {
+  const done = () => db.prepare("SELECT 1 FROM seeded WHERE what = 'monitored_channel'").get();
+  if (done()) return;
+  transaction(
+    db,
+    () => {
+      if (done()) return;
+      const at = new Date().toISOString();
+      const insert = db.prepare(
+        "INSERT OR IGNORE INTO monitored_channel (id, name, added_by, added_at) VALUES (?, ?, 'seed', ?)",
+      );
+      for (const c of MONITORED_SEED) insert.run(c.id, c.name, at);
+      db.prepare("INSERT INTO seeded (what, at) VALUES ('monitored_channel', ?)").run(at);
+    },
+    "IMMEDIATE",
+  );
+};
+
+/** `IMMEDIATE` takes the write lock up front, for a write that depends on what it read. */
+const transaction = (db: DatabaseSync, work: () => void, mode: "DEFERRED" | "IMMEDIATE" = "DEFERRED") => {
+  db.exec(`BEGIN ${mode}`);
   try {
     work();
     db.exec("COMMIT");

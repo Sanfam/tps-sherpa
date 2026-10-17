@@ -34,9 +34,9 @@ if (!Number.isSafeInteger(orderings) || orderings < 2) {
 }
 const catalog = loadCatalog();
 const vocabulary = parseVocabulary(readIfPresent(VOCABULARY_PATH));
-const { boundary, models } = openBoundary(catalog, { cheap: flag("model") ?? undefined }, FIND_TIMEOUT_MS);
+const { boundary, models, monitored } = openBoundary(catalog, { cheap: flag("model") ?? undefined }, FIND_TIMEOUT_MS);
 const byId = new Map(catalog.map((e) => [e.id, e]));
-const candidates = candidatesOf(catalog);
+const candidates = candidatesOf(catalog, monitored);
 
 /** Deterministic, so a failing ordering can be rerun. mulberry32. */
 const seeded = (seed: number) => () => {
@@ -81,6 +81,7 @@ const runOne = async (c: GoldenCase, order: Entity[]): Promise<Run> => {
           query: c.query,
           invokerId: "0",
           catalog: order,
+          monitored,
           vocabulary,
           ask: (request) => {
             calls++;
