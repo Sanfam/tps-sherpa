@@ -178,6 +178,18 @@ export const openResponderStore = (path: string = DURABLE_STORE_PATH) => {
         { member: memberId, message: messageId, edited: editedAt },
       ),
 
+    /**
+     * Before a rebuild's extraction after a restart: at most `MAX_EXTRACTIONS`
+     * per watch, apart from the text allowance, so a crash loop cannot spend
+     * the daily cap on one row.
+     */
+    claimRebuild: (memberId: string): boolean =>
+      changedOne(
+        `UPDATE introduction SET rebuilds = rebuilds + 1
+         WHERE member_id = :member AND rebuilds < ${MAX_EXTRACTIONS} AND ${WATCHED}`,
+        { member: memberId },
+      ),
+
     /** Before each text extraction call: at most `MAX_EXTRACTIONS` per watch. */
     claimExtraction: (memberId: string): boolean =>
       changedOne(

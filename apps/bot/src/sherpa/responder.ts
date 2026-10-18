@@ -428,14 +428,20 @@ export const createResponder = (deps: ResponderDeps) => {
    * One extraction over every message that fed the watch (§3, §4), the
    * others re-fetched by id: their text is held for the call only (§5).
    * When this message added signal, returns when the latest message the call
-   * read was posted or edited; otherwise null. A rebuild claims none of the
-   * row's extractions: it reconstructs what was already extracted, so a row
-   * at the cap keeps its signal. It is still a paid call, under the cap.
+   * read was posted or edited; null when it added none; undefined when no
+   * result came back (refused, stale or failed), so the caller can let the
+   * message be read again. A rebuild claims none of the row's extractions: it
+   * reconstructs what was already extracted, so a row at the cap keeps its
+   * signal. It claims a rebuild instead (at most 3), under the daily cap.
    */
-  const extract = async (watch: Watch, message: WatchedMessage, rebuild: boolean): Promise<number | null> => {
+  const extract = async (
+    watch: Watch,
+    message: WatchedMessage,
+    rebuild: boolean,
+  ): Promise<number | null | undefined> => {
     const row = deps.store((s) => s.introduction(watch.memberId));
     const messages = row && (await refetch(row.messages.map((m) => m.id), message));
-    if (!messages) return null;
+    if (!messages) return undefined;
     const before = watch.extraction;
     const result = await paid(
       watchGuard(watch),
@@ -446,9 +452,12 @@ export const createResponder = (deps: ResponderDeps) => {
           memberNames: watch.names,
           vocabulary: s.vocabulary,
         }),
-      rebuild ? undefined : () => deps.store((s) => s.claimExtraction(watch.memberId)),
+      () => deps.store((s) => (rebuild ? s.claimRebuild : s.claimExtraction)(watch.memberId)),
     );
-    if (!result) return null;
+    if (!result) return undefined;
+    // The rebuild read every message the row holds, so the catch-up's replay of
+    // its follow-ups is not extracted again.
+    if (rebuild) for (const m of messages) watch.handled.add(`${m.id}@${m.edited_timestamp ?? ""}`);
     watch.extraction = result;
     if (result.signal !== "some") return null;
     const had = new Set([...(before?.interests ?? []), ...(before?.topics ?? [])]);
@@ -484,6 +493,11 @@ export const createResponder = (deps: ResponderDeps) => {
       watch.handled.add(key);
       // Words alone are signal: an image-only message is a greeting (§4).
       const signalAt = message.content.trim() ? await extract(watch, message, rebuild) : null;
+      // No result (a pause or a stale call): forget it was read, so a replay reads it again.
+      if (signalAt === undefined) {
+        watch.handled.delete(key);
+        return;
+      }
       const at = watch.messages.length ? Date.parse(message.edited_timestamp ?? message.timestamp) : watch.introAt;
       watch.messages.push({ at, signal: signalAt !== null && signalAt <= at });
       // A rebuild reads the intro's follow-ups with it: their signal keeps their own time, so a restart

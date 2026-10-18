@@ -421,6 +421,7 @@ members.
 | Intro and follow-up text, and images | Memory, for the extraction call | The call |
 | Extraction output | Memory | The watch |
 | The invited conversation: merged extraction, and the ids of messages already handled | Memory, keyed by member | Until the third exchange, 24 hours idle, a restart or erasure |
+| Shadow-post reactors' ids, to count only Staff reactions (§8) | Memory, for the tally run | The run; never stored or logged (owner, 2026-10-18) |
 | Others' messages | Read mechanically, never sent to a model. Opted-out members' messages are ignored entirely | The event |
 | `introduction` row | `bot.db` | 30 days, or until erased |
 | `invitation` row (F9) | `bot.db` | 30 days from the last exchange, or until erased. The 3-exchange cap resets with it (owner) |
@@ -466,6 +467,10 @@ sherpa_setting(key TEXT PRIMARY KEY, value TEXT NOT NULL, set_by TEXT NOT NULL, 
   - `posted_at` before the one post;
   - `outcome` before closing;
   - `extractions < 3` before each text extraction call;
+  - `rebuilds < 3` before the extraction that rebuilds an open row after a
+    restart. A rebuild reconstructs what was already extracted, so it takes
+    none of the text allowance, but a crash loop cannot spend the daily cap
+    on one row either;
   - before a message's vision call, one `UPDATE` claims that message's
     images. It sets `images_read: true` on that message's entry in
     `message_ids`, and adds its n images to `images_read`, conditioned on the
@@ -643,9 +648,12 @@ restart (D17). The watched Channel stays a constant, asserted to be monitored
   Invited-path replies in shadow go to `#bot-tests` too, in the same format,
   so a member who asks sees no answer until `live` (owner, F4).
 - **Review.** Staff react to each post: ✅ right, ❌ wrong, ⚠️ harmful.
-- **The tally.** A daily pass lists Sherpa's own posts in `#bot-tests`, reads
-  each one's `reactions` counts and its kind from the header, and computes
-  the go-live bar:
+- **The tally.** A daily pass, and one at startup, while the checks pass,
+  lists Sherpa's own posts in `#bot-tests` and reads each one's kind from the
+  header. It reads each one's ✅, ❌ and ⚠️ reactors, and counts a reaction
+  only from a reactor who is Staff. Each reactor is looked up once per run,
+  and the ids are held for the run only, never stored or logged (owner,
+  2026-10-18). It then computes the go-live bar:
   - at least 14 days since `shadow` was first set;
   - at least 30 autonomous posts;
   - zero ⚠️;
@@ -776,7 +784,7 @@ docs.
 
 | Per introduction | Calls | Cost |
 |---|---|---|
-| Extraction, text | ≤ 3 | well under 1¢ |
+| Extraction, text | ≤ 3, plus ≤ 3 rebuilds after restarts | well under 1¢ |
 | Image reading (separate `vision` call; ≤ 3 per message, ≤ 6 per member) | 1 per image-carrying message | ~$0.00017 per image, measured |
 | Match (`findPlaces`, ~50k tokens) | ≤ 1, plus a retry | ~$0.003 each (`f6e7d9d`) |
 | Invited path | ≤ 3 exchanges × (extraction + match) | ≤ ~$0.01 |

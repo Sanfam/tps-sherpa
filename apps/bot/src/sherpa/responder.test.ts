@@ -392,6 +392,33 @@ describe("a restart (F12)", () => {
     expect(row()?.extractions).toBe(3);
   });
 
+  it("stops re-extracting on rebuild after three restarts, so a crash loop cannot spend the cap", async () => {
+    setMode("shadow", -60);
+    const intro = message(MEMBER, 0);
+    store((s) => s.startIntroduction(MEMBER, { messageId: intro.id, editedAt: null, joinedAt: JOINED }, new Date(at(0))));
+    for (let i = 0; i < 3; i++) store((s) => s.claimRebuild(MEMBER));
+    const { h, responder } = harness();
+    h.history.push(intro);
+    h.clock = at(1);
+    await responder.start();
+    expect(h.extracts).toEqual([]);
+  });
+
+  it("does not extract a follow-up again when the catch-up replays it after a rebuild", async () => {
+    setMode("shadow", -60);
+    const intro = message(MEMBER, 0);
+    const followUp = message(MEMBER, 5);
+    store((s) => s.startIntroduction(MEMBER, { messageId: intro.id, editedAt: null, joinedAt: JOINED }, new Date(at(0))));
+    store((s) => s.recordMessage(MEMBER, followUp.id, null));
+    for (let i = 0; i < 2; i++) store((s) => s.claimExtraction(MEMBER));
+    const { h, responder } = harness();
+    h.history.push(intro, followUp);
+    h.clock = at(6);
+    await responder.start();
+    expect(h.extracts).toHaveLength(1);
+    expect(row()?.extractions).toBe(2);
+  });
+
   it("gives a member answered before the restart nothing more", async () => {
     const first = await started();
     const intro = message(MEMBER, 0);

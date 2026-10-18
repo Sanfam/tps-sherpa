@@ -125,6 +125,7 @@ const MIGRATIONS = `
     started_at  TEXT NOT NULL,
     joined_at   TEXT NOT NULL,
     extractions INTEGER NOT NULL DEFAULT 0,
+    rebuilds    INTEGER NOT NULL DEFAULT 0,
     images_read INTEGER NOT NULL DEFAULT 0,
     posted_at   TEXT,
     outcome     TEXT CHECK (outcome IN ('responded', 'expired', 'failed')),
