@@ -192,8 +192,10 @@ late signal: **Mark Weigl**'s case.
 | Schwagle (empty) | Not an evaluation: no row, no call, no post. His next message is evaluated normally |
 
 **Empty and image-only.** An empty or sticker-only message starts nothing and
-closes nothing. **An image-only intro is evaluated** through its images (§4,
-D14).
+closes nothing. **An image-only intro is evaluated**, but an image is a
+gesture, not a disclosure (§4, *What an image means*). So an image-only intro
+takes the greeting path, the Zifei case: a welcome and one question, with no
+match call.
 
 ---
 
@@ -211,7 +213,13 @@ This is the only path through which monitored content reaches a model.
   other origin.
 - **Fixed by construction:**
   - **Prompt and parser:** a constant prompt and a fixed parser.
-  - **Model:** `cheap` for text, `vision` when images are present.
+  - **Two separate calls, never one combined.** The member's text goes to
+    `cheap`, with the interests schema below, and is the only source of
+    signal. Their images, when there are any, go to `vision`, with the
+    reading schema (§ *What an image means*). An intro with both makes both
+    calls: "I love climbing" plus a meme keeps its interest, and the meme
+    adds only a reading. Each call counts against the daily cap. Only the
+    text call counts toward the extraction cap of 3.
   - **Catalog:** none is sent.
   - **Text length:** cut at 2,000 code points, on a whitespace boundary.
 - **Names.** `memberNames` is the cache together with the member's own
@@ -243,36 +251,99 @@ images are read, and the owner accepts that photos, including photos of
 children, are sent to the model provider.** They are never stored, never
 shown and never logged.
 
-- **Which images:** image attachments on the member's own messages in the
-  watch, and on their invited-path messages.
-  - Only `image/png`, `image/jpeg` and `image/webp`.
+**What an image means (owner, 2026-10-17).** An image is not a disclosure of
+interest. A meme or GIF in an introduction is almost always doing what that
+meme does: a greeting, a friendly hello, excitement at arriving, a joke at
+the member's own expense. Memes cannot be taken at literal face value. What
+Sherpa takes from one is its accepted, publicly known internet-community
+meaning, not the objects it depicts: a hazmat-suit GIF is not an interest in
+laboratory science. So:
+
+- The vision call returns a reading, never interests. It has its own schema:
+  ```
+  { "kind": "meme" | "photo" | "other",
+    "known_as": string | null,   // the publicly known meme or source, ≤ 40 chars
+    "meaning": "greeting" | "humor" | "excitement" | "self_deprecation" | "other" }
+  ```
+- **Images never contribute `interests`, `topics` or `life_stage`,** and so
+  never feed matching. Signal comes only from the member's words. The rule
+  applies to photos too, as the owner stated it for images in general.
+- **The reading is used only to:**
+  - mark an image-only intro as a greeting, not a lack of signal;
+  - show on the shadow post's timeline as the fixed label of its `meaning`
+    enum (`image: greeting`), so Staff can judge it.
+
+  `known_as` is model text. It is used only inside the call, to steer the
+  reading, and is **never rendered**: no template shows model-written text.
+  The reading is held in memory with the rest of the extraction.
+
+- **Which images:** images on the member's own messages in the watch. Images
+  on invited-path messages are read only if F7 says yes; until then they are
+  not. What `#introductions` members actually post is mostly GIFs and memes:
+  13 of the 14 sampled. The owner asked for exactly those to be read
+  (2026-10-17), so they are in scope:
+  - **attachments** of type `image/png`, `image/jpeg`, `image/webp` or
+    `image/gif`. A GIF is sent as one still frame, taken from the media
+    proxy with `format=jpeg`;
+  - **GIF and image links**, meaning a message's `gifv` or `image` embeds
+    (Tenor, Giphy, a pasted image URL). The URL is `image.proxy_url` if
+    present, otherwise `thumbnail.proxy_url`, since Discord sets either or
+    both. It is sent as a still frame.
   - At most **3 per message** and **6 per member**.
-  - Each is downloaded from the attachment's `proxy_url` with
-    `?width=1024&height=1024`, so Discord does the downscaling *(unverified:
-    the media proxy's resize parameters; if they are ignored, any file over
-    4 MB is skipped)*. No image library is added.
+  - Each is downloaded through Discord's media proxy, with `width`, `height`
+    and `format=jpeg` added to every URL, attachment or embed, so Discord
+    does the downscaling and the GIF frame. Attachment GIFs came back as
+    `image/jpeg` *(verified 2026-10-17 in the paid run)*. Link thumbnails
+    were fetched without `format` in that run and came back as `image/webp`
+    or `image/gif`; whether `format=jpeg` flattens them is *unverified*.
+    **Any response that is still `image/gif` is skipped, not sent**, so an
+    animation never goes out whole. Any file over 4 MB is skipped too. No
+    image library is added.
   - Each is sent as a base64 data URL, so the provider never fetches from
     Discord. It is held in memory for the call only.
-- **The model:** a new `vision` role, `LLM_MODEL_VISION`, proposed as
-  `deepseek/deepseek-v4.1-flash-1017`. It is the dated vision build of the
-  family already in use. OpenRouter lists it with text and image input,
-  priced at about $0.08–0.30 per million input tokens across more than 9
-  zero-data-retention endpoints *(verified 2026-10-17 against
-  `openrouter.ai/api/v1/models` and `/endpoints/zdr`)*.
-  - The configured `deepseek-v4-flash-0731` is text-only *(verified, same
-    source)*.
+- **The model:** a new `vision` role, `LLM_MODEL_VISION`, set to
+  `deepseek/deepseek-v4.1-flash-1017` (owner, 2026-10-17). Text work stays on
+  `deepseek-v4-flash-0731`, for cost. The vision build has text and image
+  input and more than 9 zero-data-retention endpoints *(verified 2026-10-17
+  against `openrouter.ai/api/v1/models` and `/endpoints/zdr`)*.
+  - **Measured 2026-10-17** *(verified: a paid run under the bot's forced
+    routing)*. 14 images and GIFs were taken from `#introductions` (13
+    GIFs/memes, 1 image link), fetched into memory and sent inline, and
+    nothing was stored. Six public Wikimedia photos were also run.
+
+    | Model | Valid JSON | Mean latency (intros) | Cost per image |
+    |---|---|---|---|
+    | `deepseek-v4.1-flash-1017` | 14/14 intros, 6/6 public | 2.3 s | ~$0.00017 |
+    | `nemotron-3.5-super-vl` (paid) | 14/14, 6/6 | 3.2 s | ~$0.00028 |
+    | `nemotron-3.5-super-vl:free` | 6/6 public only; one took 90 s | — | $0 |
+
+    That run asked for interests, before the owner's rule above. DeepSeek
+    already read memes by their source and as humour (it named the films,
+    games and shows they came from). Nemotron read them more literally, and
+    once gave identical output for two different GIFs.
+  - **Fallback:** paid `nvidia/nemotron-3.5-super-vl`, which has 5 ZDR
+    endpoints.
+  - **Not eligible:** `nemotron-3.5-super-vl:free`. Its only endpoint is
+    NVIDIA's own, which is not on the ZDR list, so the forced routing refuses
+    it. Sending member images to it would also break the privacy policy's
+    "only providers that keep no data".
+  - **`max_tokens`:** both vision models reason before they answer, so a cap
+    of a few hundred tokens returns an empty answer. Use about 2,500.
+  - **GIFs** are sent as one still frame, taken through Discord’s media proxy
+    with `format=jpeg` on every URL, attachment or embed, as above. A still
+    frame was enough to recognise them in the measured run.
   - Routing is unchanged: `data_collection: "deny"` and `zdr: true` are
     forced by `openai-wire.ts` *(verified: `main`)*.
-  - Whether every one of its ZDR endpoints accepts images is unverified. A
-    paid live check (§9) settles it before `shadow` (F7).
+  - The run above should be repeated with the reading schema before
+    `shadow`, against the same kind of images, held in memory only.
 - **Wire change.** `openai-wire.ts` sends `content` as a string today. For
   vision calls it sends the OpenAI multipart form (`text` and `image_url`
   parts). The OpenRouter host check and the forced routing are unchanged.
 - **Containment.** An image cannot be redacted: a name written in a photo
   leaves as it is. Output validation still applies, and nothing the model
   writes reaches Discord.
-- **Cost:** about 1–1.5k input tokens per downscaled image *(unverified,
-  model-dependent)*, so under $0.002 per image-carrying intro.
+- **Cost:** about $0.00017 per image measured, so under $0.001 per intro at
+  the 6-image cap.
 
 ### Matching
 
@@ -315,9 +386,10 @@ members.
 ```
 introduction(
   member_id      TEXT PRIMARY KEY,
-  message_ids    TEXT NOT NULL,     -- [{id, edited_at}] that fed an extraction, intro first
+  message_ids    TEXT NOT NULL,     -- [{id, edited_at, images_read}] that fed an extraction, intro first
   started_at     TEXT NOT NULL,
   extractions    INTEGER NOT NULL DEFAULT 0,
+  images_read    INTEGER NOT NULL DEFAULT 0,  -- images sent to the vision call, ≤ 6
   posted_at      TEXT,              -- claimed before the one autonomous post
   outcome        TEXT CHECK (outcome IN ('responded','expired','failed')),
   reason         TEXT,              -- 'recommended','welcome_only','question','cap','error','off'
@@ -335,7 +407,14 @@ sherpa_setting(key TEXT PRIMARY KEY, value TEXT NOT NULL, set_by TEXT NOT NULL, 
   change count of 1 is required before any slow or visible step:
   - `posted_at` before the one post;
   - `outcome` before closing;
-  - `extractions < 3` before each extraction call;
+  - `extractions < 3` before each text extraction call;
+  - before a message's vision call, one `UPDATE` claims that message's
+    images. It sets `images_read: true` on that message's entry in
+    `message_ids`, and adds its n images to `images_read`, conditioned on the
+    flag still being false and the total staying at or under 6. That is a
+    separate counter, so images never use up the text allowance. Because the
+    claim is keyed on the message, a second event for the same message finds
+    the flag set and sends nothing;
   - `invited < 3` before each invited reply.
 - **Before every post and every model call,** the member's settings, the
   row's existence and the mode are read again.
@@ -452,12 +531,15 @@ restart (D17). The watched Channel stays a constant, asserted to be monitored
 
   ```
   Intro responder (shadow) · would POST <kind> · intro: <jump link>
-  Timeline: clock active · acknowledged +2m · active minutes 20 · extractions 1 · novelty dropped 1 · images 1
+  Timeline: clock active · acknowledged +2m · active minutes 20 · extractions 1 · novelty dropped 1 · images 1 · image: greeting
   Would post:
   > <the exact live reply>
   ```
 
-  It shows no intro text, no member name and no extracted fields (D23).
+  It shows no intro text, no member name and no extracted fields (D23). The
+  one exception is `image: <meaning>`, the fixed label of the vision
+  reading's enum, which is never model text. It is shown so Staff can judge
+  how an image was read.
   Invited-path replies in shadow use the same format (F4).
 - **Review.** Staff react to each post: ✅ right, ❌ wrong, ⚠️ harmful.
 - **The tally.** A daily pass lists Sherpa's own posts in `#bot-tests`, reads
@@ -519,6 +601,10 @@ restart (D17). The watched Channel stays a constant, asserted to be monitored
   - `extractIntroduction` refuses a mixed author or a foreign origin;
   - it truncates long text, and caps the image count.
 - The wire builds multipart content only for the `vision` role.
+- Images never feed matching. A vision reading leaves `interests`, `topics`
+  and `life_stage` empty and makes no match call. A text-plus-image intro
+  keeps its text interests. An image-only intro takes the greeting path. And
+  nothing from `known_as` appears in any rendered post.
 - Atomicity: row creation, and each claim under two concurrent decisions.
 - Restart: a row with `posted_at` set gets no second post.
 - Erasure: a `/privacy` opt-out followed by an opt-in leaves the row erased
@@ -532,8 +618,9 @@ kept.
 
 **By hand, and paid:**
 
-- Synthetic intros, including synthetic images with no real people, go
-  through extraction and then matching.
+- Synthetic intros go through extraction and then matching. Synthetic
+  images, with no real people, go through the vision reading only, and
+  must not reach matching.
 - The ConnorDavidSmith and xEMPTYCANx shapes are confirmed to come out as
   welcome-only.
 - One vision call is checked against `deepseek-v4.1-flash-1017` with the
@@ -551,7 +638,7 @@ docs.
 | Per introduction | Calls | Cost |
 |---|---|---|
 | Extraction, text | ≤ 3 | well under 1¢ |
-| Extraction with images (≤ 3, downscaled) | within the same ≤ 3 | under 0.2¢ more |
+| Image reading (separate `vision` call; ≤ 3 per message, ≤ 6 per member) | 1 per image-carrying message | ~$0.00017 per image, measured |
 | Match (`findPlaces`, ~50k tokens) | ≤ 1, plus a retry | ~$0.003 each (`f6e7d9d`) |
 | Invited path | ≤ 3 exchanges × (extraction + match) | ≤ ~$0.01 |
 
@@ -600,7 +687,10 @@ list.
 14. **Images:** read through an OpenRouter vision model, never stored or
     shown. **The owner explicitly accepts, on the child-data stop condition,
     that photos, including photos of children, go to the model provider.**
-    Image-only intros are no longer terminal.
+    Image-only intros are no longer terminal. **An image is not a disclosure
+    of interest** (owner, 2026-10-17). A meme is read by its accepted
+    community meaning (a greeting, a hello) and never by face value, and no
+    image feeds matching (§4).
 15. **One response:** exactly one autonomous post. An `@mention` that asks
     for more is answered through the invited path.
 16. **The `/sherpa` command:** yes. Staff are holders of the role named
@@ -651,10 +741,11 @@ list.
   as a recorded exception?
 - **F6. Live posts (from 30):** Sherpa never deletes its live replies in
   `#introductions` either, even when the intro is deleted. Confirm?
-- **F7. The vision model (from 14):** `deepseek/deepseek-v4.1-flash-1017`,
-  pending one paid check that its ZDR routing accepts images. And should
-  images on invited-path messages be read too? The proposal is yes, within
-  the same limits.
+- **F7. Invited-path images (from 14).** The model is settled 2026-10-17 as
+  `deepseek/deepseek-v4.1-flash-1017`, with paid Nemotron as the fallback.
+  The paid check passed (§4). Still open: should images on invited-path
+  messages be read too? The proposal is yes, within the same limits and the
+  same "not a disclosure" rule.
 
 The cross-model review of this decided version (GPT-5.6 Sol, 2026-10-17)
 found gaps that touch member data or retention, so they are owner decisions,
