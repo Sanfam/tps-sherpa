@@ -211,6 +211,35 @@ export const discordRest = (config: {
             ),
           }
         : null;
+
+      // Per role, as `canView` decides it for a member holding @everyone and
+      // that one role (#53). Discord unions role overwrites, so a role's own
+      // deny can hide a place that another role a member holds would show
+      // them: the guild hides verification from `Member` that way. Holding a
+      // deny role therefore hides the place whatever else is held, which fails
+      // closed where another role's allow would win. Member-specific
+      // overwrites are not modelled.
+      const roleAccess = (c: RawGuildChannel) => {
+        const viewRoles: string[] = [];
+        const denyRoles: string[] = [];
+        for (const r of roles) {
+          if (r.id === config.guildId) continue;
+          const alone: PermissionContext = {
+            guildId: config.guildId,
+            roleIds: [r.id],
+            memberId: "",
+            basePermissions: everyonePerms | BigInt(r.permissions),
+          };
+          if (canView(c, alone)) viewRoles.push(r.id);
+          else if (
+            c.permission_overwrites?.some(
+              (o) => o.id === r.id && o.type === 0 && (BigInt(o.deny) & VIEW_CHANNEL) !== 0n,
+            )
+          )
+            denyRoles.push(r.id);
+        }
+        return { viewRoles: viewRoles.sort(), denyRoles: denyRoles.sort() };
+      };
       return channels.map((c) => ({
         id: c.id,
         name: c.name,
@@ -220,6 +249,7 @@ export const discordRest = (config: {
         visible: canView(c, ctx),
         memberVisible: memberCtx ? canView(c, memberCtx) : canView(c, ctx),
         contentReadable: canReadHistory(c, ctx),
+        ...roleAccess(c),
         availableTags: c.available_tags?.map((t) => ({ id: t.id, name: t.name })),
       }));
     },

@@ -109,6 +109,13 @@ export const isMember = (
   manifest: RoleManifestEntry[],
 ): boolean => holdsRoleNamed(interaction, guildId, manifest, [MEMBER_ROLE_NAME]);
 
+/**
+ * The `Member` role's ids: a Member's view of the server, for matching that
+ * has no asker's roles to go on (`candidatesOf`, `findPlaces`).
+ */
+export const memberRoleIds = (manifest: RoleManifestEntry[]): string[] =>
+  manifest.filter((r) => r.name === MEMBER_ROLE_NAME).flatMap((r) => r.ids);
+
 /** The glossary's Staff (F5). */
 export const STAFF_ROLE_NAMES = ["Staff", "Event Managers"];
 
@@ -314,6 +321,7 @@ const answer = async (
           invokerId: interaction.member!.user.id,
           catalog,
           monitored,
+          roles: interaction.member!.roles,
           vocabulary,
           ask,
           origin: { command: "find" },
@@ -336,7 +344,7 @@ const answer = async (
   if (interaction.data.name === "lately") {
     const slug = stringOption(interaction, "topic");
     const topic = vocabulary.topics.find((t) => t.slug === slug) ?? null;
-    const places = latelyPlaces(catalog, monitored, topic, sherpa.now?.());
+    const places = latelyPlaces(catalog, monitored, interaction.member!.roles, topic, sherpa.now?.());
     const activity = sherpa.loadActivity();
     sherpa.log(
       `${tag} topic=${topic?.slug ?? "-"} places=${places.length} ` +

@@ -133,3 +133,50 @@ describe("listThreads", () => {
     expect(failed).toEqual([{ id: "100", reason: expect.stringContaining("no cursor") }]);
   });
 });
+
+describe("listChannels: who can see each place, by role (#53)", () => {
+  const VIEW = (1n << 10n).toString();
+  const [GUILD, MEMBER, HOBBY, STAFF, BOT_ROLE] = ["1", "2", "3", "4", "9"] as const;
+  const ow = (id: string, allow: string, deny: string) => ({ id, type: 0, allow, deny });
+  const channels = [
+    // The guild's verification shape: @everyone allowed, `Member` denied.
+    { id: "10", name: "verification", type: 0, permission_overwrites: [ow(GUILD, VIEW, "0"), ow(MEMBER, "0", VIEW)] },
+    { id: "11", name: "fishing", type: 0, permission_overwrites: [ow(GUILD, "0", VIEW), ow(HOBBY, VIEW, "0")] },
+    {
+      id: "12",
+      name: "staff-room",
+      type: 0,
+      permission_overwrites: [ow(GUILD, "0", VIEW), ow(STAFF, VIEW, "0"), ow(BOT_ROLE, VIEW, "0")],
+    },
+  ];
+  const roles = [GUILD, MEMBER, HOBBY, STAFF, BOT_ROLE].map((id) => ({
+    id,
+    name: id === MEMBER ? "Member" : id,
+    permissions: id === GUILD ? VIEW : "0",
+    color: 0,
+  }));
+  const port = discordRest({
+    token: "unused",
+    guildId: GUILD,
+    rest: {
+      get: async (route: string) => {
+        if (route === `/guilds/${GUILD}/channels`) return channels;
+        if (route === `/guilds/${GUILD}/roles`) return roles;
+        if (route === "/users/%40me") return { id: "99" };
+        if (route === `/guilds/${GUILD}/members/99`) return { roles: [BOT_ROLE] };
+        throw new Error(`unexpected route ${route}`);
+      },
+    } as never,
+  });
+
+  it("honours a role's own deny and @everyone's allow, and grants a Member no place only Staff see", async () => {
+    const access = Object.fromEntries(
+      (await port.listChannels()).map((c) => [c.name, { view: c.viewRoles, deny: c.denyRoles }]),
+    );
+    expect(access).toEqual({
+      verification: { view: [HOBBY, STAFF, BOT_ROLE], deny: [MEMBER] },
+      fishing: { view: [HOBBY], deny: [] },
+      "staff-room": { view: [STAFF, BOT_ROLE], deny: [] },
+    });
+  });
+});
