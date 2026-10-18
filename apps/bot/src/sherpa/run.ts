@@ -39,7 +39,7 @@ import { canReadHistory, canSend, canView, messageContentUsable } from "../sync/
 import { DURABLE_STORE_PATH, readMonitored, withDurableStore } from "../sync/durable-store.ts";
 import { TIER0_PATH } from "../sync/tier0-store.ts";
 import { FIND_TIMEOUT_MS } from "./find.ts";
-import { dailyCap, findDailyCap, handleInteraction, type Sherpa } from "./interactions.ts";
+import { dailyCap, findDailyCap, handleInteraction, memberRoleIds, type Sherpa } from "./interactions.ts";
 import { openMonitored } from "./monitored.ts";
 import { openPrivacy } from "./privacy.ts";
 import { withResponderStore } from "./responder-store.ts";
@@ -128,7 +128,8 @@ const responder: Responder | null = introductions
       session: () => {
         const catalog = loadCatalog();
         const { boundary, monitored } = openBoundary(catalog, {}, FIND_TIMEOUT_MS);
-        return { catalog, monitored, vocabulary: parseVocabulary(readIfPresent(VOCABULARY_PATH)), boundary };
+        const memberRoles = memberRoleIds(loadRoleManifest());
+        return { catalog, monitored, vocabulary: parseVocabulary(readIfPresent(VOCABULARY_PATH)), boundary, memberRoles };
       },
       fetchImage: (url, init) => fetch(url, init),
       cap: dailyCap(resolve(DATA_DIR, "responder-usage.json"), RESPONDER_DAILY_CAP, log),

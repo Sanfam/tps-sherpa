@@ -20,7 +20,7 @@
 import type { APIMessage, RESTPostAPIChannelMessageJSONBody } from "discord-api-types/v10";
 import { type Boundary, type Extraction, type ImageMeaning, WATCHED_CHANNEL } from "../llm/boundary.ts";
 import type { Vocabulary } from "../llm/vocabulary.ts";
-import type { Entity } from "../sync/catalog.ts";
+import { type Entity, visibleTo } from "../sync/catalog.ts";
 import type { Preferences } from "../sync/durable-store.ts";
 import { MAX_QUERY_LENGTH, MAX_MESSAGE_CHARS, findPlaces, isCandidate } from "./find.ts";
 import type { DailyCap } from "./interactions.ts";
@@ -90,6 +90,12 @@ export interface Session {
   monitored: ReadonlySet<string>;
   vocabulary: Vocabulary;
   boundary: Pick<Boundary, "ask" | "extractIntroduction" | "readImage">;
+  /**
+   * The `Member` role's ids (`memberRoleIds`): Sherpa names only places a
+   * Member can see (#53). D25 still holds — a member not yet given the role
+   * may be pointed at them — but never at a Staff-only or bot-only place.
+   */
+  memberRoles: readonly string[];
 }
 
 export interface ResponderDeps {
@@ -562,7 +568,9 @@ export const createResponder = (deps: ResponderDeps) => {
     const entities = new Map(session.catalog.map((e) => [e.id, e]));
     const doors = matches.flatMap((e) => {
       const door = e.parent_id ? entities.get(e.parent_id) : e;
-      return door && isCandidate(door, entities, session.monitored) ? [door] : [];
+      return door && isCandidate(door, entities, session.monitored) && visibleTo(door, session.memberRoles)
+        ? [door]
+        : [];
     });
     return [...new Set(doors)];
   };
@@ -655,6 +663,7 @@ export const createResponder = (deps: ResponderDeps) => {
           invokerId: memberId,
           catalog: s.catalog,
           monitored: s.monitored,
+          roles: s.memberRoles,
           vocabulary: s.vocabulary,
           ask: s.boundary.ask,
           origin: { derivedFromIntroduction: memberId },
@@ -828,6 +837,7 @@ export const createResponder = (deps: ResponderDeps) => {
           invokerId: watch.memberId,
           catalog: s.catalog,
           monitored: s.monitored,
+          roles: s.memberRoles,
           vocabulary: s.vocabulary,
           ask: s.boundary.ask,
           origin: { derivedFromIntroduction: watch.memberId },

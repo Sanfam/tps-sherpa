@@ -30,8 +30,11 @@ const MIN = 60_000;
 const T0 = Date.parse("2026-10-20T03:00:00.000Z");
 const at = (minutes: number) => T0 + minutes * MIN;
 
+const MEMBER_ROLE = "900000000000000001";
 const entity = (over: Partial<Entity> & { id: string; name: string }): Entity => ({
   type: "post",
+  view_roles: [MEMBER_ROLE],
+  deny_roles: [],
   url: `https://discord.com/channels/${GUILD}/${over.id}`,
   parent_id: null,
   description_status: "present",
@@ -50,7 +53,9 @@ const entity = (over: Partial<Entity> & { id: string; name: string }): Entity =>
 // Candidates in this order are e1 and e2 in the match prompt.
 const woodshop = entity({ id: "100000000000000001", name: "woodshop", type: "forum" });
 const gliders = entity({ id: "100000000000000002", name: "gliders", type: "channel" });
-const catalog = [entity({ id: WATCHED_CHANNEL, name: "introductions", type: "channel" }), woodshop, gliders];
+// Seen by the bot and Staff, not by the Member role (#53): never offered.
+const staffroom = entity({ id: "100000000000000003", name: "staffroom", type: "channel", view_roles: ["900000000000000002"] });
+const catalog = [entity({ id: WATCHED_CHANNEL, name: "introductions", type: "channel" }), woodshop, gliders, staffroom];
 const monitored: ReadonlySet<string> = new Set([WATCHED_CHANNEL]);
 const vocabulary = {
   version: 1,
@@ -159,6 +164,7 @@ const harness = () => {
       catalog,
       monitored,
       vocabulary,
+      memberRoles: [MEMBER_ROLE],
       boundary: {
         extractIntroduction: async (request) => {
           h.extracts.push(request);
@@ -445,6 +451,17 @@ describe("matching (§4)", () => {
       },
     ]);
     expect(JSON.stringify(h.asks)).not.toContain("oak");
+  });
+
+  it("never shows the model a place the Member role cannot see (#53)", async () => {
+    const { h, responder, say } = await started();
+    h.extraction = { signal: "some", interests: ["woodworking"], topics: [], life_stage: [] };
+    await say(message(MEMBER, 0));
+    h.clock = at(21);
+    await responder.tick();
+    expect(h.asks).toHaveLength(1);
+    expect(h.asks[0]!.context).toContain("woodshop");
+    expect(h.asks[0]!.context).not.toContain("staffroom");
   });
 });
 
