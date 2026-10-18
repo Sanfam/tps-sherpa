@@ -29,7 +29,7 @@ export const MAX_QUERY_LENGTH = 300;
  */
 export const FIND_TIMEOUT_MS = 90_000;
 /** A summary is ~12 words; an override has no budget, so it is clipped here. */
-const MAX_SUMMARY_CHARS = 150;
+export const MAX_SUMMARY_CHARS = 150;
 
 /**
  * What Sherpa may point a member at.

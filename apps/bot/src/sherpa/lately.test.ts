@@ -47,3 +47,24 @@ describe("renderLately with activity summaries", () => {
     expect(reply.match(/^• /gm)).toHaveLength(4);
   });
 });
+
+describe("renderLately spoiler tags", () => {
+  const withTopic = (topics: string[], summary: string) => {
+    const p = { ...place(1), topics };
+    return renderLately([p], null, { [p.id]: { summary, as_of: "1" } });
+  };
+
+  it("hides the activity line of the spoiler-prone Topics only", () => {
+    for (const t of ["movies-and-tv", "anime-and-manga", "books-and-reading"])
+      expect(withTopic([t], "Season finale.")).toContain("↳ Lately: ||Season finale.||");
+    expect(withTopic(["music"], "New album.")).toContain("↳ Lately: New album.");
+  });
+
+  it("cannot be broken out of by pipes or a trailing backslash, and stays within the clip", () => {
+    const line = withTopic(["movies-and-tv"], "a || b ||| " + "z".repeat(300)).split("↳ Lately: ")[1]!;
+    expect(line).toMatch(/^\|\|[^|]*\|\|$/);
+    expect(withTopic(["movies-and-tv"], "ending in C:\\")).toContain("↳ Lately: ||ending in C:||");
+    expect(line.length).toBeLessThanOrEqual(150);
+  });
+});
+

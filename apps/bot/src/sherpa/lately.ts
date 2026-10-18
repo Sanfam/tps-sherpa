@@ -13,7 +13,7 @@ import type { ActivityStore } from "../llm/activity.ts";
 import type { Topic } from "../llm/vocabulary.ts";
 import type { Entity } from "../sync/catalog.ts";
 import { ACTIVE_WITHIN_DAYS, activityBucket } from "../sync/facets.ts";
-import { MAX_MESSAGE_CHARS, candidatesOf, clip, placeLine } from "./find.ts";
+import { MAX_MESSAGE_CHARS, MAX_SUMMARY_CHARS, candidatesOf, clip, placeLine } from "./find.ts";
 
 export { MAX_MESSAGE_CHARS };
 
@@ -41,6 +41,9 @@ export const latelyPlaces = (
     .sort((a, b) => b.last_activity_at!.localeCompare(a.last_activity_at!))
     .slice(0, MAX_LATELY);
 
+/** Topics whose activity lines can spoil a plot or a result: click to reveal. */
+const SPOILER_TOPICS = ["movies-and-tv", "anime-and-manga", "books-and-reading"];
+
 const lineFor = (entity: Entity, activity: ActivityStore): string => {
   const line = placeLine(
     entity,
@@ -49,7 +52,14 @@ const lineFor = (entity: Entity, activity: ActivityStore): string => {
     ` <t:${Math.floor(new Date(entity.last_activity_at!).getTime() / 1000)}:R>`,
   );
   const lately = activity[entity.id]?.summary;
-  return lately ? `${line}\n   ↳ Lately: ${clip(lately)}` : line;
+  if (!lately) return line;
+  // Pipes and backslashes dropped so the text can neither close the tag nor
+  // escape its closing pipes; clipped short of the tag's four characters so
+  // the wrapped line is no longer than an unwrapped one.
+  const shown = entity.topics.some((t) => SPOILER_TOPICS.includes(t))
+    ? `||${clip(lately.replace(/[|\\]/g, ""), MAX_SUMMARY_CHARS - 4)}||`
+    : clip(lately);
+  return `${line}\n   ↳ Lately: ${shown}`;
 };
 
 /**
