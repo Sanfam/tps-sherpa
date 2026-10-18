@@ -145,9 +145,29 @@ describe("formatForMods", () => {
     );
     const out = formatForMods(found);
     expect(out).toContain("Factorio Channel");
-    expect(out).toContain("<#700>");
     expect(out).toContain("(1 msg)");
     expect(out).toContain("we have a thread already");
+  });
+
+  it("names the target in bold with a link to the target's own URL", () => {
+    const found = findDuplicateCandidates(
+      [msg("101", "we have a thread already, head over to <#700>")],
+      [FACTORIO, GAME_TALK],
+    );
+    const out = formatForMods(found);
+    expect(out).toContain("→ **🎮︱game\\-talk** ([open](https://discord.com/channels/1055/700))");
+    expect(out).not.toContain("→ <#700>");
+  });
+
+  it("falls back to the mention with no link when the target has no deep link", () => {
+    const bare = { ...GAME_TALK, url: "https://example.invalid/700" };
+    const found = findDuplicateCandidates(
+      [msg("101", "we have a thread already, head over to <#700>")],
+      [FACTORIO, bare],
+    );
+    const out = formatForMods(found);
+    expect(out).toContain("→ <#700>");
+    expect(out).not.toContain("[open]");
   });
 });
 

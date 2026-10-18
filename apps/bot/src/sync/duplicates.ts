@@ -10,6 +10,7 @@
  * "Disc Golf" vs "Frolf", "Audiophiles" vs "Audio Enthusiasts" — need meaning
  * rather than phrasing, and belong with the tagging work.
  */
+import { placeRef } from "../sherpa/find.ts";
 import type { Entity } from "./catalog.ts";
 
 /**
@@ -128,7 +129,7 @@ export const formatForMods = (candidates: DuplicateCandidate[]): string => {
   ];
   for (const c of candidates) {
     lines.push(
-      `• **${c.entity.name}** (${c.messageCount} msg${c.messageCount === 1 ? "" : "s"}) → <#${c.redirectsTo.id}>`,
+      `• **${c.entity.name}** (${c.messageCount} msg${c.messageCount === 1 ? "" : "s"}) → ${placeRef(c.redirectsTo)}`,
       `  ${c.entity.url}`,
       `  > ${c.evidence}`,
     );
