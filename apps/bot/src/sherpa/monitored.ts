@@ -3,10 +3,9 @@
  * conversation, and whose Threads', is extract-and-discard (#33). Edited here
  * so a new one needs no deploy.
  *
- * Staff-only: registered with Manage Server as its default member
- * permission, so Discord shows it to nobody else, and the bit is checked
- * again on every use, since admins can override that default. Every reply is
- * ephemeral, like every other.
+ * Staff-only (F5): the dispatcher checks `isStaff` before this runs
+ * (interactions.ts). Discord shows the command to everyone, since it cannot
+ * hide one by role at registration. Every reply is ephemeral, like every other.
  *
  * Removing an entry weakens a privacy carve-out — that Channel's conversation
  * can be stored and sent to a model from the next cycle on — so it is logged
@@ -18,7 +17,6 @@ import {
   ApplicationCommandOptionType,
   ApplicationCommandType,
   ChannelType,
-  PermissionFlagsBits,
   type RESTPostAPIChatInputApplicationCommandsJSONBody,
 } from "discord-api-types/v10";
 import type { Entity } from "../sync/catalog.ts";
@@ -36,7 +34,6 @@ export const MONITORED_COMMAND: RESTPostAPIChatInputApplicationCommandsJSONBody 
   name: "monitored",
   type: ApplicationCommandType.ChatInput,
   description: "Staff: the channels Sherpa never stores or sends to its model.",
-  default_member_permissions: String(PermissionFlagsBits.ManageGuild),
   options: [
     { name: "list", type: ApplicationCommandOptionType.Subcommand, description: "Show the monitored channels." },
     {
@@ -72,15 +69,6 @@ const line = (c: MonitoredChannel, inCatalog: boolean) =>
   `<t:${Math.floor(Date.parse(c.addedAt) / 1000)}:R>` +
   (inCatalog ? "" : " — **not in the current Catalog: capture, enrichment and `/find` are stopped until it is removed or restored**");
 
-export const NOT_STAFF = "`/monitored` is for Staff with the Manage Server permission.";
-
-/** The invoker's computed permissions, as Discord sends them: a decimal bitfield. Absent or malformed is no. */
-const canManageServer = (permissions: string | undefined): boolean => {
-  if (!permissions || !/^\d+$/.test(permissions)) return false;
-  const bits = BigInt(permissions);
-  return (bits & (PermissionFlagsBits.ManageGuild | PermissionFlagsBits.Administrator)) !== 0n;
-};
-
 /** One `/monitored` interaction. Logs ids only. Null for a shape it does not know. */
 export const answerMonitored = (
   interaction: APIChatInputApplicationCommandInteraction,
@@ -92,12 +80,6 @@ export const answerMonitored = (
   const by = interaction.member?.user.id;
   const sub = interaction.data.options?.[0];
   if (!by || sub?.type !== ApplicationCommandOptionType.Subcommand) return null;
-  // Checked here too: admins can override a command's default permission per
-  // role or channel, and this list is a privacy control.
-  if (!canManageServer(interaction.member?.permissions)) {
-    log(`${tag} refused: no Manage Server`);
-    return NOT_STAFF;
-  }
   const id = sub.options?.find((o) => o.name === "channel")?.value;
   const byId = new Map(catalog.map((e) => [e.id, e]));
 

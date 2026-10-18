@@ -1,12 +1,12 @@
 /**
- * Registers `/find`, `/lately`, `/privacy` and `/monitored` in the guild — guild-scoped, so a
- * change is live at once and the commands exist nowhere else. serve.ts runs
- * this at every startup.
+ * Registers `/find`, `/lately`, `/privacy`, `/monitored` and `/sherpa` in the
+ * guild — guild-scoped, so a change is live at once and the commands exist
+ * nowhere else. serve.ts runs this at every startup.
  *
  *   node --env-file=.env src/sherpa/register.ts --dry-run   print, touch nothing
  *   node --env-file=.env src/sherpa/register.ts             overwrite the guild's commands
  *
- * A bulk overwrite: the guild's command list becomes exactly these four.
+ * A bulk overwrite: the guild's command list becomes exactly these five.
  * Re-run after a vocabulary change, since `/lately`'s Topic choices are baked
  * into the definition.
  */

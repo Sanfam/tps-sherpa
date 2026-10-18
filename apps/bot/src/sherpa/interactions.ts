@@ -28,6 +28,7 @@ import { EMPTY_QUERY, MAX_QUERY_LENGTH, findPlaces, renderFind } from "./find.ts
 import { latelyPlaces, renderLately } from "./lately.ts";
 import { MONITORED_COMMAND, type Monitored, answerMonitored } from "./monitored.ts";
 import { type Answer, PRIVACY_COMMAND, type Privacy, answerPrivacy } from "./privacy.ts";
+import { SHERPA_COMMAND, type WithSettings, answerSherpa } from "./sherpa-command.ts";
 
 /** Discord's ceiling on a command option's choices. */
 const MAX_CHOICES = 25;
@@ -69,6 +70,7 @@ export const commandDefinitions = (vocabulary: Vocabulary): RESTPutAPIApplicatio
     },
     PRIVACY_COMMAND,
     MONITORED_COMMAND,
+    SHERPA_COMMAND,
   ];
 };
 
@@ -105,12 +107,31 @@ export const isMember = (
   interaction: APIChatInputApplicationCommandInteraction,
   guildId: string,
   manifest: RoleManifestEntry[],
+): boolean => holdsRoleNamed(interaction, guildId, manifest, [MEMBER_ROLE_NAME]);
+
+/** The glossary's Staff (F5). */
+export const STAFF_ROLE_NAMES = ["Staff", "Event Managers"];
+
+/**
+ * Whether the invoker is Staff: holds a role named `Staff` or `Event
+ * Managers`, resolved exactly as `isMember` resolves `Member`, and failing
+ * closed the same way. Member is not required as well.
+ */
+export const isStaff = (
+  interaction: APIChatInputApplicationCommandInteraction,
+  guildId: string,
+  manifest: RoleManifestEntry[],
+): boolean => holdsRoleNamed(interaction, guildId, manifest, STAFF_ROLE_NAMES);
+
+const holdsRoleNamed = (
+  interaction: APIChatInputApplicationCommandInteraction,
+  guildId: string,
+  manifest: RoleManifestEntry[],
+  names: string[],
 ): boolean => {
   if (interaction.guild_id !== guildId || !interaction.member) return false;
-  const memberRoles = new Set(
-    manifest.filter((r) => r.name === MEMBER_ROLE_NAME).flatMap((r) => r.ids),
-  );
-  return interaction.member.roles.some((id) => memberRoles.has(id));
+  const held = new Set(manifest.filter((r) => names.includes(r.name)).flatMap((r) => r.ids));
+  return interaction.member.roles.some((id) => held.has(id));
 };
 
 export const DEFAULT_FIND_DAILY_CAP = 50;
@@ -170,6 +191,7 @@ export type DailyCap = ReturnType<typeof dailyCap>;
 
 export const NOT_A_MEMBER =
   "Sherpa is for Members of the server. Once you have the Member role, try again.";
+export const NOT_STAFF = "This command is for Staff: holders of the Staff or Event Managers role.";
 export const CAP_REACHED =
   "Sherpa has answered all the `/find` questions it can for today. Try again tomorrow, " +
   "or use `/lately` to see what's active.";
@@ -198,6 +220,8 @@ export interface Sherpa {
   privacy: Privacy;
   /** Staff's monitored-channel list, for `/monitored`. */
   monitored: Monitored;
+  /** The introductions responder's settings, for `/sherpa`. */
+  settings: WithSettings;
   /**
    * The monitored ids, checked against this Catalog (`readMonitored`). Throws
    * when one is missing, so `/find` and `/lately` fail closed before any call.
@@ -239,6 +263,20 @@ const answer = async (
     sherpa.log(`${tag} unknown subcommand`);
     return UNKNOWN;
   }
+  // Also ahead of the Member gate: Staff need not hold Member as well (F5).
+  if (interaction.data.name === "monitored" || interaction.data.name === "sherpa") {
+    if (!isStaff(interaction, sherpa.guildId, sherpa.loadRoleManifest())) {
+      sherpa.log(`${tag} refused: not Staff`);
+      return NOT_STAFF;
+    }
+    const answered =
+      interaction.data.name === "monitored"
+        ? answerMonitored(interaction, sherpa.monitored, sherpa.loadCatalog(), sherpa.log, tag)
+        : answerSherpa(interaction, sherpa.settings, sherpa.log, tag);
+    if (answered !== null) return answered;
+    sherpa.log(`${tag} unknown subcommand`);
+    return UNKNOWN;
+  }
   if (!isMember(interaction, sherpa.guildId, sherpa.loadRoleManifest())) {
     sherpa.log(`${tag} refused: not a Member`);
     return NOT_A_MEMBER;
@@ -255,14 +293,6 @@ const answer = async (
     return FIND_OPTED_OUT;
   }
   const catalog = sherpa.loadCatalog();
-
-  // Staff-only: Discord hides it from others, and answerMonitored checks the bit (monitored.ts).
-  if (interaction.data.name === "monitored") {
-    const answered = answerMonitored(interaction, sherpa.monitored, catalog, sherpa.log, tag);
-    if (answered !== null) return answered;
-    sherpa.log(`${tag} unknown subcommand`);
-    return UNKNOWN;
-  }
 
   const vocabulary = sherpa.loadVocabulary();
   const monitored = sherpa.loadMonitored(catalog);

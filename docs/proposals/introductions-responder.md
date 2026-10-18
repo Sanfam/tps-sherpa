@@ -336,8 +336,10 @@ laboratory science. So:
     `image/jpeg` *(verified 2026-10-17 in the paid run)*. Link thumbnails
     were fetched without `format` in that run and came back as `image/webp`
     or `image/gif`; whether `format=jpeg` flattens them is *unverified*.
-    **Any response that is still `image/gif` is skipped, not sent**, so an
-    animation never goes out whole. Any file over 4 MB is skipped too. No
+    **Only a JPEG response is accepted**: one that is still `image/gif`, or
+    PNG or WebP (both can be animated), is skipped, not sent, so an animation
+    never goes out whole. Redirects are refused, so the media-proxy allow-list
+    cannot be led off. Any file over 4 MB is skipped too. No
     image library is added.
   - Each is sent as a base64 data URL, so the provider never fetches from
     Discord. It is held in memory for the call only.
