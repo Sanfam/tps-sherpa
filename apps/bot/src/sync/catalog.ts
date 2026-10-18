@@ -204,6 +204,12 @@ export const buildCatalog = async (deps: {
   previous?: Entity[];
   /** Entities that are visible and readable but are not destinations. */
   exclusions?: Set<string>;
+  /**
+   * The monitored-channel ids (#33). Their Threads and Posts are left out of
+   * the Catalog entirely (#41): an intro Thread's name may be a member's name,
+   * and monitored conversation is extract-and-discard. The Channel stays.
+   */
+  monitored?: ReadonlySet<string>;
   /** Region gazetteer. Absent means the Region facet stays empty, not wrong. */
   regions?: Gazetteer;
   /** Where to report conditions a human needs to act on. Defaults to silence. */
@@ -291,9 +297,11 @@ export const buildCatalog = async (deps: {
   // Threads are only enumerated from containers whose content is readable. A
   // withheld Forum must never have its Posts read. Excluded containers are
   // enumerated too, for the name lookup alone; their Posts and Threads are
-  // dropped below, so they never reach the Catalog.
+  // dropped below, so they never reach the Catalog. A monitored container's
+  // are never listed, so neither their names nor their first posts are read.
+  const monitored = deps.monitored ?? new Set<string>();
   const { threads: allThreads, failed } = await deps.discord.listThreads(
-    visibleContainers.filter((c) => c.contentReadable).map((c) => c.id),
+    visibleContainers.filter((c) => c.contentReadable && !monitored.has(c.id)).map((c) => c.id),
   );
   const threads = allThreads.filter((t) => !excluded.has(t.id) && !excluded.has(t.parentId));
   const containerById = new Map(containers.map((c) => [c.id, c]));

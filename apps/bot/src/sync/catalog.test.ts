@@ -22,6 +22,33 @@ describe("buildCatalog", () => {
     ]);
   });
 
+  it("leaves a monitored Channel's Threads out entirely, never listing them, and keeps ordinary ones (#41)", async () => {
+    const thread = (id: string, name: string, parentId: string) => ({
+      id,
+      name,
+      parentId,
+      appliedTags: [],
+      firstPost: `${name}, first post`,
+    });
+    const discord = fixtureDiscord({
+      channels: [
+        { id: "111", name: "👋︱introductions", type: ChannelType.GuildText },
+        { id: "222", name: "gaming", type: ChannelType.GuildText },
+      ],
+      threads: [thread("311", "Dave Smith", "111"), thread("322", "Elden Ring", "222")],
+    });
+    // The live adapter fetches a first post for every Thread it lists.
+    const listed: string[] = [];
+    const listThreads = discord.listThreads;
+    discord.listThreads = (parentIds) => (listed.push(...parentIds), listThreads(parentIds));
+
+    const { catalog } = await buildCatalog({ discord, guildId: GUILD_ID, monitored: new Set(["111"]) });
+
+    expect(listed).toEqual(["222"]);
+    expect(catalog.map((e) => e.id)).toEqual(["111", "222", "322"]);
+    expect(JSON.stringify(catalog)).not.toContain("Dave Smith");
+  });
+
   it("keys each Entity on its Discord ID and gives it a working deep link", async () => {
     const discord = fixtureDiscord({ channels: [{ id: "111", name: "gaming", type: ChannelType.GuildText }] });
 

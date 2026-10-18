@@ -492,7 +492,7 @@ export const readProcessingOptOuts = (path: string = DURABLE_STORE_PATH): Set<st
  * hidden from the bot, excluded, or mistyped — means the Threads it should
  * cover cannot be placed under it, so the carve-out cannot be vouched for.
  * Capture, enrichment and `/find` refuse until Staff fix the list or the
- * Channel comes back. The sync, which is what brings it back, does not read it.
+ * Channel comes back. The sync, which is what brings it back, reads the ids unchecked.
  */
 export const readMonitored = (catalog: Entity[], path: string = DURABLE_STORE_PATH): ReadonlySet<string> => {
   const ids = readMonitoredIds(path);
