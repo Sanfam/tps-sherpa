@@ -38,7 +38,9 @@ export type SettingKey =
   | "ceiling_active_hours"
   | "on_since"
   | "seed_until"
-  | "seeded_at";
+  | "seeded_at"
+  | "shadow_first_at"
+  | "shadow_notice_at";
 
 /** A message that fed the watch. `imagesRead`: its images went to the vision call. */
 export interface ContributingMessage {
@@ -255,6 +257,14 @@ export const openResponderStore = (path: string = DURABLE_STORE_PATH) => {
         "IMMEDIATE",
       ),
 
+    /** The member's `invitation` row: how many exchanges are used, for the third's reply (§9). */
+    invitation: (memberId: string): { exchanges: number; imagesRead: number; lastAt: string } | null => {
+      const row = db.prepare("SELECT exchanges, images_read, last_at FROM invitation WHERE member_id = ?").get(memberId) as
+        | { exchanges: number; images_read: number; last_at: string }
+        | undefined;
+      return row ? { exchanges: row.exchanges, imagesRead: row.images_read, lastAt: row.last_at } : null;
+    },
+
     /**
      * Claims one invited exchange, and with it the triggering message's
      * `images`, all or none, under `MAX_IMAGES` across both rows. Returns how
@@ -372,7 +382,8 @@ export const openResponderStore = (path: string = DURABLE_STORE_PATH) => {
     /**
      * Sets the mode. `on_since` moves only on a switch out of `off`, so a
      * `shadow` → `live` switch leaves it, and the catch-up's floor, where it
-     * was (§2).
+     * was (§2). `shadow_first_at` is written the first time the mode is
+     * `shadow` and never moved: the go-live bar's 14 days run from it (§8).
      */
     setMode: (mode: Mode, by: string, at: Date = new Date()) => {
       transaction(
@@ -380,6 +391,8 @@ export const openResponderStore = (path: string = DURABLE_STORE_PATH) => {
         () => {
           if (readMode(db) === "off" && mode !== "off") writeSetting(db, "on_since", at.toISOString(), by, at);
           writeSetting(db, "mode", mode, by, at);
+          if (mode === "shadow" && !db.prepare("SELECT 1 FROM sherpa_setting WHERE key = 'shadow_first_at'").get())
+            writeSetting(db, "shadow_first_at", at.toISOString(), by, at);
         },
         "IMMEDIATE",
       );

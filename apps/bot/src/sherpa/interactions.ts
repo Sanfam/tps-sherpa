@@ -28,7 +28,7 @@ import { EMPTY_QUERY, MAX_QUERY_LENGTH, findPlaces, renderFind } from "./find.ts
 import { latelyPlaces, renderLately } from "./lately.ts";
 import { MONITORED_COMMAND, type Monitored, answerMonitored } from "./monitored.ts";
 import { type Answer, PRIVACY_COMMAND, type Privacy, answerPrivacy } from "./privacy.ts";
-import { SHERPA_COMMAND, type WithSettings, answerSherpa } from "./sherpa-command.ts";
+import { SHERPA_COMMAND, type TallyText, type WithSettings, answerSherpa } from "./sherpa-command.ts";
 
 /** Discord's ceiling on a command option's choices. */
 const MAX_CHOICES = 25;
@@ -222,6 +222,8 @@ export interface Sherpa {
   monitored: Monitored;
   /** The introductions responder's settings, for `/sherpa`. */
   settings: WithSettings;
+  /** The shadow tally for `/sherpa introductions status`. Without it, status says the tally is unavailable. */
+  tally?: TallyText;
   /**
    * The monitored ids, checked against this Catalog (`readMonitored`). Throws
    * when one is missing, so `/find` and `/lately` fail closed before any call.
@@ -272,7 +274,7 @@ const answer = async (
     const answered =
       interaction.data.name === "monitored"
         ? answerMonitored(interaction, sherpa.monitored, sherpa.loadCatalog(), sherpa.log, tag)
-        : answerSherpa(interaction, sherpa.settings, sherpa.log, tag);
+        : await answerSherpa(interaction, sherpa.settings, sherpa.log, tag, sherpa.tally);
     if (answered !== null) return answered;
     sherpa.log(`${tag} unknown subcommand`);
     return UNKNOWN;

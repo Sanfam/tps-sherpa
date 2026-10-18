@@ -173,7 +173,7 @@ const harness = (
     policy?: string;
     /** The invoker has turned processing off. */
     optedOut?: boolean;
-  } & Partial<Pick<Sherpa, "loadCatalog" | "loadVocabulary" | "loadActivity">> = {},
+  } & Partial<Pick<Sherpa, "loadCatalog" | "loadVocabulary" | "loadActivity" | "tally">> = {},
 ) => {
   const calls: string[] = [];
   const logs: string[] = [];
@@ -200,6 +200,7 @@ const harness = (
     privacy,
     monitored,
     settings: (work) => withResponderStore(work, paths.durable),
+    tally: opts.tally,
     loadMonitored: (c) => readMonitored(c, paths.durable),
     askFor: (c) =>
       createBoundary({
@@ -799,11 +800,22 @@ describe("the Staff gate, for /monitored and /sherpa", () => {
 });
 
 describe("/sherpa introductions", () => {
-  it("is off with no mode row, and shows the default thresholds", async () => {
-    const { run } = harness();
-    expect(await run(sherpaCommand("status"))).toBe(
-      "Mode: **off**\nClock: **wall**\nGreet: **10** minutes\nRecommend: **20** minutes\nCeiling: **6** active hours",
-    );
+  const SETTINGS =
+    "Mode: **off**\nClock: **wall**\nGreet: **10** minutes\nRecommend: **20** minutes\nCeiling: **6** active hours";
+
+  it("is off with no mode row, and shows the default thresholds, then the tally", async () => {
+    const { run } = harness({ tally: async () => "TALLY" });
+    expect(await run(sherpaCommand("status"))).toBe(`${SETTINGS}\nTALLY`);
+  });
+
+  it("still shows the settings when the tally cannot be read", async () => {
+    const { run, logs } = harness({
+      tally: async () => {
+        throw new Error("Discord 503");
+      },
+    });
+    expect(await run(sherpaCommand("status"))).toBe(`${SETTINGS}\nShadow tally: unavailable right now.`);
+    expect(logs.at(-1)).toMatch(/tally unavailable: Discord 503/);
   });
 
   it("logs live loudly, with who set it", async () => {

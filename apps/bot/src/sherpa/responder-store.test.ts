@@ -304,6 +304,16 @@ describe("settings", () => {
     expect(a.setting("on_since")).toBe(t(4).toISOString());
   });
 
+  it("writes shadow_first_at on the first shadow only, so a later switch cannot restart the 14 days", () => {
+    const t = (h: number) => new Date(Date.UTC(2026, 9, 18, h));
+    a.setMode("live", "staff", t(0));
+    expect(a.setting("shadow_first_at")).toBeNull();
+    a.setMode("shadow", "staff", t(1));
+    a.setMode("off", "staff", t(2));
+    a.setMode("shadow", "staff", t(3));
+    expect(b.setting("shadow_first_at")).toBe(t(1).toISOString());
+  });
+
   it("keeps the first seed_until on a second write", () => {
     expect(a.seedUntil("1428000000000000000", "seed")).toBe("1428000000000000000");
     expect(b.seedUntil("1429000000000000000", "seed")).toBe("1428000000000000000");

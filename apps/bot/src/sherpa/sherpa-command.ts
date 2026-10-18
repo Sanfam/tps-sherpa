@@ -121,13 +121,20 @@ const status = (settings: Settings): string => {
   ].join("\n");
 };
 
+/**
+ * The shadow tally as text, for `status` (§8). Throws when Discord cannot be
+ * read; status then says so and still shows the settings.
+ */
+export type TallyText = () => Promise<string>;
+
 /** One `/sherpa` interaction. Logs ids and setting values only. Null for a shape it does not know. */
-export const answerSherpa = (
+export const answerSherpa = async (
   interaction: APIChatInputApplicationCommandInteraction,
   withSettings: WithSettings,
   log: (m: string) => void,
   tag: string,
-): string | null => {
+  tally?: TallyText,
+): Promise<string | null> => {
   const by = interaction.member?.user.id;
   const group = interaction.data.options?.[0];
   if (!by || group?.type !== ApplicationCommandOptionType.SubcommandGroup || group.name !== "introductions")
@@ -179,7 +186,14 @@ export const answerSherpa = (
     }
     case "status": {
       log(`${tag} status`);
-      return withSettings(status);
+      const settings = withSettings(status);
+      try {
+        if (!tally) throw new Error("no tally port");
+        return `${settings}\n${await tally()}`;
+      } catch (error) {
+        log(`${tag} tally unavailable: ${(error as Error).message.slice(0, 160)}`);
+        return `${settings}\nShadow tally: unavailable right now.`;
+      }
     }
   }
   return null;

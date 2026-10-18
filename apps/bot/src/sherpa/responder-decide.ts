@@ -139,16 +139,20 @@ export const countsAsIntroduction = (message: IntroCandidate, authorPostedBefore
 const NAMED = /<#(\d+)>|discord(?:app)?\.com\/channels\/(?:\d+|@me)\/(\d+)/g;
 
 /**
- * `matchIds` without the places another member has already named, as a `<#id>`
- * mention or a `discord.com/channels/…` link (a link to a message in a place
- * names the place). The caller passes only the contents of messages from
- * members with processing on, and checks `isCandidate` on what is left.
+ * The ids of the places one message names, as a `<#id>` mention or a
+ * `discord.com/channels/…` link (a link to a message in a place names the
+ * place). The responder keeps these, never the message, for the watch (§5).
+ */
+export const namedPlaces = (content: string): string[] =>
+  [...content.matchAll(NAMED)].map((found) => found[1] ?? found[2] ?? "");
+
+/**
+ * `matchIds` without the places another member has already named. The caller
+ * passes only messages from members with processing on, and checks
+ * `isCandidate` on what is left.
  */
 export const novelty = (matchIds: readonly string[], othersMessageContents: readonly string[]): string[] => {
-  const named = new Set<string>();
-  for (const content of othersMessageContents) {
-    for (const found of content.matchAll(NAMED)) named.add(found[1] ?? found[2] ?? "");
-  }
+  const named = new Set(othersMessageContents.flatMap(namedPlaces));
   return matchIds.filter((id) => !named.has(id));
 };
 
