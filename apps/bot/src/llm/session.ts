@@ -15,7 +15,7 @@ import type { NameLookup } from "../sync/normalise.ts";
 import type { RoleManifestEntry } from "../sync/ports.ts";
 import { TIER0_PATH, openTier0 } from "../sync/tier0-store.ts";
 import type { ActivityStore } from "./activity.ts";
-import { createBoundary, namePattern, type Boundary } from "./boundary.ts";
+import { createBoundary, usableMemberNames, type Boundary } from "./boundary.ts";
 import { openAiWire, wireFromEnv } from "./openai-wire.ts";
 import { parseVocabulary } from "./vocabulary.ts";
 
@@ -77,37 +77,9 @@ export const nameLookup = (catalog: Entity[]): NameLookup => {
   };
 };
 
-/** Shorter than this, a name is a word fragment, and refusing it would refuse half of English. */
-export const MIN_MEMBER_NAME_LENGTH = 3;
-
-/**
- * The member names a boundary may act on.
- *
- * The boundary refuses any answer containing one, and replaces each in what it
- * sends, so a name that is also an ordinary word in this Catalog — a member
- * called "Battlefield", or "Dad" — would break every call about that place and
- * blank it out of every prompt. Left out: names under three characters, and
- * names that appear, whole-word and in any case, in Staff-controlled text — a
- * Channel or Forum name, a Topic label or slug. Never a Post or Thread title:
- * members write those, so an intro Thread called "Jughfer intro" would switch
- * off redaction of Jughfer, and anyone could do the same for any name.
- *
- * ponytail: a member whose name collides with a Channel, a Forum or a Topic is
- * not redacted, in or out. One whose name is in a Post's title has that Post's
- * summary refused by output validation, so it stays unsummarised — closed, not
- * open. A per-name allowlist Staff can edit, if either ever matters.
- */
-export const usableMemberNames = (
-  names: Iterable<string>,
-  catalog: Entity[],
-  topics: Iterable<string>,
-): string[] => {
-  const staffText = catalog.filter((e) => e.type === "channel" || e.type === "forum").map((e) => e.name);
-  const text = [...staffText, ...topics].join("\n");
-  return [...new Set([...names].map((n) => n.trim()))].filter(
-    (n) => [...n].length >= MIN_MEMBER_NAME_LENGTH && !namePattern(n).test(text),
-  );
-};
+// Live in the boundary, which applies them to the names a caller hands
+// `extractIntroduction`; kept importable from here, where the cache is read.
+export { MIN_MEMBER_NAME_LENGTH, usableMemberNames } from "./boundary.ts";
 
 /**
  * The member-name cache (`tier0-store.ts`) and the names kept for members

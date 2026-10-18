@@ -38,6 +38,9 @@ const current = store.current();
 // Empty only before the first complete sync, which the marker vouches for.
 const previous = current?.catalog ?? [];
 const exclusions = store.exclusions();
+// Unchecked against the Catalog, unlike `readMonitored`: an id it cannot
+// place leaves nothing out, and this sync is what brings a Channel back.
+const monitored = new Set(store.monitoredChannels().map((c) => c.id));
 // A missing gazetteer means no Region facet — an empty facet, not a wrong one.
 // Any OTHER read failure must still throw: silently emptying every Region on a
 // permissions error would rewrite the Catalog and look like a clean run.
@@ -48,11 +51,12 @@ const regions = parseGazetteer(
   }),
 );
 const warn = (m: string) => console.warn(m);
-const { catalog, roleManifest, exclusionsApplied, outcome } = await buildCatalog({
+const { catalog, roleManifest, exclusionsApplied, outcome, memberDenies } = await buildCatalog({
   discord: discordRest({ token, guildId, warn }),
   guildId,
   previous,
   exclusions,
+  monitored,
   regions,
   warn,
 });
@@ -70,7 +74,7 @@ if (!outcome.complete) {
 const unchanged =
   JSON.stringify(catalog) === JSON.stringify(previous) &&
   JSON.stringify(roleManifest) === JSON.stringify(current?.roleManifest ?? []);
-store.replaceCatalog({ catalog, roleManifest, outcome });
+store.replaceCatalog({ catalog, roleManifest, outcome, memberDenies });
 store.close();
 
 const exportJson = async (path: string, value: unknown) => {

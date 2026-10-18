@@ -89,7 +89,57 @@ export interface Entity {
    * correction cannot be clobbered by a later run.
    */
   summary_override: string | null;
+  /**
+   * Who can see it in Discord, by role id, as of the last sync (#53):
+   *
+   * - allow_roles: the role's own overwrite allows it, or the role carries
+   *   ADMINISTRATOR. Either shows it whatever else is held.
+   * - view_roles: the role shows it, held alone beside @everyone.
+   * - deny_roles: the role's own overwrite hides it.
+   *
+   * A Post or Thread has its parent's. Read only through `visibleTo`, in
+   * code: roles never reach a model. Absent on an Entity synced before #53
+   * (or, for allow_roles, before it existed), which `visibleTo` shows to
+   * nobody until the next sync writes them.
+   *
+   * A member's own deny is not here: it is member data, kept bot-side only
+   * (`member_deny` in the durable store).
+   */
+  allow_roles?: string[];
+  view_roles?: string[];
+  deny_roles?: string[];
 }
+
+/**
+ * Whether a holder of `roles` can see this Entity in Discord, as Discord
+ * decides it from role overwrites: @everyone's, then every held role's denies,
+ * then every held role's allows, so one role's allow beats another's deny.
+ * Hence: a held role allows it, or a held role shows it and none denies it.
+ * A place only the bot can see shows to nobody, and one only Staff can see to
+ * Staff alone. No access recorded means nobody. A member's own overwrite is
+ * `deniedTo`'s.
+ */
+export const visibleTo = (entity: Entity, roles: readonly string[]): boolean => {
+  const { allow_roles: allow, view_roles: view, deny_roles: deny } = entity;
+  if (!Array.isArray(allow) || !Array.isArray(view) || !Array.isArray(deny)) return false;
+  return (
+    roles.some((r) => allow.includes(r)) ||
+    (roles.some((r) => view.includes(r)) && !roles.some((r) => deny.includes(r)))
+  );
+};
+
+/**
+ * Whether a member's own overwrite hides this Entity from them. `denied` is
+ * their denied places (`readDeniedPlaces`); a Post or Thread is hidden with
+ * its parent.
+ *
+ * ponytail: a member-specific deny wins even over ADMINISTRATOR, which Discord
+ * lets bypass it. That fails closed: an administrator denied a place by name
+ * is not shown it here, though they can open it. Carry guild-wide admin role
+ * ids beside the denies if that case ever matters.
+ */
+export const deniedTo = (entity: Entity, denied: ReadonlySet<string>): boolean =>
+  denied.has(entity.id) || (entity.parent_id !== null && denied.has(entity.parent_id));
 
 /**
  * What an Entity *is*, as far as anything derived from it is concerned.
@@ -132,10 +182,19 @@ export const parsePrevious = (raw: string): Entity[] => {
   // A missing field would be carried forward as null, silently.
   const isEntity = (e: unknown) => {
     if (typeof e !== "object" || e === null) return false;
-    const { id, summary_override, summary_generated, topics, topics_version } = e as Entity;
+    const { id, summary_override, summary_generated, topics, topics_version, allow_roles, view_roles, deny_roles } =
+      e as Entity;
     const stringOrNull = (v: unknown) => v === null || typeof v === "string";
+    // Absent is accepted: a Catalog written before #53 shows its places to
+    // nobody (`visibleTo`) until the next sync, rather than its overrides
+    // being refused for a field the sync recomputes anyway.
+    const roleIds = (v: unknown) =>
+      v === undefined || (Array.isArray(v) && v.every((r) => typeof r === "string"));
     return (
       typeof id === "string" &&
+      roleIds(allow_roles) &&
+      roleIds(view_roles) &&
+      roleIds(deny_roles) &&
       stringOrNull(summary_override) &&
       stringOrNull(summary_generated) &&
       Array.isArray(topics) &&
@@ -174,6 +233,12 @@ export const buildCatalog = async (deps: {
   previous?: Entity[];
   /** Entities that are visible and readable but are not destinations. */
   exclusions?: Set<string>;
+  /**
+   * The monitored-channel ids (#33). Their Threads and Posts are left out of
+   * the Catalog entirely (#41): an intro Thread's name may be a member's name,
+   * and monitored conversation is extract-and-discard. The Channel stays.
+   */
+  monitored?: ReadonlySet<string>;
   /** Region gazetteer. Absent means the Region facet stays empty, not wrong. */
   regions?: Gazetteer;
   /** Where to report conditions a human needs to act on. Defaults to silence. */
@@ -185,6 +250,11 @@ export const buildCatalog = async (deps: {
   exclusionsApplied: string[];
   /** Incomplete means this Catalog must not replace the previous one. */
   outcome: SyncOutcome;
+  /**
+   * Which members their own overwrite hides each Catalog Channel and Forum
+   * from. For the durable store alone: never part of the Catalog.
+   */
+  memberDenies: Array<{ placeId: string; memberId: string }>;
 }> => {
   if (!(await deps.discord.hasMessageContentIntent())) {
     throw new Error(
@@ -261,12 +331,16 @@ export const buildCatalog = async (deps: {
   // Threads are only enumerated from containers whose content is readable. A
   // withheld Forum must never have its Posts read. Excluded containers are
   // enumerated too, for the name lookup alone; their Posts and Threads are
-  // dropped below, so they never reach the Catalog.
+  // dropped below, so they never reach the Catalog. A monitored container is
+  // not passed in (#41): Discord's guild-wide active-Threads call still
+  // returns its active ones, but the adapter drops them by parent before
+  // fetching any first post, so none is stored.
+  const monitored = deps.monitored ?? new Set<string>();
   const { threads: allThreads, failed } = await deps.discord.listThreads(
-    visibleContainers.filter((c) => c.contentReadable).map((c) => c.id),
+    visibleContainers.filter((c) => c.contentReadable && !monitored.has(c.id)).map((c) => c.id),
   );
   const threads = allThreads.filter((t) => !excluded.has(t.id) && !excluded.has(t.parentId));
-  const containerType = new Map(containers.map((c) => [c.id, c.type]));
+  const containerById = new Map(containers.map((c) => [c.id, c]));
   const tagSets = new Map(
     containers.map((c) => [c.id, new Map((c.availableTags ?? []).map((t) => [t.id, t.name]))]),
   );
@@ -373,6 +447,9 @@ export const buildCatalog = async (deps: {
       last_activity_at: snowflakeTime(c.lastMessageId),
       summary_generated: null,
       summary_override: overrides.get(c.id) ?? null,
+      allow_roles: c.allowRoles,
+      view_roles: c.viewRoles,
+      deny_roles: c.denyRoles,
     };
   };
 
@@ -383,7 +460,7 @@ export const buildCatalog = async (deps: {
       // A Post lives in a Forum; a Thread lives in a Channel. Same underlying
       // object, different Entity — only a Post carries applied_tags.
       type:
-        containerType.get(t.parentId) === ChannelType.GuildForum
+        containerById.get(t.parentId)?.type === ChannelType.GuildForum
           ? "post"
           : "thread",
       name: t.name,
@@ -402,6 +479,10 @@ export const buildCatalog = async (deps: {
       last_activity_at: snowflakeTime(t.lastMessageId),
       summary_generated: null,
       summary_override: overrides.get(t.id) ?? null,
+      // Discord gives a Post or Thread its parent's permissions.
+      allow_roles: containerById.get(t.parentId)?.allowRoles ?? [],
+      view_roles: containerById.get(t.parentId)?.viewRoles ?? [],
+      deny_roles: containerById.get(t.parentId)?.denyRoles ?? [],
     };
   };
 
@@ -423,5 +504,6 @@ export const buildCatalog = async (deps: {
       ...allThreads.filter((t) => excluded.has(t.id)).map((t) => t.id),
     ].sort(),
     outcome: failed.length ? { complete: false, failed } : { complete: true },
+    memberDenies: containers.flatMap((c) => c.deniedMembers.map((memberId) => ({ placeId: c.id, memberId }))),
   };
 };

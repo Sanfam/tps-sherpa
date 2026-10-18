@@ -72,6 +72,21 @@ describe("isActivityDue", () => {
 });
 
 describe("recentSources", () => {
+  it("strips marked spoilers, across lines and several spans, but not an unclosed ||", () => {
+    const out = recentSources([
+      msg("1", "good ||he dies\nat the end|| film ||twist||"),
+      msg("2", "||only a spoiler||"),
+      msg("3", "bad || unclosed"),
+      // An escaped pipe does not close the span: all of it is the spoiler.
+      msg("4", "safe ||he dies \\|| after credits too|| end"),
+    ]);
+    expect(out.map((m) => [m.messageId, m.content.replace(/\s+/g, " ").trim()])).toEqual([
+      ["1", "good film"],
+      ["3", "bad || unclosed"],
+      ["4", "safe end"],
+    ]);
+  });
+
   it("takes the newest messages by snowflake, whatever window label they carry", () => {
     // Capture lets head overwrite tail on overlap, so a short Thread's recent
     // messages may all be labelled head. Numeric order, not string order:

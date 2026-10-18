@@ -153,7 +153,7 @@ describe("replacing the Catalog", () => {
     await established();
     const store = openDurableStore(path);
     expect(() =>
-      store.replaceCatalog({ catalog: [], roleManifest: [], outcome: { complete: true } }),
+      store.replaceCatalog({ catalog: [], roleManifest: [], outcome: { complete: true }, memberDenies: [] }),
     ).toThrow(/empty/);
     store.close();
     expect(readCatalog()).toHaveLength(3);
@@ -168,15 +168,61 @@ describe("replacing the Catalog", () => {
       catalog: [...catalog, { ...catalog[0]!, id: "300", name: secret }],
       roleManifest: [],
       outcome: { complete: true },
+      memberDenies: [],
     });
     store.close();
     expect(readFileSync(path).includes(secret)).toBe(true);
 
     const again = openDurableStore(path);
-    again.replaceCatalog({ catalog, roleManifest: [], outcome: { complete: true } });
+    again.replaceCatalog({ catalog, roleManifest: [], outcome: { complete: true }, memberDenies: [] });
     again.close();
     // Closing the last connection checkpoints the WAL into the file.
     expect(readFileSync(path).includes(secret)).toBe(false);
+  });
+});
+
+describe("members' own denies", () => {
+  const A = "500000000000000001";
+  const B = "500000000000000002";
+  const withDenies = (...ids: string[]) =>
+    fixtureDiscord({
+      channels: [{ id: "100", name: "general", type: ChannelType.GuildText, deniedMembers: ids }],
+    });
+  const syncInto = async (discord: ReturnType<typeof fixtureDiscord>) => {
+    const built = await sync(discord);
+    const store = openDurableStore(path);
+    store.replaceCatalog(built);
+    store.close();
+    return built;
+  };
+  const denied = (member: string) => {
+    const store = openDurableStore(path);
+    const places = [...store.deniedPlaces(member)];
+    store.close();
+    return places;
+  };
+
+  it("are replaced by the next complete sync, not merged into it", async () => {
+    await established();
+    await syncInto(withDenies(A, B));
+    expect([denied(A), denied(B)]).toEqual([["100"], ["100"]]);
+    await syncInto(withDenies(B));
+    expect([denied(A), denied(B)]).toEqual([[], ["100"]]);
+  });
+
+  it("reach neither the Catalog nor the exports the site is built from, nor any other table", async () => {
+    await established();
+    const built = await syncInto(withDenies(A));
+    // What sync/run.ts writes to catalog.json and roles.json.
+    const exported = JSON.stringify(built.catalog) + JSON.stringify(built.roleManifest);
+    expect(exported).not.toContain(A);
+    const db = new DatabaseSync(path);
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name != 'member_deny'")
+      .all() as Array<{ name: string }>;
+    for (const { name } of tables)
+      expect(JSON.stringify(db.prepare(`SELECT * FROM "${name}"`).all()), name).not.toContain(A);
+    db.close();
   });
 });
 
@@ -210,7 +256,7 @@ describe("sync and enrichment interleaved", () => {
     const syncing = openDurableStore(path);
     const read = enrichment.current()!;
     await new Promise((r) => setTimeout(r, 2)); // a later generated_at
-    syncing.replaceCatalog({ catalog: read.catalog, roleManifest: [], outcome: { complete: true } });
+    syncing.replaceCatalog({ catalog: read.catalog, roleManifest: [], outcome: { complete: true }, memberDenies: [] });
     expect(() =>
       enrichment.patchEntities(read.generatedAt, [{ id: "100", summary_generated: "stale" }]),
     ).toThrow(GenerationChanged);
@@ -227,7 +273,7 @@ describe("sync and enrichment interleaved", () => {
     enrichment.patchEntities(read.generatedAt, [{ id: "100", summary_generated: "fresh" }]);
     await new Promise((r) => setTimeout(r, 2));
     const next = await renamed();
-    syncing.replaceCatalog({ catalog: next, roleManifest: [], outcome: { complete: true } });
+    syncing.replaceCatalog({ catalog: next, roleManifest: [], outcome: { complete: true }, memberDenies: [] });
     expect(readCatalog()).toEqual(next);
     expect(() => enrichment.patchEntities(read.generatedAt, [{ id: "100", summary_generated: "x" }])).toThrow(
       /changed under this run/,
@@ -242,7 +288,7 @@ describe("sync and enrichment interleaved", () => {
     const syncing = openDurableStore(path);
     const read = enrichment.current()!;
     await new Promise((r) => setTimeout(r, 2));
-    syncing.replaceCatalog({ catalog: await renamed(), roleManifest: [], outcome: { complete: true } });
+    syncing.replaceCatalog({ catalog: await renamed(), roleManifest: [], outcome: { complete: true }, memberDenies: [] });
     expect(() =>
       enrichment.patchEntities(read.generatedAt, [{ id: "201", summary_generated: "About Rocket League." }]),
     ).toThrow(GenerationChanged);

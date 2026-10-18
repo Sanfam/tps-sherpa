@@ -59,6 +59,7 @@ for (const role of ["strong", "cheap"] as ModelRole[]) {
           authorId: "1",
           authorIsBot: false,
           content: "<@732682426853359667> and 732682426853359667 are usually on after 9",
+          origin: subject.id,
         },
       ],
       parse: (value) => {

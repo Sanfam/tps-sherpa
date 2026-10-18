@@ -205,7 +205,7 @@ const activityOne = async (entity: Entity) => {
         orNothing: null,
         system: ACTIVITY_SYSTEM_PROMPT,
         subject: entity,
-        sources,
+        sources: sources.map((m) => ({ ...m, origin: m.entityId })),
         parse: (value) => {
           const s = (value as { summary?: unknown }).summary;
           // The shape only, never the value: a malformed answer is still

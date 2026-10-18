@@ -38,6 +38,7 @@ export const ACTIVITY_SYSTEM_PROMPT = [
   "Rules:",
   "- Describe the subjects, never the people. No names, nicknames, @-handles or counts of people.",
   "- Do not name the channel or thread itself; describe what is being said.",
+  "- Name the subject (a show, film, book, anime or game) but never plot points, endings, twists, deaths, results of any kind (a match, race, election or contest) or reveals.",
   "- If the messages are only greetings, reactions or noise, reply with null rather than inventing a subject.",
   "",
   'Reply with JSON: {"summary": string | null}',
@@ -140,6 +141,10 @@ export const recentSources = (
   const seen = new Set<string>();
   return newest
     .filter((m) => !m.authorIsBot)
+    // Marked spoilers never reach the model (Staff, 2026-10-18). A delimiter
+    // after a backslash is escaped, as Discord reads it, so it neither opens
+    // nor closes a span. An unclosed `||` matches nothing and is left as it is.
+    .map((m) => ({ ...m, content: m.content.replace(/(?<!\\)\|\|[\s\S]*?(?<!\\)\|\|/g, " ") }))
     .filter((m) => {
       const key = normalised(m.content);
       if (!/\p{L}/u.test(key) || seen.has(key)) return false;

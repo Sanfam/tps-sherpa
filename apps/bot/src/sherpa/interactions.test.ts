@@ -14,7 +14,13 @@ import { createBoundary, type ChatPort } from "../llm/boundary.ts";
 import { PRIVACY_POLICY_PATH, retrying } from "../llm/session.ts";
 import type { Vocabulary } from "../llm/vocabulary.ts";
 import type { Entity } from "../sync/catalog.ts";
-import { MONITORED_SEED, initDurableStore, readMonitored, withDurableStore } from "../sync/durable-store.ts";
+import {
+  MONITORED_SEED,
+  initDurableStore,
+  readDeniedPlaces,
+  readMonitored,
+  withDurableStore,
+} from "../sync/durable-store.ts";
 import type { RoleManifestEntry } from "../sync/ports.ts";
 import { RETAIN_MS, openTier0 } from "../sync/tier0-store.ts";
 import { EMPTY_QUERY } from "./find.ts";
@@ -25,6 +31,7 @@ import {
   DEFAULT_FIND_DAILY_CAP,
   FAILED,
   NOT_A_MEMBER,
+  NOT_STAFF,
   UNKNOWN,
   type EphemeralReply,
   type Sherpa,
@@ -33,7 +40,7 @@ import {
   findDailyCap,
   handleInteraction,
 } from "./interactions.ts";
-import { NOT_STAFF, openMonitored } from "./monitored.ts";
+import { openMonitored } from "./monitored.ts";
 import {
   BACKFILL_OPT_IN_FIRST,
   BACKFILL_PENDING,
@@ -44,10 +51,13 @@ import {
   openPrivacy,
   renderDeleted,
 } from "./privacy.ts";
+import { withResponderStore } from "./responder-store.ts";
 
 const GUILD = "400000000000000001";
 const MEMBER_ROLE = "400000000000000002";
 const OTHER_ROLE = "400000000000000003";
+const STAFF_ROLE = "400000000000000004";
+const EVENT_MANAGERS_ROLE = "400000000000000005";
 
 const entity = (over: Partial<Entity> & { id: string; name: string }): Entity => ({
   type: "post",
@@ -64,6 +74,9 @@ const entity = (over: Partial<Entity> & { id: string; name: string }): Entity =>
   last_activity_at: new Date().toISOString(),
   summary_generated: null,
   summary_override: null,
+  allow_roles: [],
+  view_roles: [MEMBER_ROLE],
+  deny_roles: [],
   ...over,
 });
 
@@ -84,6 +97,8 @@ const manifest: RoleManifestEntry[] = [
   // A duplicate-named role: the sync unions them, and so must the gate.
   { name: "Member", color: 2, ids: [MEMBER_ROLE] },
   { name: "Moderator", color: 3, ids: [OTHER_ROLE] },
+  { name: "Staff", color: 4, ids: [STAFF_ROLE] },
+  { name: "Event Managers", color: 5, ids: [EVENT_MANAGERS_ROLE] },
 ];
 
 const QUERY = "distinctive-query-text flying and rocket league";
@@ -91,7 +106,7 @@ const QUERY = "distinctive-query-text flying and rocket league";
 const command = (
   name: string,
   options: Record<string, string> = {},
-  over: { guild_id?: string; roles?: string[]; type?: number; dataType?: number } = {},
+  over: { guild_id?: string; roles?: string[]; userId?: string; type?: number; dataType?: number } = {},
 ): APIInteraction =>
   ({
     id: "600000000000000001",
@@ -99,7 +114,7 @@ const command = (
     token: "interaction-token",
     type: over.type ?? InteractionType.ApplicationCommand,
     guild_id: over.guild_id ?? GUILD,
-    member: { roles: over.roles ?? [MEMBER_ROLE], user: { id: "500000000000000001" } },
+    member: { roles: over.roles ?? [MEMBER_ROLE], user: { id: over.userId ?? "500000000000000001" } },
     data: {
       name,
       type: over.dataType ?? ApplicationCommandType.ChatInput,
@@ -167,7 +182,9 @@ const harness = (
     policy?: string;
     /** The invoker has turned processing off. */
     optedOut?: boolean;
-  } & Partial<Pick<Sherpa, "loadCatalog" | "loadVocabulary" | "loadActivity">> = {},
+    /** Members' own denies, written by a sync as the real one writes them. */
+    memberDenies?: Array<{ placeId: string; memberId: string }>;
+  } & Partial<Pick<Sherpa, "loadCatalog" | "loadVocabulary" | "loadActivity" | "tally">> = {},
 ) => {
   const calls: string[] = [];
   const logs: string[] = [];
@@ -185,6 +202,12 @@ const harness = (
   // missing adds it back.
   const monitored = openMonitored(paths.durable);
   for (const c of MONITORED_SEED) monitored.remove(c.id);
+  const memberDenies = opts.memberDenies ?? [];
+  if (memberDenies.length)
+    withDurableStore(
+      (s) => s.replaceCatalog({ catalog, roleManifest: [], outcome: { complete: true }, memberDenies }),
+      paths.durable,
+    );
   const sherpa: Sherpa = {
     guildId: GUILD,
     loadCatalog: opts.loadCatalog ?? (() => catalog),
@@ -193,7 +216,10 @@ const harness = (
     loadActivity: opts.loadActivity ?? (() => ({})),
     privacy,
     monitored,
+    settings: (work) => withResponderStore(work, paths.durable),
+    tally: opts.tally,
     loadMonitored: (c) => readMonitored(c, paths.durable),
+    loadDenied: (id) => readDeniedPlaces(id, paths.durable),
     askFor: (c) =>
       createBoundary({
         chat,
@@ -371,6 +397,16 @@ describe("/privacy", () => {
     other.close();
   });
 
+  it("keeps the places a member's own Discord overwrite hides from them", () => {
+    const { paths, privacy } = tempPrivacy();
+    withDurableStore(
+      (s) => s.replaceCatalog({ catalog, roleManifest: [], outcome: { complete: true }, memberDenies: [{ placeId: "100", memberId: INVOKER }] }),
+      paths.durable,
+    );
+    privacy.deleteMyData(INVOKER);
+    expect([...readDeniedPlaces(INVOKER, paths.durable)]).toEqual(["100"]);
+  });
+
   it("checkpoints Tier 0, so the deletion reaches the file while another process holds it open", () => {
     const { paths, privacy } = tempPrivacy();
     const other = openTier0(paths.tier0);
@@ -467,6 +503,36 @@ describe("the Member gate", () => {
     const { run } = harness();
     const dm = { ...(command("lately") as object), member: undefined } as unknown as APIInteraction;
     expect(await run(dm)).toBe(NOT_A_MEMBER);
+  });
+});
+
+describe("the invoker's own roles decide what is named (#53)", () => {
+  const gated = entity({ id: "100000000000000003", name: "Moderators' corner", view_roles: [OTHER_ROLE] });
+  const link = `**Moderators' corner** ([open](${gated.url}))`;
+
+  it.each([
+    ["holds the role", [MEMBER_ROLE, OTHER_ROLE], true],
+    ["does not", [MEMBER_ROLE], false],
+  ])("a role-gated place, to a Member who %s", async (_, roles, shown) => {
+    const { run, calls } = harness({ loadCatalog: () => [...catalog, gated] });
+    await run(command("find", { interests: QUERY }, { roles }));
+    expect(calls[0]!.includes("Moderators' corner")).toBe(shown);
+    expect((await run(command("lately", {}, { roles })))!.includes(link)).toBe(shown);
+  });
+});
+
+describe("a member's own Discord deny hides a place from them alone", () => {
+  const [denied] = catalog;
+  const link = `**Rocket League** ([open](${denied!.url}))`;
+
+  it.each([
+    ["the member it denies", INVOKER, false],
+    ["another Member", "500000000000000002", true],
+  ])("in /find and /lately, to %s", async (_, userId, shown) => {
+    const { run, calls } = harness({ memberDenies: [{ placeId: denied!.id, memberId: INVOKER }] });
+    await run(command("find", { interests: QUERY }, { userId }));
+    expect(calls[0]!.includes("Rocket League")).toBe(shown);
+    expect((await run(command("lately", {}, { userId })))!.includes(link)).toBe(shown);
   });
 });
 
@@ -668,13 +734,11 @@ describe("/privacy backfill", () => {
   });
 });
 
-/** `/monitored <sub>`, with a channel option when given one. */
-/** `permissions` is the invoker's computed bitfield; "32" is Manage Server. */
-const monitoredCommand = (sub: string, channel?: string, permissions: string | undefined = "32"): APIInteraction => {
-  const base = command("monitored") as unknown as { data: object; member: object };
+/** `/monitored <sub>`, with a channel option when given one, from Staff unless `roles` says otherwise. */
+const monitoredCommand = (sub: string, channel?: string, roles: string[] = [STAFF_ROLE]): APIInteraction => {
+  const base = command("monitored", {}, { roles }) as unknown as { data: object };
   return {
     ...base,
-    member: { ...base.member, permissions },
     data: {
       ...base.data,
       options: [
@@ -682,6 +746,38 @@ const monitoredCommand = (sub: string, channel?: string, permissions: string | u
           name: sub,
           type: ApplicationCommandOptionType.Subcommand,
           options: channel ? [{ name: "channel", type: ApplicationCommandOptionType.Channel, value: channel }] : [],
+        },
+      ],
+    },
+  } as unknown as APIInteraction;
+};
+
+/** `/sherpa introductions <sub>`, from Staff unless `roles` says otherwise. */
+const sherpaCommand = (
+  sub: string,
+  options: Record<string, string | number> = {},
+  roles: string[] = [STAFF_ROLE],
+): APIInteraction => {
+  const base = command("sherpa", {}, { roles }) as unknown as { data: object };
+  return {
+    ...base,
+    data: {
+      ...base.data,
+      options: [
+        {
+          name: "introductions",
+          type: ApplicationCommandOptionType.SubcommandGroup,
+          options: [
+            {
+              name: sub,
+              type: ApplicationCommandOptionType.Subcommand,
+              options: Object.entries(options).map(([name, value]) => ({
+                name,
+                type: typeof value === "number" ? ApplicationCommandOptionType.Integer : ApplicationCommandOptionType.String,
+                value,
+              })),
+            },
+          ],
         },
       ],
     },
@@ -708,11 +804,6 @@ describe("monitored channels fail closed", () => {
 });
 
 describe("/monitored", () => {
-  it("is registered for Manage Server only", () => {
-    const monitored = commandDefinitions(vocabulary).find((c) => c.name === "monitored")!;
-    expect(monitored.default_member_permissions).toBe("32");
-  });
-
   it("adds a channel in the Catalog, recording who, and refuses one that is not", async () => {
     const channel = entity({ id: "100000000000000003", name: "👋︱intros", type: "channel" });
     const { run, paths } = harness({ loadCatalog: () => [...catalog, channel] });
@@ -734,13 +825,89 @@ describe("/monitored", () => {
     expect(logs.at(-1)).toMatch(new RegExp(`MONITORED CHANNEL REMOVED ${channel.id} by ${INVOKER}`));
   });
 
-  it("refuses an invoker without Manage Server, even if Discord let the command through", async () => {
-    const channel = entity({ id: "100000000000000003", name: "👋︱intros", type: "channel" });
-    const { run, paths } = harness({ loadCatalog: () => [...catalog, channel] });
-    // Send Messages only; nothing; and an Administrator, who may.
-    expect(await run(monitoredCommand("add", channel.id, "2048"))).toBe(NOT_STAFF);
-    expect(await run(monitoredCommand("list", undefined, ""))).toBe(NOT_STAFF);
-    expect(withDurableStore((s) => s.monitoredChannels(), paths.durable)).toEqual([]);
-    expect(await run(monitoredCommand("add", channel.id, "8"))).toMatch(/^Done/);
+});
+
+describe("the Staff gate, for /monitored and /sherpa", () => {
+  const intros = entity({ id: "100000000000000003", name: "👋︱intros", type: "channel" });
+  it.each([
+    ["Staff", true, [STAFF_ROLE]],
+    ["Event Managers alone, without Member", true, [EVENT_MANAGERS_ROLE]],
+    ["Member alone", false, [MEMBER_ROLE]],
+    ["no role", false, []],
+  ])("%s: admitted %s", async (_, admitted, roles) => {
+    const { run, paths } = harness({ loadCatalog: () => [...catalog, intros] });
+    const monitoredAnswer = await run(monitoredCommand("add", intros.id, roles));
+    const sherpaAnswer = await run(sherpaCommand("mode", { mode: "live" }, roles));
+    const mode = withResponderStore((s) => s.mode(), paths.durable);
+    const channels = withDurableStore((s) => s.monitoredChannels(), paths.durable);
+    if (admitted) {
+      expect(monitoredAnswer).toMatch(/^Done/);
+      expect(sherpaAnswer).toMatch(/^Done/);
+      expect([mode, channels.length]).toEqual(["live", 1]);
+    } else {
+      expect([monitoredAnswer, sherpaAnswer]).toEqual([NOT_STAFF, NOT_STAFF]);
+      expect([mode, channels.length]).toEqual(["off", 0]);
+    }
+  });
+
+  it("admits nobody before any sync has written a manifest", async () => {
+    const { run } = harness({ roles: [] });
+    expect(await run(sherpaCommand("status"))).toBe(NOT_STAFF);
+    expect(await run(monitoredCommand("list"))).toBe(NOT_STAFF);
+  });
+});
+
+describe("/sherpa introductions", () => {
+  const SETTINGS =
+    "Mode: **off**\nClock: **wall**\nGreet: **10** minutes\nRecommend: **20** minutes\nCeiling: **6** active hours";
+
+  it("is off with no mode row, and shows the default thresholds, then the tally", async () => {
+    const { run } = harness({ tally: async () => "TALLY" });
+    expect(await run(sherpaCommand("status"))).toBe(`${SETTINGS}\nTALLY`);
+  });
+
+  it("still shows the settings when the tally cannot be read", async () => {
+    const { run, logs } = harness({
+      tally: async () => {
+        throw new Error("Discord 503");
+      },
+    });
+    expect(await run(sherpaCommand("status"))).toBe(`${SETTINGS}\nShadow tally: unavailable right now.`);
+    expect(logs.at(-1)).toMatch(/tally unavailable: Discord 503/);
+  });
+
+  it("logs live loudly, with who set it", async () => {
+    const { run, logs, paths } = harness();
+    await run(sherpaCommand("mode", { mode: "shadow" }));
+    expect(logs.at(-1)).not.toMatch(/LIVE/);
+    await run(sherpaCommand("mode", { mode: "live" }));
+    expect(logs.at(-1)).toMatch(new RegExp(`INTRODUCTIONS MODE SET TO LIVE by ${INVOKER}`));
+    expect(withResponderStore((s) => s.mode(), paths.durable)).toBe("live");
+  });
+
+  it("refuses timing out of bounds, or recommend below greet against what is stored, writing nothing", async () => {
+    const { run, paths } = harness();
+    const stored = () =>
+      withResponderStore(
+        (s) => (["greet_minutes", "recommend_minutes", "ceiling_active_hours"] as const).map((k) => s.setting(k)),
+        paths.durable,
+      );
+    for (const options of [
+      { greet: 0 } as Record<string, number>,
+      { greet: 121 },
+      { recommend: 361 },
+      { ceiling: 25 },
+      { greet: 5, ceiling: 0 },
+      // Against the default recommend of 20, and the default greet of 10.
+      { greet: 30 },
+      { recommend: 5 },
+    ])
+      expect(await run(sherpaCommand("timing", options))).toMatch(/^Nothing changed/);
+    expect(stored()).toEqual([null, null, null]);
+
+    expect(await run(sherpaCommand("timing", { greet: 30, recommend: 30 }))).toMatch(/^Done/);
+    expect(await run(sherpaCommand("timing", { recommend: 20 }))).toMatch(/^Nothing changed/);
+    expect(await run(sherpaCommand("timing", { ceiling: 24 }))).toMatch(/^Done/);
+    expect(stored()).toEqual(["30", "30", "24"]);
   });
 });

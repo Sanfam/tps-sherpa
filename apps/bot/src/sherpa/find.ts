@@ -8,10 +8,10 @@
  * a crafted first post feeding a summary — can make the bot say anything.
  * That is the prompt-injection containment (PROJECT-STATUS §6.6).
  */
-import type { Boundary } from "../llm/boundary.ts";
+import type { Boundary, Origin } from "../llm/boundary.ts";
 import { isEnrichable } from "../llm/subject.ts";
 import type { Topic, Vocabulary } from "../llm/vocabulary.ts";
-import type { Entity } from "../sync/catalog.ts";
+import { type Entity, deniedTo, visibleTo } from "../sync/catalog.ts";
 
 /** Enough to cover a member who mentions four things, short enough to read. */
 export const MAX_MATCHES = 5;
@@ -29,7 +29,7 @@ export const MAX_QUERY_LENGTH = 300;
  */
 export const FIND_TIMEOUT_MS = 90_000;
 /** A summary is ~12 words; an override has no budget, so it is clipped here. */
-const MAX_SUMMARY_CHARS = 150;
+export const MAX_SUMMARY_CHARS = 150;
 
 /**
  * What Sherpa may point a member at.
@@ -67,10 +67,20 @@ export const NOT_DESTINATIONS: ReadonlySet<string> = new Set([
   "1121511095518122164", // ✅︱micro-polls
 ]);
 
-/** `monitored` from `readMonitored`, which refuses a list the Catalog cannot place. */
-export const candidatesOf = (catalog: Entity[], monitored: ReadonlySet<string>): Entity[] => {
+/**
+ * `monitored` from `readMonitored`, which refuses a list the Catalog cannot
+ * place. `roles` are the asker's role ids and `denied` their denied places
+ * (`readDeniedPlaces`): only places they can see in Discord are candidates
+ * (#53), so a model is never shown one they cannot.
+ */
+export const candidatesOf = (
+  catalog: Entity[],
+  monitored: ReadonlySet<string>,
+  roles: readonly string[],
+  denied: ReadonlySet<string>,
+): Entity[] => {
   const byId = new Map(catalog.map((e) => [e.id, e]));
-  return catalog.filter((e) => isCandidate(e, byId, monitored));
+  return catalog.filter((e) => isCandidate(e, byId, monitored) && visibleTo(e, roles) && !deniedTo(e, denied));
 };
 
 /** The human correction wins, as on the Index. */
@@ -172,7 +182,8 @@ const NOTHING: FindResult = { matches: [], topics: [], dropped: 0 };
 /**
  * Matches one query against the whole Catalog.
  *
- * The query is the member's own words, so it goes in as a `source`: the
+ * The query is the member's own words (`/find`), or one derived from their
+ * introduction's extraction (the responder), so it goes in as a `source`: the
  * boundary checks the opt-out first and redacts identifiers before anything
  * leaves. An empty query never reaches a model — asked about nothing, a model
  * answers anyway, and that answer is invention.
@@ -182,11 +193,17 @@ export const findPlaces = async (request: {
   invokerId: string;
   catalog: Entity[];
   monitored: ReadonlySet<string>;
+  /** Whose view of the server to match against: the asker's role ids (`candidatesOf`). */
+  roles: readonly string[];
+  /** The asker's denied places (`candidatesOf`): Staff's by-name denies (#53). */
+  denied: ReadonlySet<string>;
   vocabulary: Vocabulary;
   ask: Boundary["ask"];
+  /** Where the query came from, set by the caller: `/find`, or the responder's extraction. */
+  origin: Origin;
 }): Promise<FindResult & { candidates: number }> => {
   const query = request.query.trim().slice(0, MAX_QUERY_LENGTH);
-  const candidates = candidatesOf(request.catalog, request.monitored);
+  const candidates = candidatesOf(request.catalog, request.monitored, request.roles, request.denied);
   if (!query || candidates.length === 0) return { ...NOTHING, candidates: candidates.length };
 
   const byId = new Map(request.catalog.map((e) => [e.id, e]));
@@ -196,7 +213,7 @@ export const findPlaces = async (request: {
     system: findSystemPrompt(request.vocabulary),
     subject: candidates,
     context: `${text}\n\nWhat the member is into:`,
-    sources: [{ authorId: request.invokerId, authorIsBot: false, content: query }],
+    sources: [{ authorId: request.invokerId, authorIsBot: false, content: query, origin: request.origin }],
     orNothing: NOTHING,
     parse: (value) => parseFind(value, keys, request.vocabulary),
   });
@@ -226,7 +243,7 @@ const plainName = (name: string): string =>
  * A deep link that is not one falls back to the mention, which is never
  * worse than before.
  */
-const placeRef = (entity: Entity): string =>
+export const placeRef = (entity: Entity): string =>
   (entity.type === "post" || entity.type === "thread") &&
   entity.url.startsWith("https://discord.com/channels/")
     ? `**${plainName(entity.name)}** ([open](${entity.url}))`

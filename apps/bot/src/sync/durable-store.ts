@@ -1,8 +1,8 @@
 /**
  * The bot's durable store: the current Catalog generation, its role manifest,
  * the exclusions, the monitored channels, and members' privacy preferences and
- * backfill requests (ADR-0001). Later, the rest of the durable state the
- * handoff names.
+ * backfill requests (ADR-0001), and the introductions responder's state.
+ * Later, the rest of the durable state the handoff names.
  *
  * Separate from the Tier 0 cache on purpose. Litestream replicates whole
  * databases, and this is the one that gets replicated; Tier 0 must not be.
@@ -63,6 +63,30 @@ export interface Generation {
  * takes no snapshot of a database that has not changed, so without it a long
  * pipeline outage would leave the replica's only snapshot to age out under the
  * bucket's lifecycle rule, and a restore would have nothing to start from.
+ *
+ * The introductions responder's four (design §5; read and written only through
+ * `sherpa/responder-store.ts`):
+ *
+ * - `introduction`: one row per member evaluated, from their intro to 30 days
+ *   after it, or until erased. `message_ids` is the ids that fed an
+ *   extraction, as `[{id, edited_at, images_read}]`, intro first: ids only,
+ *   never content. `joined_at` is the member's, from the lookup when the
+ *   evaluation started (F10).
+ * - `invitation`: the invited path's counts, kept 30 days from `last_at`, its
+ *   last exchange (F9). No message ids: nothing here points at member content.
+ * - `tombstone`: that a member was evaluated, kept indefinitely and through
+ *   erasure (F3), so no member is welcomed twice within one membership; a
+ *   new `joined_at` (they left and rejoined) admits them again (F10). A NULL `joined_at` is a
+ *   seeded one, from the Channel's history before the first deploy (F2), and
+ *   blocks for good (F10).
+ * - `sherpa_setting`: Staff's mode, clock and thresholds, and the responder's
+ *   own markers (`on_since`, `seed_until`, `seeded_at`), with who set each.
+ *
+ * `member_deny`: a member whose own Discord overwrite hides a Catalog Channel
+ * or Forum from them, so Sherpa never names it to them (`deniedTo`). Discord's
+ * state, not theirs: replaced whole by every complete sync, in the same
+ * transaction as the Catalog, so it is never older than the last sync. It
+ * never leaves the bot: not in the Catalog, an Entity or the site's snapshot.
  */
 const MIGRATIONS = `
   CREATE TABLE IF NOT EXISTS heartbeat (
@@ -94,6 +118,40 @@ const MIGRATIONS = `
     member_id TEXT NOT NULL,
     name      TEXT NOT NULL,
     PRIMARY KEY (member_id, name)
+  );
+  CREATE TABLE IF NOT EXISTS introduction (
+    member_id   TEXT PRIMARY KEY,
+    message_ids TEXT NOT NULL,
+    started_at  TEXT NOT NULL,
+    joined_at   TEXT NOT NULL,
+    extractions INTEGER NOT NULL DEFAULT 0,
+    rebuilds    INTEGER NOT NULL DEFAULT 0,
+    images_read INTEGER NOT NULL DEFAULT 0,
+    posted_at   TEXT,
+    outcome     TEXT CHECK (outcome IN ('responded', 'expired', 'failed')),
+    reason      TEXT
+  );
+  CREATE TABLE IF NOT EXISTS invitation (
+    member_id   TEXT PRIMARY KEY,
+    exchanges   INTEGER NOT NULL DEFAULT 0,
+    images_read INTEGER NOT NULL DEFAULT 0,
+    last_at     TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS tombstone (
+    member_id TEXT PRIMARY KEY,
+    joined_at TEXT,
+    closed_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS sherpa_setting (
+    key    TEXT PRIMARY KEY,
+    value  TEXT NOT NULL,
+    set_by TEXT NOT NULL,
+    set_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS member_deny (
+    member_id TEXT NOT NULL,
+    place_id  TEXT NOT NULL,
+    PRIMARY KEY (member_id, place_id)
   );
 `;
 
@@ -167,13 +225,15 @@ const SCHEMA = `
 const PRAGMAS = "PRAGMA journal_mode = WAL; PRAGMA secure_delete = ON; PRAGMA busy_timeout = 5000;";
 
 /**
- * The startup contract. Runs before anything reads or migrates the file.
+ * The startup contract. Runs before anything reads or migrates the file, and
+ * every connection to the durable store opens through it, so each one sets
+ * the pragmas.
  *
  * Never falls back to empty durable state: an empty store would write every
  * summary override and exclusion away on the next sync, and look like a clean
  * run doing it.
  */
-export const openDurableStore = (path: string = DURABLE_STORE_PATH) => {
+export const openDurableDatabase = (path: string = DURABLE_STORE_PATH): DatabaseSync => {
   // Checked before opening: opening a missing file creates it.
   if (!existsSync(path))
     throw new Error(
@@ -195,7 +255,11 @@ export const openDurableStore = (path: string = DURABLE_STORE_PATH) => {
   db.exec(PRAGMAS);
   db.exec(MIGRATIONS);
   seedMonitored(db);
+  return db;
+};
 
+export const openDurableStore = (path: string = DURABLE_STORE_PATH) => {
+  const db = openDurableDatabase(path);
   return {
     /** The current generation, or null before the first complete sync. */
     current: (): Generation | null => {
@@ -238,6 +302,8 @@ export const openDurableStore = (path: string = DURABLE_STORE_PATH) => {
       catalog: Entity[];
       roleManifest: RoleManifestEntry[];
       outcome: SyncOutcome;
+      /** `member_deny`, replaced whole. */
+      memberDenies: Array<{ placeId: string; memberId: string }>;
     }) => {
       if (!next.outcome.complete)
         throw new Error("Refusing to replace the Catalog with an incomplete sync.");
@@ -250,8 +316,21 @@ export const openDurableStore = (path: string = DURABLE_STORE_PATH) => {
         db.prepare(
           "INSERT OR REPLACE INTO generation (id, generated_at, role_manifest) VALUES (1, ?, ?)",
         ).run(new Date().toISOString(), JSON.stringify(next.roleManifest));
+        db.exec("DELETE FROM member_deny");
+        const deny = db.prepare("INSERT OR IGNORE INTO member_deny (member_id, place_id) VALUES (?, ?)");
+        for (const d of next.memberDenies) deny.run(d.memberId, d.placeId);
       });
     },
+
+    /** The Channels and Forums a member's own overwrite hides from them (`member_deny`). */
+    deniedPlaces: (memberId: string): Set<string> =>
+      new Set(
+        (
+          db.prepare("SELECT place_id FROM member_deny WHERE member_id = ?").all(memberId) as Array<{
+            place_id: string;
+          }>
+        ).map((r) => r.place_id),
+      ),
 
     /**
      * Writes fields an enrichment pass produced onto Entities that still
@@ -432,6 +511,13 @@ export const readProcessingOptOuts = (path: string = DURABLE_STORE_PATH): Set<st
   withDurableStore((store) => store.processingOptOuts(), path);
 
 /**
+ * One member's denied places, read fresh, for `deniedTo`. Whatever names a
+ * place to a member reads this: `/find` and `/lately`, and the responder.
+ */
+export const readDeniedPlaces = (memberId: string, path: string = DURABLE_STORE_PATH): ReadonlySet<string> =>
+  withDurableStore((store) => store.deniedPlaces(memberId), path);
+
+/**
  * The monitored-channel ids, checked against the Catalog they will be applied
  * to. Every step that stores conversation or sends anything to a model reads
  * them through here.
@@ -440,7 +526,7 @@ export const readProcessingOptOuts = (path: string = DURABLE_STORE_PATH): Set<st
  * hidden from the bot, excluded, or mistyped — means the Threads it should
  * cover cannot be placed under it, so the carve-out cannot be vouched for.
  * Capture, enrichment and `/find` refuse until Staff fix the list or the
- * Channel comes back. The sync, which is what brings it back, does not read it.
+ * Channel comes back. The sync, which is what brings it back, reads the ids unchecked.
  */
 export const readMonitored = (catalog: Entity[], path: string = DURABLE_STORE_PATH): ReadonlySet<string> => {
   const ids = readMonitoredIds(path);
@@ -574,11 +660,16 @@ const seedMonitored = (db: DatabaseSync) => {
 };
 
 /** `IMMEDIATE` takes the write lock up front, for a write that depends on what it read. */
-const transaction = (db: DatabaseSync, work: () => void, mode: "DEFERRED" | "IMMEDIATE" = "DEFERRED") => {
+export const transaction = <T>(
+  db: DatabaseSync,
+  work: () => T,
+  mode: "DEFERRED" | "IMMEDIATE" = "DEFERRED",
+): T => {
   db.exec(`BEGIN ${mode}`);
   try {
-    work();
+    const result = work();
     db.exec("COMMIT");
+    return result;
   } catch (error) {
     db.exec("ROLLBACK");
     throw error;

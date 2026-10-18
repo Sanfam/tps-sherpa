@@ -9,7 +9,7 @@
  * This is a thin adapter, like the Discord one: exercised by `llm-check.ts`
  * against the real API rather than unit-tested against a mock of `fetch`.
  */
-import type { ChatPort, ModelRole } from "./boundary.ts";
+import type { ChatPort, ModelRole, Models } from "./boundary.ts";
 
 export interface WireConfig {
   baseUrl: string;
@@ -38,8 +38,14 @@ export interface WireConfig {
  */
 const DEFAULT_TIMEOUT_MS = 180_000;
 
+/**
+ * Both vision models measured (2026-10-17) reason before they answer, and a
+ * cap of a few hundred tokens came back as an empty answer.
+ */
+const VISION_MAX_TOKENS = 2_500;
+
 export const openAiWire = (config: WireConfig): ChatPort => ({
-  complete: async ({ model, system, user }) => {
+  complete: async ({ model, system, user, image }) => {
     const response = await fetch(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: {
@@ -51,12 +57,24 @@ export const openAiWire = (config: WireConfig): ChatPort => ({
         ...(config.provider === undefined ? {} : { provider: config.provider }),
         messages: [
           { role: "system", content: system },
-          { role: "user", content: user },
+          // The multipart form only when there is an image, so a text call's
+          // body is exactly what it was before images existed.
+          {
+            role: "user",
+            content:
+              image === undefined
+                ? user
+                : [
+                    { type: "text", text: user },
+                    { type: "image_url", image_url: { url: image } },
+                  ],
+          },
         ],
         // Structured output is the prompt-injection containment, not a style
         // preference: the app renders from a template, so no input can make
         // the bot say anything.
         response_format: { type: "json_object" },
+        ...(image === undefined ? {} : { max_tokens: VISION_MAX_TOKENS }),
       }),
       signal: AbortSignal.timeout(config.timeoutMs ?? DEFAULT_TIMEOUT_MS),
     });
@@ -88,7 +106,7 @@ export const openAiWire = (config: WireConfig): ChatPort => ({
  */
 export const wireFromEnv = (
   env: Record<string, string | undefined> = process.env,
-): { wire: WireConfig; models: Record<ModelRole, string> } => {
+): { wire: WireConfig; models: Models } => {
   const apiKey = env["LLM_API_KEY"] ?? env["OPENROUTER_API_KEY"];
   if (!apiKey)
     throw new Error("LLM_API_KEY (or OPENROUTER_API_KEY) must be set to call a model.");
@@ -128,6 +146,11 @@ export const wireFromEnv = (
       ...(env["LLM_TIMEOUT_MS"] ? { timeoutMs: Number(env["LLM_TIMEOUT_MS"]) } : {}),
       provider,
     },
-    models: models as Record<ModelRole, string>,
+    models: {
+      ...(models as Record<ModelRole, string>),
+      // Optional: only an image call needs it, and throws without it, so the
+      // pipeline starts where it is unset.
+      ...(env["LLM_MODEL_VISION"] ? { vision: env["LLM_MODEL_VISION"] } : {}),
+    },
   };
 };

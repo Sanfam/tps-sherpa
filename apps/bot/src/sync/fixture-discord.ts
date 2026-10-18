@@ -6,14 +6,10 @@ import type {
   RawThread,
 } from "./ports.ts";
 
+type Defaulted = "contentReadable" | "visible" | "memberVisible" | "allowRoles" | "viewRoles" | "denyRoles" | "deniedMembers";
+
 export const fixtureDiscord = (data: {
-  channels: Array<
-    Omit<RawChannel, "contentReadable" | "visible" | "memberVisible"> & {
-      contentReadable?: boolean;
-      visible?: boolean;
-      memberVisible?: boolean;
-    }
-  >;
+  channels: Array<Omit<RawChannel, Defaulted> & Partial<Pick<RawChannel, Defaulted>>>;
   threads?: RawThread[];
   roles?: RawRole[];
   windows?: Record<string, RawCapturedMessage[]>;
@@ -25,6 +21,10 @@ export const fixtureDiscord = (data: {
       visible: c.visible ?? true,
       memberVisible: c.memberVisible ?? c.visible ?? true,
       contentReadable: c.contentReadable ?? true,
+      allowRoles: c.allowRoles ?? [],
+      viewRoles: c.viewRoles ?? [],
+      denyRoles: c.denyRoles ?? [],
+      deniedMembers: c.deniedMembers ?? [],
     })),
   listThreads: async (parentIds) => ({
     threads: (data.threads ?? []).filter((t) => parentIds.includes(t.parentId)),

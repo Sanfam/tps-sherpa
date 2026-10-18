@@ -12,6 +12,12 @@ import {
 } from "./find.ts";
 import { MAX_LATELY, latelyPlaces, renderLately } from "./lately.ts";
 
+const MEMBER = "400000000000000002";
+const HOBBY = "400000000000000003";
+const STAFF = "400000000000000004";
+const asMember = [MEMBER];
+const none: ReadonlySet<string> = new Set();
+
 const entity = (over: Partial<Entity> & { id: string; name: string }): Entity => ({
   type: "post",
   url: `https://discord.com/channels/1/${over.id}`,
@@ -27,6 +33,9 @@ const entity = (over: Partial<Entity> & { id: string; name: string }): Entity =>
   last_activity_at: null,
   summary_generated: null,
   summary_override: null,
+  allow_roles: [],
+  view_roles: [MEMBER, STAFF],
+  deny_roles: [],
   ...over,
 });
 
@@ -94,7 +103,7 @@ const askWith = (chat: ChatPort, hasOptedOut?: (id: string) => boolean) =>
   }).ask;
 
 const find = (query: string, chat: ChatPort, hasOptedOut?: (id: string) => boolean) =>
-  findPlaces({ query, invokerId: "500000000000000001", catalog, monitored, vocabulary, ask: askWith(chat, hasOptedOut) });
+  findPlaces({ query, invokerId: "500000000000000001", catalog, monitored, roles: asMember, denied: new Set(), vocabulary, ask: askWith(chat, hasOptedOut), origin: { command: "find" } });
 
 /** The keys the prompt assigned, by Entity name — so a fixture can answer by name. */
 const keyOf = (user: string, name: string): string => {
@@ -105,7 +114,7 @@ const keyOf = (user: string, name: string): string => {
 
 describe("/find candidates", () => {
   it("offers open and closed places, and never the withheld, monitored, locked or orphaned", () => {
-    expect(candidatesOf(catalog, monitored).map((e) => e.name)).toEqual([
+    expect(candidatesOf(catalog, monitored, asMember, none).map((e) => e.name)).toEqual([
       "🎮︱game-talk",
       "Rocket League",
       "Flight Simulators",
@@ -117,10 +126,58 @@ describe("/find candidates", () => {
     const polls = entity({ id: "1121511095518122164", name: "✅︱micro-polls", type: "channel" });
     const suggestion = entity({ id: "100000000000000011", name: "Sim racing channel?", parent_id: suggestions.id });
     const poll = entity({ id: "100000000000000012", name: "Pineapple on pizza?", type: "thread", parent_id: polls.id });
-    expect(candidatesOf([suggestions, polls, suggestion, poll], monitored).map((e) => e.name)).toEqual([
+    expect(candidatesOf([suggestions, polls, suggestion, poll], monitored, asMember, none).map((e) => e.name)).toEqual([
       "🗳︱suggestions",
       "✅︱micro-polls",
     ]);
+  });
+});
+
+describe("/find and /lately name only places the asker can see (#53)", () => {
+  const now = new Date("2026-10-15T12:00:00Z");
+  const place = (id: string, name: string, over: Partial<Entity>) =>
+    entity({ id, name, type: "channel", last_activity_at: "2026-10-14T12:00:00.000Z", ...over });
+  const fishing = place("100000000000000021", "fishing", { view_roles: [HOBBY, STAFF] });
+  const staffRoom = place("100000000000000022", "staff-room", { view_roles: [STAFF] });
+  const botOnly = place("100000000000000023", "bot-only", { view_roles: [] });
+  // The guild's verification shape: @everyone may view, `Member` is denied.
+  const verification = place("100000000000000024", "verification", { view_roles: [HOBBY, STAFF], deny_roles: [MEMBER] });
+  const { view_roles: _, ...unsynced } = place("100000000000000025", "synced before #53", {});
+  const { allow_roles: _a, ...beforeAllow } = place("100000000000000026", "synced before allow_roles", {});
+  const tackle = place("100000000000000027", "Fly tackle", { type: "post", parent_id: fishing.id, thread_state: "open" });
+  const places = [fishing, staffRoom, botOnly, verification, unsynced, beforeAllow, tackle];
+  const named = (roles: string[], denied = none) => {
+    const find = candidatesOf(places, monitored, roles, denied).map((e) => e.name);
+    expect(latelyPlaces(places, monitored, roles, denied, null, now).map((e) => e.name)).toEqual(find);
+    return find;
+  };
+
+  it("shows a role-gated place to a holder of the role, and not to a Member without it", () => {
+    expect(named([MEMBER, HOBBY])).toContain("fishing");
+    expect(named([MEMBER])).not.toContain("fishing");
+  });
+
+  it("never names a Staff-only place to a Member, nor a place only the bot sees to anyone", () => {
+    expect(named([MEMBER, HOBBY])).not.toContain("staff-room");
+    expect(named([MEMBER, STAFF])).toContain("staff-room");
+    expect(named([MEMBER, HOBBY, STAFF])).not.toContain("bot-only");
+  });
+
+  it("hides a place from a holder of a role it denies, when no role they hold allows it", () => {
+    expect(named([HOBBY])).toContain("verification");
+    expect(named([MEMBER, HOBBY])).not.toContain("verification");
+  });
+
+  it("shows an Entity with no recorded access to nobody", () => {
+    expect(named([MEMBER, HOBBY, STAFF])).not.toContain("synced before #53");
+    expect(named([MEMBER, HOBBY, STAFF])).not.toContain("synced before allow_roles");
+  });
+
+  it("hides a place, and the Posts in it, from a member its own overwrite denies", () => {
+    expect(named([MEMBER, HOBBY])).toEqual(expect.arrayContaining(["fishing", "Fly tackle"]));
+    const shown = named([MEMBER, HOBBY], new Set([fishing.id]));
+    expect(shown).not.toContain("fishing");
+    expect(shown).not.toContain("Fly tackle");
   });
 });
 
@@ -132,7 +189,7 @@ describe("findPlaces", () => {
     expect(found.matches).toEqual([]);
     // Not even the boundary: an empty query is answered before anything is built.
     const ask = () => Promise.reject(new Error("asked"));
-    await expect(findPlaces({ query, invokerId: "1", catalog, monitored, vocabulary, ask })).resolves.toMatchObject({
+    await expect(findPlaces({ query, invokerId: "1", catalog, monitored, roles: asMember, denied: new Set(), vocabulary, ask, origin: { command: "find" } })).resolves.toMatchObject({
       matches: [],
     });
   });
@@ -300,18 +357,18 @@ describe("/lately", () => {
   const lately = [activeForum, older, fresh, stale, quietLock, intro, activeIntro, activeWithheld];
 
   it("lists the last fortnight's places, newest first, from the same candidates as /find", () => {
-    expect(latelyPlaces(lately, monitored, null, now).map((e) => e.name)).toEqual(["fresh", "older"]);
+    expect(latelyPlaces(lately, monitored, asMember, none, null, now).map((e) => e.name)).toEqual(["fresh", "older"]);
   });
 
   it("filters by Topic", () => {
-    expect(latelyPlaces(lately, monitored, vocabulary.topics[0]!, now).map((e) => e.name)).toEqual(["fresh"]);
+    expect(latelyPlaces(lately, monitored, asMember, none, vocabulary.topics[0]!, now).map((e) => e.name)).toEqual(["fresh"]);
   });
 
   it(`stops at ${MAX_LATELY}`, () => {
     const many = Array.from({ length: 12 }, (_, i) =>
       recent({ id: `3${i}`, name: `p${i}`, last_activity_at: daysAgo(i / 2) }),
     );
-    expect(latelyPlaces([games, ...many], monitored, null, now)).toHaveLength(MAX_LATELY);
+    expect(latelyPlaces([games, ...many], monitored, asMember, none, null, now)).toHaveLength(MAX_LATELY);
   });
 
   it("describes each place by what it is, with when it was last active", () => {

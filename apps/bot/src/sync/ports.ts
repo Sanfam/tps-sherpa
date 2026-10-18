@@ -29,6 +29,15 @@ export interface RawChannel {
    * verification plumbing.
    */
   memberVisible: boolean;
+  /** Who can see it, by role: the Entity's `allow_roles`, `view_roles` and `deny_roles`; see there. */
+  allowRoles: string[];
+  viewRoles: string[];
+  denyRoles: string[];
+  /**
+   * Members whose own overwrite hides it. Member data: stored only in the
+   * bot's durable store (`member_deny`), never on an Entity.
+   */
+  deniedMembers: string[];
   /**
    * Whether the bot may read message history. Visible but not readable means
    * deliberately withheld — content off-limits, not broken.

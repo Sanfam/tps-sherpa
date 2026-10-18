@@ -428,7 +428,8 @@ where the introductions actually are; matching only on the channel's own name
 would capture exactly what the rule protects.
 
 *(2026-10-16, #33)* The monitored list is keyed on channel **ids**, held in the
-bot's durable store, and edited by Staff with `/monitored` (Manage Server), so
+bot's durable store, and edited by Staff with `/monitored` (the `Staff` or `Event Managers` role
+since 2026-10-18, F5), so
 a rename cannot quietly lift the carve-out. It fails closed: if a configured id
 is missing from the Catalog, capture, enrichment and `/find` refuse rather than
 guess which Threads it held.
