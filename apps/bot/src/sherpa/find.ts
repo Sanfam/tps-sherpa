@@ -229,7 +229,7 @@ const plainName = (name: string): string =>
  * A deep link that is not one falls back to the mention, which is never
  * worse than before.
  */
-const placeRef = (entity: Entity): string =>
+export const placeRef = (entity: Entity): string =>
   (entity.type === "post" || entity.type === "thread") &&
   entity.url.startsWith("https://discord.com/channels/")
     ? `**${plainName(entity.name)}** ([open](${entity.url}))`
