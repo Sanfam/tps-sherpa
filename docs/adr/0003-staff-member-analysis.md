@@ -1,7 +1,6 @@
 # ADR-0003: Staff analysis of a member's messages
 
-**Status:** Proposed, 2026-10-18. Awaiting the owner's decisions; not ready for
-acceptance until they are recorded below.
+**Status:** Accepted, 2026-10-18. The owner's decisions are recorded at the end.
 **Covers:** Deep User Analysis (#51, `docs/proposals/deep-user-analysis.md`)
 and User Monitoring (#52, `docs/proposals/user-monitoring.md`).
 **Departs from:** the rules listed under *What this lifts*. Each departure is an
@@ -167,3 +166,24 @@ early notice under triggers they set, in the Forum they already use.
 - That Discord's Search Guild Messages endpoint serves bots, and its rate
   limits (deep-user-analysis proposal §2).
 - The gateway delivering messages from Channels where history is denied.
+
+## Owner decisions (2026-10-18)
+
+- **O1:** people may be subjects, for Staff-only `moderation` output.
+- **O2:** bounded model text in that output.
+- **O3:** **B, a published moderation exception.** The privacy policy gains
+  one line saying Staff can have Sherpa review a member's messages for
+  moderation, whatever their settings, that reviews go only to Staff, and
+  that a watch can run for up to 90 days. The owner approves the exact
+  wording before it ships.
+- **O4:** the subject's own messages in monitored Channels are admitted,
+  sent and discarded.
+- **O5:** accepted as recommended. Sources are sent as they are; no child
+  details in the output, and no field for them. This extends D14 for these
+  tools.
+- **O6:** as recommended. For a reply, the one message it replies to,
+  redacted, with opted-out authors dropped; for #52, the Staff notes
+  already in the member's Post.
+- **O7:** **holders of the role named `Staff` alone**, not the glossary's
+  Staff (`Staff` or `Event Managers`). `CONTEXT.md` needs an entry for this
+  narrower group when the tools are built.

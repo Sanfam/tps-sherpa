@@ -232,3 +232,11 @@ Then the final review.
 - **The startup check:** nothing posts while the Channel is in the Catalog.
 
 Each is shown to fail against a broken guard before it is kept.
+
+## Owner decisions (2026-10-18)
+
+D50-1 to D50-7 are accepted as recommended.
+
+- **D50-2:** Discord's join message if the server posts one. The owner also
+  granted the **Guild Members intent** (see user-monitoring D52-6), so
+  "becomes a Member", or a raw join, can be detected directly.

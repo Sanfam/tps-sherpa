@@ -248,3 +248,13 @@ Only where a failure would be invisible or easy to get almost right:
 
 Each is shown to fail against a broken guard before it is kept. No real
 member's messages go into fixtures, tests or docs.
+
+## Owner decisions (2026-10-18)
+
+D51-1, D51-2 and D51-4 to D51-6 are accepted as recommended.
+
+- **D51-3:** the depth is **everything since the member joined**. Runs should
+  be deliberate and infrequent, and the caps (D51-4) keep them so. The depth
+  can be revisited later.
+- ADR-0003 is decided; see its owner decisions. Staff here means **holders of
+  the role named `Staff` alone** (O7).

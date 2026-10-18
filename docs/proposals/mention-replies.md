@@ -236,3 +236,20 @@ Then the final review for each.
 - **The write port** (if D49-2 widens it): no write outside the allowlist.
 
 Each is shown to fail against a broken guard before it is kept.
+
+## Owner decisions (2026-10-18)
+
+- **D49-1:** model text to members, bounded as §4 but up to **500
+  characters**, shadow first. ADR-0004 records it when this is built.
+- **D49-2:** **every Channel the bot is in.** The owner thereby authorises
+  Sherpa's first reply in each, on a mention. Monitored and withheld
+  Channels are still refused in code.
+- **D49-3:** no follow-ups without a mention.
+- **D49-4:** yes, the newest 10 messages from others, redacted, with
+  opted-out authors dropped.
+- **D49-5:** **no exchange cap** on @mention replies. A **15-second
+  cooldown per member** applies, and the daily cap stays as the runaway
+  guard.
+- **D49-6:** role flavour is added in code; roles never reach the prompt.
+- **D49-7:** a persona file, as recommended, in the voice of **a kindly gamer
+  dad**, helpful and kind, who does not portray Sherpa people.
