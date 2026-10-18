@@ -87,6 +87,7 @@ const runOne = async (c: GoldenCase, order: Entity[]): Promise<Run> => {
             calls++;
             return boundary.ask(request);
           },
+          origin: { command: "find" },
         }),
       (m) => console.warn(`  ${c.id}: ${m}`),
     );

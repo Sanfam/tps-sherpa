@@ -2,8 +2,9 @@ import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Entity } from "../sync/catalog.ts";
 import type { NameLookup } from "../sync/normalise.ts";
-import { createBoundary, type ChatPort, type Source } from "./boundary.ts";
+import { WATCHED_CHANNEL, createBoundary, type ChatPort, type Source } from "./boundary.ts";
 import { wireFromEnv } from "./openai-wire.ts";
+import type { Vocabulary } from "./vocabulary.ts";
 
 const names: NameLookup = {
   channels: new Map([["1088552078709891242", "pc-gaming"]]),
@@ -30,7 +31,7 @@ const entity = (over: Partial<Entity> & { id: string; name: string }): Entity =>
 
 /** Records what it was sent and answers whatever the test tells it to. */
 const fixtureChat = (reply: string | (() => string)) => {
-  const calls: Array<{ model: string; system: string; user: string }> = [];
+  const calls: Array<Parameters<ChatPort["complete"]>[0]> = [];
   const chat: ChatPort = {
     complete: async (request) => {
       calls.push(request);
@@ -52,7 +53,7 @@ const post = entity({ id: "20", name: "Helldivers squad" });
 const boundary = (chat: ChatPort, over: Partial<Parameters<typeof createBoundary>[0]> = {}) =>
   createBoundary({
     chat,
-    models: { strong: "test-strong", cheap: "test-cheap" },
+    models: { strong: "test-strong", cheap: "test-cheap", vision: "test-vision" },
     catalog: [post, intro, introThread],
     monitored: new Set([intro.id]),
     names,
@@ -67,7 +68,7 @@ describe("the redaction boundary", () => {
 
     await boundary(chat).ask({
       ...ask,
-      sources: [{ authorId: "1", authorIsBot: false, content: "<@732682426853359667> is in" }],
+      sources: [{ authorId: "1", authorIsBot: false, content: "<@732682426853359667> is in", origin: post.id }],
     });
 
     expect(calls[0]?.user).toBe("@member is in");
@@ -78,7 +79,7 @@ describe("the redaction boundary", () => {
 
     await boundary(chat).ask({
       ...ask,
-      sources: [{ authorId: "1", authorIsBot: false, content: "ping 732682426853359667 about it" }],
+      sources: [{ authorId: "1", authorIsBot: false, content: "ping 732682426853359667 about it", origin: post.id }],
     });
 
     expect(calls[0]?.user).toBe("ping [id] about it");
@@ -249,6 +250,27 @@ describe("what never reaches a model", () => {
     expect(calls).toHaveLength(0);
   });
 
+  it("refuses a source from monitored conversation, whatever the subject (#40)", async () => {
+    // The subject is an ordinary Post; the words are not. A Thread under the
+    // monitored Channel is monitored too, and an origin the Catalog cannot
+    // place is refused rather than assumed safe.
+    for (const [origin, refusal] of [
+      [intro.id, /monitored/],
+      [introThread.id, /monitored/],
+      ["does-not-exist", /not in the Catalog/],
+      // A non-Entity origin is one of two exact shapes; a malformed one is not waved through.
+      [{} as never, /neither a Catalog Entity/],
+      [{ command: "lately" } as never, /neither a Catalog Entity/],
+      [{ derivedFromIntroduction: "" } as never, /neither a Catalog Entity/],
+    ] as const) {
+      const { chat, calls } = fixtureChat('{"ok":true}');
+      const source = { authorId: "1", authorIsBot: false, content: "hi all", origin };
+
+      await expect(boundary(chat).ask({ ...ask, sources: [source] })).rejects.toThrow(refusal);
+      expect(calls).toHaveLength(0);
+    }
+  });
+
   it("replaces a known member's name before the text leaves", async () => {
     // Validating only the response would still have handed the name to the
     // provider. Redaction is outbound as well as inbound.
@@ -257,7 +279,7 @@ describe("what never reaches a model", () => {
     await boundary(chat, { memberNames: ["Schwagle"] }).ask({
       ...ask,
       context: "Schwagle runs this one",
-      sources: [{ authorId: "1", authorIsBot: false, content: "ask Schwagle about it" }],
+      sources: [{ authorId: "1", authorIsBot: false, content: "ask Schwagle about it", origin: post.id }],
     });
 
     expect(calls[0]?.user).not.toMatch(/Schwagle/i);
@@ -268,7 +290,7 @@ describe("what never reaches a model", () => {
     const { chat, calls } = fixtureChat('{"ok":true}');
     await boundary(chat, { memberNames: ["Dave", "Dave Smith"] }).ask({
       ...ask,
-      sources: [{ authorId: "1", authorIsBot: false, content: "thanks Dave Smith" }],
+      sources: [{ authorId: "1", authorIsBot: false, content: "thanks Dave Smith", origin: post.id }],
     });
     expect(calls[0]?.user).toBe("thanks @member");
   });
@@ -287,8 +309,8 @@ describe("what never reaches a model", () => {
   it("drops an opted-out member's words before the call, not after", async () => {
     const { chat, calls } = fixtureChat('{"ok":true}');
     const sources: Source[] = [
-      { authorId: "opted-out", authorIsBot: false, content: "please forget me" },
-      { authorId: "fine", authorIsBot: false, content: "great thread" },
+      { authorId: "opted-out", authorIsBot: false, content: "please forget me", origin: post.id },
+      { authorId: "fine", authorIsBot: false, content: "great thread", origin: post.id },
     ];
 
     await boundary(chat, { hasOptedOut: (id) => id === "opted-out" }).ask({ ...ask, sources });
@@ -302,7 +324,7 @@ describe("what never reaches a model", () => {
 
     await boundary(chat).ask({
       ...ask,
-      sources: [{ authorId: "anyone", authorIsBot: false, content: "still here" }],
+      sources: [{ authorId: "anyone", authorIsBot: false, content: "still here", origin: post.id }],
     });
 
     expect(calls[0]?.user).toBe("still here");
@@ -314,8 +336,8 @@ describe("what never reaches a model", () => {
     await boundary(chat).ask({
       ...ask,
       sources: [
-        { authorId: "bot", authorIsBot: true, content: "Poll closed." },
-        { authorId: "human", authorIsBot: false, content: "good game" },
+        { authorId: "bot", authorIsBot: true, content: "Poll closed.", origin: post.id },
+        { authorId: "human", authorIsBot: false, content: "good game", origin: post.id },
       ],
     });
 
@@ -324,7 +346,7 @@ describe("what never reaches a model", () => {
 });
 
 describe("when filtering leaves nothing", () => {
-  const optedOut = { authorId: "9", authorIsBot: false, content: "Anyone up for raids?" };
+  const optedOut = { authorId: "9", authorIsBot: false, content: "Anyone up for raids?", origin: post.id };
 
   it("answers with orNothing and never calls the model", async () => {
     const { chat, calls } = fixtureChat('{"summary":"Invented."}');
@@ -430,5 +452,116 @@ describe("the containment boundary itself", () => {
     walk(src);
 
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("an introduction", () => {
+  const MEMBER = "500000000000000001";
+  const vocabulary: Vocabulary = {
+    version: 1,
+    frozen_at: "",
+    status: "frozen",
+    topics: [{ slug: "outdoors", label: "Outdoors", description: "" }],
+  };
+  const said = (content: string, over: Partial<Source> = {}): Source => ({
+    authorId: MEMBER,
+    authorIsBot: false,
+    content,
+    origin: WATCHED_CHANNEL,
+    ...over,
+  });
+  const extract = (chat: ChatPort, sources: Source[]) =>
+    boundary(chat).extractIntroduction({ memberId: MEMBER, sources, memberNames: [], vocabulary });
+  const image = (over: Record<string, string> = {}) => ({
+    authorId: MEMBER,
+    origin: WATCHED_CHANNEL,
+    dataUrl: "data:image/jpeg;base64,AAAA",
+    ...over,
+  });
+
+  it("refuses another member's words among the member's own", async () => {
+    const { chat, calls } = fixtureChat('{"signal":"none","interests":[],"topics":[],"life_stage":[]}');
+
+    await expect(
+      extract(chat, [said("hi, I climb"), said("welcome!", { authorId: "500000000000000002" })]),
+    ).rejects.toThrow(/someone other than the member/);
+    await expect(
+      boundary(chat).readImage({ memberId: MEMBER, image: image({ authorId: "500000000000000002" }) }),
+    ).rejects.toThrow(/someone other than the member/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("refuses words or an image from anywhere but the watched Channel itself", async () => {
+    // A Thread under it is not it (D27), and an unmonitored Post is not either:
+    // this path lifts the carve-out for one Channel, not for whatever it is handed.
+    const { chat, calls } = fixtureChat('{"signal":"none","interests":[],"topics":[],"life_stage":[]}');
+
+    for (const origin of [introThread.id, post.id, { command: "find" as const }]) {
+      await expect(extract(chat, [said("hi, I climb", { origin })])).rejects.toThrow(/not from the watched Channel/);
+      await expect(
+        boundary(chat).readImage({ memberId: MEMBER, image: { ...image(), origin } }),
+      ).rejects.toThrow(/not from the watched Channel/);
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  it("returns the model's signal, keeping only what the schema allows", async () => {
+    // A path that called the model and threw the answer away would send every
+    // real introduction down the question path, and never match it.
+    const { chat } = fixtureChat(
+      JSON.stringify({
+        signal: "some",
+        interests: ["climbing", "x".repeat(41)],
+        topics: ["outdoors", "not-a-topic"],
+        life_stage: ["toddler", "grandparent"],
+      }),
+    );
+
+    await expect(extract(chat, [said("hi, I climb with my toddler")])).resolves.toEqual({
+      signal: "some",
+      interests: ["climbing"],
+      topics: ["outdoors"],
+      life_stage: ["toddler"],
+    });
+  });
+
+  it("cuts long text at 2,000 code points, on a word boundary", async () => {
+    // Code points, not UTF-16 units: an emoji is two units and one character.
+    const words = Array.from({ length: 300 }, () => "🦆abcde");
+    const { chat, calls } = fixtureChat('{"signal":"none","interests":[],"topics":[],"life_stage":[]}');
+
+    await extract(chat, [said(words.join(" "))]);
+
+    expect(calls[0]?.user).toBe(words.slice(0, 285).join(" "));
+  });
+
+  it("reads an image as a gesture only: no interests, Topics or life stage, and no model text", async () => {
+    // Whatever the model adds, a reading is two enums. `known_as` is model
+    // text, and nothing a template renders may come from one.
+    const { chat, calls } = fixtureChat(
+      JSON.stringify({
+        kind: "meme",
+        known_as: "Synthetic Film",
+        meaning: "greeting",
+        interests: ["laboratory science"],
+        topics: ["outdoors"],
+        life_stage: ["infant"],
+      }),
+    );
+
+    const reading = await boundary(chat).readImage({ memberId: MEMBER, image: image() });
+
+    expect(reading).toStrictEqual({ kind: "meme", meaning: "greeting" });
+    expect(calls[0]).toMatchObject({ model: "test-vision", image: "data:image/jpeg;base64,AAAA" });
+  });
+
+  it("sends an image inline and still, never a link the provider would fetch or a whole GIF", async () => {
+    const { chat, calls } = fixtureChat('{"kind":"meme","known_as":null,"meaning":"greeting"}');
+
+    for (const dataUrl of ["https://media.discordapp.net/attachments/1/2/a.png", "data:image/gif;base64,AAAA"])
+      await expect(
+        boundary(chat).readImage({ memberId: MEMBER, image: image({ dataUrl }) }),
+      ).rejects.toThrow(/inline still/);
+    expect(calls).toHaveLength(0);
   });
 });

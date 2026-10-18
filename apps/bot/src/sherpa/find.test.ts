@@ -94,7 +94,7 @@ const askWith = (chat: ChatPort, hasOptedOut?: (id: string) => boolean) =>
   }).ask;
 
 const find = (query: string, chat: ChatPort, hasOptedOut?: (id: string) => boolean) =>
-  findPlaces({ query, invokerId: "500000000000000001", catalog, monitored, vocabulary, ask: askWith(chat, hasOptedOut) });
+  findPlaces({ query, invokerId: "500000000000000001", catalog, monitored, vocabulary, ask: askWith(chat, hasOptedOut), origin: { command: "find" } });
 
 /** The keys the prompt assigned, by Entity name — so a fixture can answer by name. */
 const keyOf = (user: string, name: string): string => {
@@ -132,7 +132,7 @@ describe("findPlaces", () => {
     expect(found.matches).toEqual([]);
     // Not even the boundary: an empty query is answered before anything is built.
     const ask = () => Promise.reject(new Error("asked"));
-    await expect(findPlaces({ query, invokerId: "1", catalog, monitored, vocabulary, ask })).resolves.toMatchObject({
+    await expect(findPlaces({ query, invokerId: "1", catalog, monitored, vocabulary, ask, origin: { command: "find" } })).resolves.toMatchObject({
       matches: [],
     });
   });

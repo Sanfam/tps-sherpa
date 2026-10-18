@@ -8,7 +8,7 @@
  * a crafted first post feeding a summary — can make the bot say anything.
  * That is the prompt-injection containment (PROJECT-STATUS §6.6).
  */
-import type { Boundary } from "../llm/boundary.ts";
+import type { Boundary, Origin } from "../llm/boundary.ts";
 import { isEnrichable } from "../llm/subject.ts";
 import type { Topic, Vocabulary } from "../llm/vocabulary.ts";
 import type { Entity } from "../sync/catalog.ts";
@@ -172,7 +172,8 @@ const NOTHING: FindResult = { matches: [], topics: [], dropped: 0 };
 /**
  * Matches one query against the whole Catalog.
  *
- * The query is the member's own words, so it goes in as a `source`: the
+ * The query is the member's own words (`/find`), or one derived from their
+ * introduction's extraction (the responder), so it goes in as a `source`: the
  * boundary checks the opt-out first and redacts identifiers before anything
  * leaves. An empty query never reaches a model — asked about nothing, a model
  * answers anyway, and that answer is invention.
@@ -184,6 +185,8 @@ export const findPlaces = async (request: {
   monitored: ReadonlySet<string>;
   vocabulary: Vocabulary;
   ask: Boundary["ask"];
+  /** Where the query came from, set by the caller: `/find`, or the responder's extraction. */
+  origin: Origin;
 }): Promise<FindResult & { candidates: number }> => {
   const query = request.query.trim().slice(0, MAX_QUERY_LENGTH);
   const candidates = candidatesOf(request.catalog, request.monitored);
@@ -196,7 +199,7 @@ export const findPlaces = async (request: {
     system: findSystemPrompt(request.vocabulary),
     subject: candidates,
     context: `${text}\n\nWhat the member is into:`,
-    sources: [{ authorId: request.invokerId, authorIsBot: false, content: query }],
+    sources: [{ authorId: request.invokerId, authorIsBot: false, content: query, origin: request.origin }],
     orNothing: NOTHING,
     parse: (value) => parseFind(value, keys, request.vocabulary),
   });

@@ -22,6 +22,7 @@ import {
 import { readActivity, writeActivity } from "../llm/session.ts";
 import { SETTINGS, type Preferences, type Setting, withDurableStore } from "../sync/durable-store.ts";
 import { RETAIN_MS, openTier0 } from "../sync/tier0-store.ts";
+import { withResponderStore } from "./responder-store.ts";
 
 /** Discord's ceiling on an embed's description. */
 export const MAX_EMBED_DESCRIPTION = 4096;
@@ -86,54 +87,83 @@ export interface Privacy {
   deleteMyData: (memberId: string) => Deleted;
 }
 
-/** Each opened per call, like the Catalog: the pipeline writes them while the bot runs. */
-export const openPrivacy = (paths: {
-  durable: string;
-  tier0: string;
-  activity: string;
-  policy: string;
-}): Privacy => ({
-  policy: () => readFileSync(paths.policy, "utf8"),
-  settings: (memberId) => withDurableStore((s) => s.preferences(memberId), paths.durable),
-  set: (memberId, setting, allowed, names) =>
-    withDurableStore((s) => s.setPreference(memberId, setting, allowed, names), paths.durable),
-  requestBackfill: (memberId) => withDurableStore((s) => s.requestBackfill(memberId), paths.durable),
-
-  /**
-   * In an order that a failure part-way can only leave safer, and a retry can
-   * finish:
-   *
-   * 1. Processing off, first and durably. Capture drops their messages from
-   *    here on, so nothing deleted below is stored again behind the deletion.
-   * 2. Their messages, checkpointed so the zeroed pages reach the file —
-   *    before anything parses activity.json, so a corrupt file there cannot
-   *    hold the erasure back. Where they wrote is noted first.
-   * 3. The activity summaries their messages fed, cleared, so they regenerate
-   *    without them: those for the places noted, and those recording them as
-   *    an author. A retry after this step fails finds the second kind.
-   *
-   * Their opt-out itself is kept: it is what honours the request.
-   */
-  deleteMyData: (memberId) => {
-    withDurableStore((s) => s.setPreference(memberId, "processing", false), paths.durable);
-    const tier0 = openTier0(paths.tier0);
-    let places: string[], messages: number, checkpointed: boolean;
-    try {
-      places = tier0.authoredIn(memberId);
-      messages = tier0.deleteAuthor(memberId);
-      checkpointed = tier0.checkpoint();
-    } finally {
-      tier0.close();
-    }
-    const activity = readActivity(paths.activity);
-    const fed = Object.keys(activity).filter(
-      (id) => places.includes(id) || activity[id]!.authors?.includes(memberId),
-    );
-    for (const id of fed) delete activity[id];
-    if (fed.length) writeActivity(activity, paths.activity);
-    return { messages, places: places.length, summaries: fed.length, checkpointed };
+/**
+ * Each opened per call, like the Catalog: the pipeline writes them while the bot runs.
+ *
+ * `eraseFromMemory` drops a member's in-memory watch, extraction and invited
+ * conversation; the introductions responder wires it (F8).
+ */
+export const openPrivacy = (
+  paths: {
+    durable: string;
+    tier0: string;
+    activity: string;
+    policy: string;
   },
-});
+  eraseFromMemory: (memberId: string) => void = () => {},
+): Privacy => {
+  /**
+   * The introductions responder's rows, then its memory, at once (design §6).
+   * Called after the opt-out is stored, so no new row can start behind it.
+   */
+  const eraseIntroductions = (memberId: string) => {
+    // Memory goes even if the durable erase throws: clearing it can only help,
+    // and a retry of the command finishes the rows.
+    try {
+      withResponderStore((r) => r.erase(memberId), paths.durable);
+    } finally {
+      eraseFromMemory(memberId);
+    }
+  };
+
+  return {
+    policy: () => readFileSync(paths.policy, "utf8"),
+    settings: (memberId) => withDurableStore((s) => s.preferences(memberId), paths.durable),
+    /** Either opt-out erases what the introductions responder holds of them. */
+    set: (memberId, setting, allowed, names) => {
+      withDurableStore((s) => s.setPreference(memberId, setting, allowed, names), paths.durable);
+      if (!allowed) eraseIntroductions(memberId);
+    },
+    requestBackfill: (memberId) => withDurableStore((s) => s.requestBackfill(memberId), paths.durable),
+
+    /**
+     * In an order that a failure part-way can only leave safer, and a retry can
+     * finish:
+     *
+     * 1. Processing off, first and durably. Capture drops their messages from
+     *    here on, so nothing deleted below is stored again behind the deletion.
+     *    Then the introductions responder's rows and memory.
+     * 2. Their messages, checkpointed so the zeroed pages reach the file —
+     *    before anything parses activity.json, so a corrupt file there cannot
+     *    hold the erasure back. Where they wrote is noted first.
+     * 3. The activity summaries their messages fed, cleared, so they regenerate
+     *    without them: those for the places noted, and those recording them as
+     *    an author. A retry after this step fails finds the second kind.
+     *
+     * Their opt-out itself is kept: it is what honours the request.
+     */
+    deleteMyData: (memberId) => {
+      withDurableStore((s) => s.setPreference(memberId, "processing", false), paths.durable);
+      eraseIntroductions(memberId);
+      const tier0 = openTier0(paths.tier0);
+      let places: string[], messages: number, checkpointed: boolean;
+      try {
+        places = tier0.authoredIn(memberId);
+        messages = tier0.deleteAuthor(memberId);
+        checkpointed = tier0.checkpoint();
+      } finally {
+        tier0.close();
+      }
+      const activity = readActivity(paths.activity);
+      const fed = Object.keys(activity).filter(
+        (id) => places.includes(id) || activity[id]!.authors?.includes(memberId),
+      );
+      for (const id of fed) delete activity[id];
+      if (fed.length) writeActivity(activity, paths.activity);
+      return { messages, places: places.length, summaries: fed.length, checkpointed };
+    },
+  };
+};
 
 /** What Tier 0 can still hold, in days: a backfill reaches no further back. */
 const RETAIN_DAYS = RETAIN_MS / (24 * 60 * 60 * 1000);

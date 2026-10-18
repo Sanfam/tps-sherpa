@@ -284,6 +284,7 @@ const answer = async (
           monitored,
           vocabulary,
           ask,
+          origin: { command: "find" },
         });
       });
       sherpa.log(

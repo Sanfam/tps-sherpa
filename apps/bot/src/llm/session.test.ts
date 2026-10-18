@@ -70,8 +70,8 @@ describe("openBoundary", () => {
       system: "Answer in JSON.",
       subject,
       sources: [
-        { authorId: "in", authorIsBot: false, content: "raid tonight" },
-        { authorId: "out", authorIsBot: false, content: "distinctive-opted-out-text" },
+        { authorId: "in", authorIsBot: false, content: "raid tonight", origin: subject.id },
+        { authorId: "out", authorIsBot: false, content: "distinctive-opted-out-text", origin: subject.id },
       ],
       parse: (v) => v,
     });
@@ -88,8 +88,8 @@ describe("openBoundary", () => {
         system: "Answer in JSON.",
         subject,
         sources: [
-          { authorId: "in", authorIsBot: false, content: "raid tonight" },
-          { authorId: "later", authorIsBot: false, content: "distinctive-later-text" },
+          { authorId: "in", authorIsBot: false, content: "raid tonight", origin: subject.id },
+          { authorId: "later", authorIsBot: false, content: "distinctive-later-text", origin: subject.id },
         ],
         parse: (v) => v,
       });
@@ -110,7 +110,7 @@ describe("openBoundary", () => {
       role: "cheap",
       system: "Answer in JSON.",
       subject,
-      sources: [{ authorId: "in", authorIsBot: false, content: "thanks jughfer for the carry" }],
+      sources: [{ authorId: "in", authorIsBot: false, content: "thanks jughfer for the carry", origin: subject.id }],
       parse: (v) => v,
     });
     expect(sent).toEqual(["thanks @member for the carry"]);
@@ -123,7 +123,7 @@ describe("openBoundary", () => {
         role: "cheap",
         system: "Answer in JSON.",
         subject,
-        sources: [{ authorId: "in", authorIsBot: false, content: "Gonzo Rex said hi" }],
+        sources: [{ authorId: "in", authorIsBot: false, content: "Gonzo Rex said hi", origin: subject.id }],
         parse: (v) => v,
       });
       return sent[0];
