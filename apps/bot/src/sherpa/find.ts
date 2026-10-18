@@ -11,7 +11,7 @@
 import type { Boundary, Origin } from "../llm/boundary.ts";
 import { isEnrichable } from "../llm/subject.ts";
 import type { Topic, Vocabulary } from "../llm/vocabulary.ts";
-import { type Entity, visibleTo } from "../sync/catalog.ts";
+import { type Entity, deniedTo, visibleTo } from "../sync/catalog.ts";
 
 /** Enough to cover a member who mentions four things, short enough to read. */
 export const MAX_MATCHES = 5;
@@ -69,16 +69,18 @@ export const NOT_DESTINATIONS: ReadonlySet<string> = new Set([
 
 /**
  * `monitored` from `readMonitored`, which refuses a list the Catalog cannot
- * place. `roles` are the asker's role ids: only places they can see in Discord
- * are candidates (#53), so a model is never shown one they cannot.
+ * place. `roles` are the asker's role ids and `denied` their denied places
+ * (`readDeniedPlaces`): only places they can see in Discord are candidates
+ * (#53), so a model is never shown one they cannot.
  */
 export const candidatesOf = (
   catalog: Entity[],
   monitored: ReadonlySet<string>,
   roles: readonly string[],
+  denied: ReadonlySet<string>,
 ): Entity[] => {
   const byId = new Map(catalog.map((e) => [e.id, e]));
-  return catalog.filter((e) => isCandidate(e, byId, monitored) && visibleTo(e, roles));
+  return catalog.filter((e) => isCandidate(e, byId, monitored) && visibleTo(e, roles) && !deniedTo(e, denied));
 };
 
 /** The human correction wins, as on the Index. */
@@ -193,13 +195,15 @@ export const findPlaces = async (request: {
   monitored: ReadonlySet<string>;
   /** Whose view of the server to match against: the asker's role ids (`candidatesOf`). */
   roles: readonly string[];
+  /** The asker's denied places (`candidatesOf`): Staff's by-name denies (#53). */
+  denied: ReadonlySet<string>;
   vocabulary: Vocabulary;
   ask: Boundary["ask"];
   /** Where the query came from, set by the caller: `/find`, or the responder's extraction. */
   origin: Origin;
 }): Promise<FindResult & { candidates: number }> => {
   const query = request.query.trim().slice(0, MAX_QUERY_LENGTH);
-  const candidates = candidatesOf(request.catalog, request.monitored, request.roles);
+  const candidates = candidatesOf(request.catalog, request.monitored, request.roles, request.denied);
   if (!query || candidates.length === 0) return { ...NOTHING, candidates: candidates.length };
 
   const byId = new Map(request.catalog.map((e) => [e.id, e]));

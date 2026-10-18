@@ -42,18 +42,20 @@ introduction and some context.
 - Two small tables.
 - A write port whose only target is `#ambassador-chamber`.
 
-## 3. `#ambassador-chamber` must leave the Catalog first
+## 3. `#ambassador-chamber` enters the Catalog; #53 keeps it out of Member results
 
 The Channel was created on 2026-09-19 *(verified: its snowflake)*, after the
 recorded fixture, so **whether the bot can see it is unverified**. If the bot
 can, the Channel is already in the Catalog: the sync takes every container
 the bot can see, not only what a Member can (`catalog.ts`). That means its
-conversation is captured to Tier 0 and summarised, and `/find` can recommend
-it to members who cannot open it.
+conversation is captured to Tier 0 and summarised.
 
-So the Channel's id joins the **one-time exclusion seed** shared with
-`user-monitoring.md` §3. It ships before anything else here, and the alert
-writer refuses to start while the Channel is in the Catalog.
+#53 decides who is *shown* it: the sync records the role ids that can view each
+Entity, and `/find` and `/lately` name a place only to an asker whose roles can
+see it. A Staff-only Channel has no granting role, so it is in no Member's
+results. **#53 must land before Staff grant the bot access.** It does not take
+the Channel out of the Catalog, so the capture and summaries remain, and the
+snapshot and site Index carry it, unless Staff add it to the durable exclusions (ADR-0001; the git seed file is read only at first initialisation, so editing it later does nothing). Staff's call; see packet 1.
 
 ## 4. Design
 
@@ -200,9 +202,9 @@ alerts (`SHERPA_ALERTS_DAILY_CAP`) guards against a raid of joins, with one
 After the responder's gateway, `isStaff`, `/sherpa` and `sherpa_setting` are
 merged.
 
-1. **The exclusion seed** for `#ambassador-chamber` and the User Monitoring
-   Forum (shared with `user-monitoring.md` packet 1). *Opus implementer,
-   Medium.* First.
+1. **#53 (access fields), merged and deployed.** Not this feature's packet;
+   it gates Staff granting the bot access. Then Staff decide whether to
+   exclude the Channel from the Catalog as well (§3). No seed packet.
 2. **Discovery,** read-only, with the bot token: the role manifest has
    `Ambassador`; the guild's `system_channel_id` and whether join messages
    are on; the bot's permissions in `#ambassador-chamber`. Ids and booleans

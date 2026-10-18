@@ -58,7 +58,12 @@ export interface TallyDeps {
   log: (message: string) => void;
 }
 
-/** Discord names ⚠️ with or without its variation selector. */
+/**
+ * Discord names ⚠️ with or without its variation selector. Counts are not
+ * checked reactor by reactor: #bot-tests is Staff-only, and the responder's
+ * checks pause it if the `Member` role can ever see that Channel, so only
+ * Staff (and bots, which do not react) can be counted.
+ */
 const reacted = (m: TallyMessage, emoji: string) =>
   m.reactions?.find((r) => r.emoji.name?.replace(/️/g, "") === emoji)?.count ?? 0;
 

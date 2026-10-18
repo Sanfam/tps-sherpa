@@ -14,7 +14,13 @@ import { createBoundary, type ChatPort } from "../llm/boundary.ts";
 import { PRIVACY_POLICY_PATH, retrying } from "../llm/session.ts";
 import type { Vocabulary } from "../llm/vocabulary.ts";
 import type { Entity } from "../sync/catalog.ts";
-import { MONITORED_SEED, initDurableStore, readMonitored, withDurableStore } from "../sync/durable-store.ts";
+import {
+  MONITORED_SEED,
+  initDurableStore,
+  readDeniedPlaces,
+  readMonitored,
+  withDurableStore,
+} from "../sync/durable-store.ts";
 import type { RoleManifestEntry } from "../sync/ports.ts";
 import { RETAIN_MS, openTier0 } from "../sync/tier0-store.ts";
 import { EMPTY_QUERY } from "./find.ts";
@@ -68,6 +74,7 @@ const entity = (over: Partial<Entity> & { id: string; name: string }): Entity =>
   last_activity_at: new Date().toISOString(),
   summary_generated: null,
   summary_override: null,
+  allow_roles: [],
   view_roles: [MEMBER_ROLE],
   deny_roles: [],
   ...over,
@@ -99,7 +106,7 @@ const QUERY = "distinctive-query-text flying and rocket league";
 const command = (
   name: string,
   options: Record<string, string> = {},
-  over: { guild_id?: string; roles?: string[]; type?: number; dataType?: number } = {},
+  over: { guild_id?: string; roles?: string[]; userId?: string; type?: number; dataType?: number } = {},
 ): APIInteraction =>
   ({
     id: "600000000000000001",
@@ -107,7 +114,7 @@ const command = (
     token: "interaction-token",
     type: over.type ?? InteractionType.ApplicationCommand,
     guild_id: over.guild_id ?? GUILD,
-    member: { roles: over.roles ?? [MEMBER_ROLE], user: { id: "500000000000000001" } },
+    member: { roles: over.roles ?? [MEMBER_ROLE], user: { id: over.userId ?? "500000000000000001" } },
     data: {
       name,
       type: over.dataType ?? ApplicationCommandType.ChatInput,
@@ -175,6 +182,8 @@ const harness = (
     policy?: string;
     /** The invoker has turned processing off. */
     optedOut?: boolean;
+    /** Members' own denies, written by a sync as the real one writes them. */
+    memberDenies?: Array<{ placeId: string; memberId: string }>;
   } & Partial<Pick<Sherpa, "loadCatalog" | "loadVocabulary" | "loadActivity" | "tally">> = {},
 ) => {
   const calls: string[] = [];
@@ -193,6 +202,12 @@ const harness = (
   // missing adds it back.
   const monitored = openMonitored(paths.durable);
   for (const c of MONITORED_SEED) monitored.remove(c.id);
+  const memberDenies = opts.memberDenies ?? [];
+  if (memberDenies.length)
+    withDurableStore(
+      (s) => s.replaceCatalog({ catalog, roleManifest: [], outcome: { complete: true }, memberDenies }),
+      paths.durable,
+    );
   const sherpa: Sherpa = {
     guildId: GUILD,
     loadCatalog: opts.loadCatalog ?? (() => catalog),
@@ -204,6 +219,7 @@ const harness = (
     settings: (work) => withResponderStore(work, paths.durable),
     tally: opts.tally,
     loadMonitored: (c) => readMonitored(c, paths.durable),
+    loadDenied: (id) => readDeniedPlaces(id, paths.durable),
     askFor: (c) =>
       createBoundary({
         chat,
@@ -492,6 +508,21 @@ describe("the invoker's own roles decide what is named (#53)", () => {
     await run(command("find", { interests: QUERY }, { roles }));
     expect(calls[0]!.includes("Moderators' corner")).toBe(shown);
     expect((await run(command("lately", {}, { roles })))!.includes(link)).toBe(shown);
+  });
+});
+
+describe("a member's own Discord deny hides a place from them alone", () => {
+  const [denied] = catalog;
+  const link = `**Rocket League** ([open](${denied!.url}))`;
+
+  it.each([
+    ["the member it denies", INVOKER, false],
+    ["another Member", "500000000000000002", true],
+  ])("in /find and /lately, to %s", async (_, userId, shown) => {
+    const { run, calls } = harness({ memberDenies: [{ placeId: denied!.id, memberId: INVOKER }] });
+    await run(command("find", { interests: QUERY }, { userId }));
+    expect(calls[0]!.includes("Rocket League")).toBe(shown);
+    expect((await run(command("lately", {}, { userId })))!.includes(link)).toBe(shown);
   });
 });
 

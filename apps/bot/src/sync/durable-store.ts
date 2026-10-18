@@ -81,6 +81,12 @@ export interface Generation {
  *   blocks for good (F10).
  * - `sherpa_setting`: Staff's mode, clock and thresholds, and the responder's
  *   own markers (`on_since`, `seed_until`, `seeded_at`), with who set each.
+ *
+ * `member_deny`: a member whose own Discord overwrite hides a Catalog Channel
+ * or Forum from them, so Sherpa never names it to them (`deniedTo`). Discord's
+ * state, not theirs: replaced whole by every complete sync, in the same
+ * transaction as the Catalog, so it is never older than the last sync. It
+ * never leaves the bot: not in the Catalog, an Entity or the site's snapshot.
  */
 const MIGRATIONS = `
   CREATE TABLE IF NOT EXISTS heartbeat (
@@ -140,6 +146,11 @@ const MIGRATIONS = `
     value  TEXT NOT NULL,
     set_by TEXT NOT NULL,
     set_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS member_deny (
+    member_id TEXT NOT NULL,
+    place_id  TEXT NOT NULL,
+    PRIMARY KEY (member_id, place_id)
   );
 `;
 
@@ -290,6 +301,8 @@ export const openDurableStore = (path: string = DURABLE_STORE_PATH) => {
       catalog: Entity[];
       roleManifest: RoleManifestEntry[];
       outcome: SyncOutcome;
+      /** `member_deny`, replaced whole. */
+      memberDenies: Array<{ placeId: string; memberId: string }>;
     }) => {
       if (!next.outcome.complete)
         throw new Error("Refusing to replace the Catalog with an incomplete sync.");
@@ -302,8 +315,21 @@ export const openDurableStore = (path: string = DURABLE_STORE_PATH) => {
         db.prepare(
           "INSERT OR REPLACE INTO generation (id, generated_at, role_manifest) VALUES (1, ?, ?)",
         ).run(new Date().toISOString(), JSON.stringify(next.roleManifest));
+        db.exec("DELETE FROM member_deny");
+        const deny = db.prepare("INSERT OR IGNORE INTO member_deny (member_id, place_id) VALUES (?, ?)");
+        for (const d of next.memberDenies) deny.run(d.memberId, d.placeId);
       });
     },
+
+    /** The Channels and Forums a member's own overwrite hides from them (`member_deny`). */
+    deniedPlaces: (memberId: string): Set<string> =>
+      new Set(
+        (
+          db.prepare("SELECT place_id FROM member_deny WHERE member_id = ?").all(memberId) as Array<{
+            place_id: string;
+          }>
+        ).map((r) => r.place_id),
+      ),
 
     /**
      * Writes fields an enrichment pass produced onto Entities that still
@@ -482,6 +508,13 @@ export const readCurrent = (path: string = DURABLE_STORE_PATH): Generation =>
  */
 export const readProcessingOptOuts = (path: string = DURABLE_STORE_PATH): Set<string> =>
   withDurableStore((store) => store.processingOptOuts(), path);
+
+/**
+ * One member's denied places, read fresh, for `deniedTo`. Whatever names a
+ * place to a member reads this: `/find` and `/lately`, and the responder.
+ */
+export const readDeniedPlaces = (memberId: string, path: string = DURABLE_STORE_PATH): ReadonlySet<string> =>
+  withDurableStore((store) => store.deniedPlaces(memberId), path);
 
 /**
  * The monitored-channel ids, checked against the Catalog they will be applied

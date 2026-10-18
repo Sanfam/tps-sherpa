@@ -153,7 +153,7 @@ describe("replacing the Catalog", () => {
     await established();
     const store = openDurableStore(path);
     expect(() =>
-      store.replaceCatalog({ catalog: [], roleManifest: [], outcome: { complete: true } }),
+      store.replaceCatalog({ catalog: [], roleManifest: [], outcome: { complete: true }, memberDenies: [] }),
     ).toThrow(/empty/);
     store.close();
     expect(readCatalog()).toHaveLength(3);
@@ -168,12 +168,13 @@ describe("replacing the Catalog", () => {
       catalog: [...catalog, { ...catalog[0]!, id: "300", name: secret }],
       roleManifest: [],
       outcome: { complete: true },
+      memberDenies: [],
     });
     store.close();
     expect(readFileSync(path).includes(secret)).toBe(true);
 
     const again = openDurableStore(path);
-    again.replaceCatalog({ catalog, roleManifest: [], outcome: { complete: true } });
+    again.replaceCatalog({ catalog, roleManifest: [], outcome: { complete: true }, memberDenies: [] });
     again.close();
     // Closing the last connection checkpoints the WAL into the file.
     expect(readFileSync(path).includes(secret)).toBe(false);
@@ -210,7 +211,7 @@ describe("sync and enrichment interleaved", () => {
     const syncing = openDurableStore(path);
     const read = enrichment.current()!;
     await new Promise((r) => setTimeout(r, 2)); // a later generated_at
-    syncing.replaceCatalog({ catalog: read.catalog, roleManifest: [], outcome: { complete: true } });
+    syncing.replaceCatalog({ catalog: read.catalog, roleManifest: [], outcome: { complete: true }, memberDenies: [] });
     expect(() =>
       enrichment.patchEntities(read.generatedAt, [{ id: "100", summary_generated: "stale" }]),
     ).toThrow(GenerationChanged);
@@ -227,7 +228,7 @@ describe("sync and enrichment interleaved", () => {
     enrichment.patchEntities(read.generatedAt, [{ id: "100", summary_generated: "fresh" }]);
     await new Promise((r) => setTimeout(r, 2));
     const next = await renamed();
-    syncing.replaceCatalog({ catalog: next, roleManifest: [], outcome: { complete: true } });
+    syncing.replaceCatalog({ catalog: next, roleManifest: [], outcome: { complete: true }, memberDenies: [] });
     expect(readCatalog()).toEqual(next);
     expect(() => enrichment.patchEntities(read.generatedAt, [{ id: "100", summary_generated: "x" }])).toThrow(
       /changed under this run/,
@@ -242,7 +243,7 @@ describe("sync and enrichment interleaved", () => {
     const syncing = openDurableStore(path);
     const read = enrichment.current()!;
     await new Promise((r) => setTimeout(r, 2));
-    syncing.replaceCatalog({ catalog: await renamed(), roleManifest: [], outcome: { complete: true } });
+    syncing.replaceCatalog({ catalog: await renamed(), roleManifest: [], outcome: { complete: true }, memberDenies: [] });
     expect(() =>
       enrichment.patchEntities(read.generatedAt, [{ id: "201", summary_generated: "About Rocket League." }]),
     ).toThrow(GenerationChanged);

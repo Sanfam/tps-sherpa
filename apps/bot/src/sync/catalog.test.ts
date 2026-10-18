@@ -22,7 +22,7 @@ describe("buildCatalog", () => {
     ]);
   });
 
-  it("leaves a monitored Channel's Threads out entirely, never listing them, and keeps ordinary ones (#41)", async () => {
+  it("leaves a monitored Channel's Threads out entirely, never asking for them, and keeps ordinary ones (#41)", async () => {
     const thread = (id: string, name: string, parentId: string) => ({
       id,
       name,
@@ -47,6 +47,20 @@ describe("buildCatalog", () => {
     expect(listed).toEqual(["222"]);
     expect(catalog.map((e) => e.id)).toEqual(["111", "222", "322"]);
     expect(JSON.stringify(catalog)).not.toContain("Dave Smith");
+  });
+
+  it("hands members' own denies to the store alone, never to the Catalog or its snapshot", async () => {
+    const MEMBER_ID = "500000000000000777";
+    const discord = fixtureDiscord({
+      channels: [{ id: "111", name: "fishing", type: ChannelType.GuildText, deniedMembers: [MEMBER_ID] }],
+      threads: [{ id: "311", name: "Fly tackle", parentId: "111", appliedTags: [], firstPost: null }],
+    });
+
+    const { catalog, memberDenies } = await buildCatalog({ discord, guildId: GUILD_ID });
+
+    expect(memberDenies).toEqual([{ placeId: "111", memberId: MEMBER_ID }]);
+    expect(catalog.map((e) => e.id)).toEqual(["111", "311"]);
+    expect(JSON.stringify(catalog)).not.toContain(MEMBER_ID);
   });
 
   it("keys each Entity on its Discord ID and gives it a working deep link", async () => {

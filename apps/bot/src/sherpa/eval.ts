@@ -38,9 +38,9 @@ const catalog = loadCatalog();
 const vocabulary = parseVocabulary(readIfPresent(VOCABULARY_PATH));
 const { boundary, models, monitored } = openBoundary(catalog, { cheap: flag("model") ?? undefined }, FIND_TIMEOUT_MS);
 const byId = new Map(catalog.map((e) => [e.id, e]));
-// A Member's view, which is what a golden-set query stands for.
+// A Member's view, which is what a golden-set query stands for: no one member, so no own denies.
 const roles = memberRoleIds(loadRoleManifest());
-const candidates = candidatesOf(catalog, monitored, roles);
+const candidates = candidatesOf(catalog, monitored, roles, new Set());
 
 /** Deterministic, so a failing ordering can be rerun. mulberry32. */
 const seeded = (seed: number) => () => {
@@ -87,6 +87,7 @@ const runOne = async (c: GoldenCase, order: Entity[]): Promise<Run> => {
           catalog: order,
           monitored,
           roles,
+          denied: new Set(),
           vocabulary,
           ask: (request) => {
             calls++;

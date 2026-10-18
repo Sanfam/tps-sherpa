@@ -20,10 +20,10 @@ Every credential gets three homes:
 
 | Credential | Purpose | Runtime location | Durable copy | Expires | Owners |
 |---|---|---|---|---|---|
-| `DISCORD_BOT_TOKEN` | Papa Sherpa reads the guild and (later) posts | Railway `bot` service variables (2026-10-15) and local `.env` | ⚠️ TODO | Never (rotate on exposure) | ⚠️ TODO |
-| `GITHUB_MACHINE_TOKEN` | **Retired by ADR-0001** — the bot no longer commits. Revoke once a human confirms nothing else uses it | ⚠️ local `.env` only | ⚠️ TODO | **No expiry set** *(verified 2026-09-02)* | ⚠️ TODO |
-| `LITESTREAM_ACCESS_KEY_ID`, `LITESTREAM_SECRET_ACCESS_KEY` | Replicate the bot's `bot.db` to R2, with an R2 API token scoped to the one bucket (ADR-0001). One key per service. Beside them, not secret: `LITESTREAM_BUCKET` and `LITESTREAM_ENDPOINT` (`https://<account_id>.r2.cloudflarestorage.com`). Without all four the deployed bot refuses to start (`docs/runbook.md`) | Railway `bot` service variables (minted 2026-10-16) | ⚠️ TODO | ⚠️ TODO | ⚠️ TODO |
-| `LLM_API_KEY` | Every model call — tagging, summaries | Railway `bot` service variables (2026-10-15) and local `.env` (as `OPENROUTER_API_KEY`) | ⚠️ TODO | Provider-managed | ⚠️ TODO |
+| `DISCORD_BOT_TOKEN` | Papa Sherpa reads the guild and posts | Railway `bot` service variables (2026-10-15) and local `.env` | Password manager (owner, 2026-10-18) | Never (rotate on exposure) | ⚠️ TODO |
+| `GITHUB_MACHINE_TOKEN` | **Retired by ADR-0001** — the bot no longer commits. The `tps-papabot` collaborator was removed and the local `.env` line deleted (owner, 2026-10-18). ⚠️ Revoke the PAT in that account, or delete the account | None | n/a | **No expiry set** *(verified 2026-09-02)* | ⚠️ TODO |
+| `LITESTREAM_ACCESS_KEY_ID`, `LITESTREAM_SECRET_ACCESS_KEY` | Replicate the bot's `bot.db` to R2, with an R2 API token scoped to the one bucket (ADR-0001). One key per service. Beside them, not secret: `LITESTREAM_BUCKET` and `LITESTREAM_ENDPOINT` (`https://<account_id>.r2.cloudflarestorage.com`). Without all four the deployed bot refuses to start (`docs/runbook.md`) | Railway `bot` service variables (minted 2026-10-16) | Password manager (owner, 2026-10-18) | ⚠️ TODO | ⚠️ TODO |
+| `LLM_API_KEY` | Every model call — tagging, summaries | Railway `bot` service variables (2026-10-15) and local `.env` (as `OPENROUTER_API_KEY`) | Password manager (owner, 2026-10-18) | Provider-managed | ⚠️ TODO |
 | Discord application | Owns the bot; invisible until it is lost | Discord developer portal | n/a — account ownership | n/a | ⚠️ TODO |
 | Railway project | Hosting | n/a | n/a | n/a | ⚠️ TODO |
 | Cloudflare account | DNS, proxy, R2 | n/a | n/a | n/a | ⚠️ TODO |

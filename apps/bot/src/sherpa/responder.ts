@@ -20,7 +20,7 @@
 import type { APIMessage, RESTPostAPIChannelMessageJSONBody } from "discord-api-types/v10";
 import { type Boundary, type Extraction, type ImageMeaning, WATCHED_CHANNEL } from "../llm/boundary.ts";
 import type { Vocabulary } from "../llm/vocabulary.ts";
-import { type Entity, visibleTo } from "../sync/catalog.ts";
+import { type Entity, deniedTo, visibleTo } from "../sync/catalog.ts";
 import type { Preferences } from "../sync/durable-store.ts";
 import { MAX_QUERY_LENGTH, MAX_MESSAGE_CHARS, findPlaces, isCandidate } from "./find.ts";
 import type { DailyCap } from "./interactions.ts";
@@ -96,6 +96,8 @@ export interface Session {
    * may be pointed at them — but never at a Staff-only or bot-only place.
    */
   memberRoles: readonly string[];
+  /** A member's denied places (`readDeniedPlaces`): never named to them, on either path (#53). */
+  denied: (memberId: string) => ReadonlySet<string>;
 }
 
 export interface ResponderDeps {
@@ -107,8 +109,16 @@ export interface ResponderDeps {
     messages: (query: { after: string } | { before: string }) => Promise<WatchedMessage[]>;
     /** One message in `#introductions`. Null once it is deleted (a 404); anything else throws. */
     message: (id: string) => Promise<WatchedMessage | null>;
-    /** Whether Message Content is granted, and the bot's access to the two Channels. */
-    probe: () => Promise<{ messageContent: boolean; watched: ChannelAccess | null; shadow: ChannelAccess | null }>;
+    /**
+     * Whether Message Content is granted, the bot's access to the two
+     * Channels, and whether the `Member` role can see `#bot-tests`.
+     */
+    probe: () => Promise<{
+      messageContent: boolean;
+      watched: ChannelAccess | null;
+      shadow: ChannelAccess | null;
+      shadowVisibleToMember: boolean;
+    }>;
     /** Sherpa's own user id, for telling a mention of it or a reply to it (§9). */
     botId: () => Promise<string>;
     /** The raw send. Only the write port calls it. */
@@ -263,6 +273,11 @@ export const createResponder = (deps: ResponderDeps) => {
   /** Learned by the checks; until then nothing is taken for an invitation. */
   let botId: string | null = null;
   const erasures = new Map<string, number>();
+  /**
+   * Ids deleted in `#introductions`, and when, for a day: a delete that lands
+   * while its message waits for a lookup or a queue finds nothing to erase yet (§6).
+   */
+  const deleted = new Map<string, number>();
   const queues = new Map<string, Promise<void>>();
   /** The checks passed and the seed is complete: nothing is evaluated before both (§2, F2). */
   let ready = false;
@@ -289,7 +304,8 @@ export const createResponder = (deps: ResponderDeps) => {
   /**
    * One member's work at a time, in arrival order: a tick waits for an
    * extraction in flight, and two events for one member never interleave.
-   * An error closes their row `failed`.
+   * An error closes their open row `failed`, watched or not: a rebuild that
+   * fails before its watch begins would otherwise strand the row open.
    */
   const serial = (memberId: string, work: () => Promise<void>): Promise<void> => {
     const next = (queues.get(memberId) ?? Promise.resolve()).then(work).catch((error: unknown) => {
@@ -297,6 +313,8 @@ export const createResponder = (deps: ResponderDeps) => {
       const watch = watches.get(memberId);
       try {
         if (watch) close(watch, "failed", "error");
+        else if (deps.store((s) => s.closeIntroduction(memberId, "failed", "error", date())))
+          log(`[responder] member ${memberId}: failed (error)`);
       } catch (closing) {
         log(`[responder] member ${memberId}: could not close their row: ${reason(closing)}`);
       }
@@ -320,11 +338,11 @@ export const createResponder = (deps: ResponderDeps) => {
 
   /**
    * §5's re-check, before every model call and post and after every call
-   * returns: no erasure since the watch began, both settings still on, the row
-   * still open, and the mode not `off`.
+   * returns: the checks passing, no erasure since the watch began, both
+   * settings still on, the row still open, and the mode not `off`.
    */
   const current = (watch: Watch): boolean => {
-    if (erasureCount(watch.memberId) !== watch.erasures) return false;
+    if (!ready || erasureCount(watch.memberId) !== watch.erasures) return false;
     const { approach, processing } = deps.preferences(watch.memberId);
     if (!approach || !processing) return false;
     const { mode, row } = deps.store((s) => ({ mode: s.mode(), row: s.introduction(watch.memberId) }));
@@ -396,14 +414,26 @@ export const createResponder = (deps: ResponderDeps) => {
   };
 
   /**
+   * Whether a message was deleted after its event arrived. Checked after each
+   * await that comes before a row or a conversation holds its id; from then
+   * on the delete erases what holds it, and §5's re-check drops the rest.
+   */
+  const gone = (messageId: string): boolean => {
+    if (!deleted.has(messageId)) return false;
+    eraseMessage(messageId);
+    return true;
+  };
+
+  /**
    * One extraction over every message that fed the watch (§3, §4), the
    * others re-fetched by id: their text is held for the call only (§5).
-   * Returns whether this message added signal.
+   * When this message added signal, returns when the latest message the call
+   * read was posted or edited; otherwise null.
    */
-  const extract = async (watch: Watch, message: WatchedMessage): Promise<boolean> => {
+  const extract = async (watch: Watch, message: WatchedMessage): Promise<number | null> => {
     const row = deps.store((s) => s.introduction(watch.memberId));
     const messages = row && (await refetch(row.messages.map((m) => m.id), message));
-    if (!messages) return false;
+    if (!messages) return null;
     const before = watch.extraction;
     const result = await paid(
       watchGuard(watch),
@@ -416,11 +446,12 @@ export const createResponder = (deps: ResponderDeps) => {
         }),
       () => deps.store((s) => s.claimExtraction(watch.memberId)),
     );
-    if (!result) return false;
+    if (!result) return null;
     watch.extraction = result;
-    if (result.signal !== "some") return false;
+    if (result.signal !== "some") return null;
     const had = new Set([...(before?.interests ?? []), ...(before?.topics ?? [])]);
-    return before?.signal !== "some" || [...result.interests, ...result.topics].some((x) => !had.has(x));
+    const added = before?.signal !== "some" || [...result.interests, ...result.topics].some((x) => !had.has(x));
+    return added ? Math.max(...messages.map((m) => Date.parse(m.edited_timestamp ?? m.timestamp))) : null;
   };
 
   /** A message's images, claimed together, each read as a gesture and never as signal (§4). */
@@ -450,9 +481,12 @@ export const createResponder = (deps: ResponderDeps) => {
     if (!watch.handled.has(key)) {
       watch.handled.add(key);
       // Words alone are signal: an image-only message is a greeting (§4).
-      const signal = message.content.trim() ? await extract(watch, message) : false;
-      const at = Date.parse(message.edited_timestamp ?? message.timestamp);
-      watch.messages.push({ at: watch.messages.length ? at : watch.introAt, signal });
+      const signalAt = message.content.trim() ? await extract(watch, message) : null;
+      const at = watch.messages.length ? Date.parse(message.edited_timestamp ?? message.timestamp) : watch.introAt;
+      watch.messages.push({ at, signal: signalAt !== null && signalAt <= at });
+      // A rebuild reads the intro's follow-ups with it: their signal keeps their own time, so a restart
+      // can delay the post but never bring it forward.
+      if (signalAt !== null && signalAt > at) watch.messages.push({ at: signalAt, signal: true });
     }
     await readImages(watch, message);
   };
@@ -504,6 +538,7 @@ export const createResponder = (deps: ResponderDeps) => {
       // An open row is rebuilt from its intro, read again by the catch-up. Nothing else of it is.
       if (row.postedAt !== null || row.messages[0]?.id !== message.id) return;
       const member = await deps.discord.member(author);
+      if (gone(message.id)) return;
       if (!member) {
         log(`[responder] member ${author}: not in the guild, so their open watch is not rebuilt`);
         return void deps.store((s) => s.closeIntroduction(author, "failed", "error", date()));
@@ -521,8 +556,8 @@ export const createResponder = (deps: ResponderDeps) => {
       log(`[responder] member ${author} message ${message.id}: the lookup gave no joined_at, so not evaluated`);
       return;
     }
-    // After the last await: the row is one conditional insert (§5).
-    if (deps.store((s) => s.mode()) === "off") return;
+    // After the last await: the row is one conditional insert (§5), never of a deleted message (§6).
+    if (gone(message.id) || deps.store((s) => s.mode()) === "off") return;
     const joinedAt = member.joinedAt;
     const started = deps.store((s) =>
       s.startIntroduction(author, { messageId: message.id, editedAt: message.edited_timestamp, joinedAt }, date()),
@@ -548,13 +583,14 @@ export const createResponder = (deps: ResponderDeps) => {
   /** A fixed text, with no model call and nothing recorded: processing off, or past the cap. */
   const answerFixed = async (kind: ReplyKind, reply: string, message: WatchedMessage) => {
     const { mode, clock } = deps.store((s) => ({ mode: s.mode(), clock: timingSettings(s).clock }));
-    if (mode === "off") return;
+    if (!ready || mode === "off") return;
     await post(kind, { reply, timeline: quiet(clock) }, message.id);
     log(`[responder] member ${message.author.id} message ${message.id}: answered ${kind}`);
   };
 
-  /** §5's re-check for a conversation: no erasure since it began, still held, processing on, its row there, not `off`. */
+  /** §5's re-check for a conversation: the checks passing, no erasure since it began, still held, processing on, its row there, not `off`. */
   const conversationIsCurrent = (c: Conversation): boolean =>
+    ready &&
     erasureCount(c.memberId) === c.erasures &&
     conversations.get(c.memberId) === c &&
     deps.preferences(c.memberId).processing &&
@@ -564,11 +600,15 @@ export const createResponder = (deps: ResponderDeps) => {
    * The widest doors (§9): each match's own Channel or Forum rather than a
    * Post or Thread inside it, once each, so the last reply points at rooms.
    */
-  const doorsOf = (matches: readonly Entity[], session: Session): Entity[] => {
+  const doorsOf = (matches: readonly Entity[], session: Session, memberId: string): Entity[] => {
+    const denied = session.denied(memberId);
     const entities = new Map(session.catalog.map((e) => [e.id, e]));
     const doors = matches.flatMap((e) => {
       const door = e.parent_id ? entities.get(e.parent_id) : e;
-      return door && isCandidate(door, entities, session.monitored) && visibleTo(door, session.memberRoles)
+      return door &&
+        isCandidate(door, entities, session.monitored) &&
+        visibleTo(door, session.memberRoles) &&
+        !deniedTo(door, denied)
         ? [door]
         : [];
     });
@@ -615,81 +655,86 @@ export const createResponder = (deps: ResponderDeps) => {
     };
     log(`[responder] member ${memberId} message ${message.id}: invited exchange ${exchange}`);
 
-    const row = deps.store((s) => s.introduction(memberId));
-    const messages = await refetch([...(row?.messages.map((m) => m.id) ?? []), message.id], message);
-    if (!messages) return;
-    if (messages.some((m) => m.content.trim())) {
-      // Their own names are what redaction keeps out of the call: without them, silence.
+    // The third exchange ends the conversation however it ends: posted, refused or failed (§5).
+    try {
+      const row = deps.store((s) => s.introduction(memberId));
+      const messages = await refetch([...(row?.messages.map((m) => m.id) ?? []), message.id], message);
+      if (!messages) return;
+      // Before any call, text or image: their names are what redaction keeps out of
+      // it (§4), and a member the lookup cannot find is not answered.
       const member = await deps.discord.member(memberId);
       if (!member) {
         log(`[responder] member ${memberId} message ${message.id}: not found, so not answered`);
         return;
       }
-      const names = member.names;
-      const result = await paid(guard, (s) =>
-        s.boundary.extractIntroduction({
-          memberId,
-          sources: sourcesOf(messages),
-          memberNames: names,
-          vocabulary: s.vocabulary,
-        }),
-      );
-      if (!result) return;
-      conversation.extraction = merge(conversation.extraction, result);
-    }
-
-    // Read as gestures, under the claim's share of the 6 (F7); never matched on.
-    let read = 0;
-    let meaning: ImageMeaning | null = null;
-    for (const image of images.slice(0, granted)) {
-      if (!guard.current()) return;
-      const dataUrl = await fetchStill(image, deps.fetchImage);
-      if (!dataUrl) continue;
-      const reading = await paid(guard, (s) =>
-        s.boundary.readImage({ memberId, image: { authorId: memberId, origin: message.channel_id, dataUrl } }),
-      );
-      if (reading) {
-        read++;
-        meaning = reading.meaning;
+      if (messages.some((m) => m.content.trim())) {
+        const result = await paid(guard, (s) =>
+          s.boundary.extractIntroduction({
+            memberId,
+            sources: sourcesOf(messages),
+            memberNames: member.names,
+            vocabulary: s.vocabulary,
+          }),
+        );
+        if (!result) return;
+        conversation.extraction = merge(conversation.extraction, result);
       }
-    }
 
-    const extraction = conversation.extraction;
-    let places: Entity[] = [];
-    if (extraction?.signal === "some") {
-      const found = await paid(guard, async (s) => {
-        const result = await findPlaces({
-          query: matchQuery(extraction, s.vocabulary),
-          invokerId: memberId,
-          catalog: s.catalog,
-          monitored: s.monitored,
-          roles: s.memberRoles,
-          vocabulary: s.vocabulary,
-          ask: s.boundary.ask,
-          origin: { derivedFromIntroduction: memberId },
+      // Read as gestures, under the claim's share of the 6 (F7); never matched on.
+      let read = 0;
+      let meaning: ImageMeaning | null = null;
+      for (const image of images.slice(0, granted)) {
+        if (!guard.current()) return;
+        const dataUrl = await fetchStill(image, deps.fetchImage);
+        if (!dataUrl) continue;
+        const reading = await paid(guard, (s) =>
+          s.boundary.readImage({ memberId, image: { authorId: memberId, origin: message.channel_id, dataUrl } }),
+        );
+        if (reading) {
+          read++;
+          meaning = reading.meaning;
+        }
+      }
+
+      const extraction = conversation.extraction;
+      let places: Entity[] = [];
+      if (extraction?.signal === "some") {
+        const found = await paid(guard, async (s) => {
+          const result = await findPlaces({
+            query: matchQuery(extraction, s.vocabulary),
+            invokerId: memberId,
+            catalog: s.catalog,
+            monitored: s.monitored,
+            roles: s.memberRoles,
+            denied: s.denied(memberId),
+            vocabulary: s.vocabulary,
+            ask: s.boundary.ask,
+            origin: { derivedFromIntroduction: memberId },
+          });
+          const entities = new Map(s.catalog.map((e) => [e.id, e]));
+          const matches = result.matches.filter((e) => isCandidate(e, entities, s.monitored));
+          return last ? doorsOf(matches, s, memberId) : matches;
         });
-        const entities = new Map(s.catalog.map((e) => [e.id, e]));
-        const matches = result.matches.filter((e) => isCandidate(e, entities, s.monitored));
-        return last ? doorsOf(matches, s) : matches;
-      });
-      if (!found) return;
-      places = found;
+        if (!found) return;
+        places = found;
+      }
+      const doors = (p: Entity[]) => widestDoors(p, INDEX_URL);
+      const [kind, reply]: [ReplyKind, string] = last
+        ? ["widest_doors", doors(fit(places, doors))]
+        : places.length
+          ? ["invited_recommend", recommendPost(fit(places, recommendPost))]
+          : ["invited_question", INVITED_QUESTION];
+      if (!guard.current()) return;
+      const clock = deps.store((s) => timingSettings(s).clock);
+      await post(
+        kind,
+        { reply, timeline: { ...quiet(clock), extractions: exchange, images: read, imageMeaning: meaning } },
+        message.id,
+      );
+      log(`[responder] member ${memberId} message ${message.id}: answered ${kind}`);
+    } finally {
+      if (last) guard.silence();
     }
-    const doors = (p: Entity[]) => widestDoors(p, INDEX_URL);
-    const [kind, reply]: [ReplyKind, string] = last
-      ? ["widest_doors", doors(fit(places, doors))]
-      : places.length
-        ? ["invited_recommend", recommendPost(fit(places, recommendPost))]
-        : ["invited_question", INVITED_QUESTION];
-    if (!guard.current()) return;
-    const clock = deps.store((s) => timingSettings(s).clock);
-    await post(
-      kind,
-      { reply, timeline: { ...quiet(clock), extractions: exchange, images: read, imageMeaning: meaning } },
-      message.id,
-    );
-    log(`[responder] member ${memberId} message ${message.id}: answered ${kind}`);
-    if (last) guard.silence();
   };
 
   /** Every create and update the filter let through, live or from the catch-up. */
@@ -706,6 +751,8 @@ export const createResponder = (deps: ResponderDeps) => {
     }
     for (const w of watches.values()) if (w.memberId !== author) notice(w, message);
     await serial(author, async () => {
+      // It may have waited behind their earlier work.
+      if (gone(message.id)) return;
       if (invited && !watched(author)) return invite(message);
       const w = watches.get(author);
       await (w ? own(w, message) : consider(message));
@@ -777,6 +824,8 @@ export const createResponder = (deps: ResponderDeps) => {
       if (!probe.watched?.view || !probe.watched.history) failures.push("#introductions is not visible and readable");
       if (!probe.shadow?.view || !probe.shadow.send || !probe.shadow.history)
         failures.push("#bot-tests cannot be viewed, sent to and read");
+      // Shadow posts and the tally assume a Staff-only Channel.
+      if (probe.shadowVisibleToMember) failures.push("#bot-tests is visible to the Member role");
       if (mode === "live" && !probe.watched?.send) failures.push("#introductions cannot be sent to");
       const monitored = deps.monitored();
       if (!monitored.has(WATCHED_CHANNEL)) failures.push("#introductions is not monitored");
@@ -838,6 +887,7 @@ export const createResponder = (deps: ResponderDeps) => {
           catalog: s.catalog,
           monitored: s.monitored,
           roles: s.memberRoles,
+          denied: s.denied(watch.memberId),
           vocabulary: s.vocabulary,
           ask: s.boundary.ask,
           origin: { derivedFromIntroduction: watch.memberId },
@@ -911,7 +961,8 @@ export const createResponder = (deps: ResponderDeps) => {
      */
     onMessage: (message: WatchedMessage, edited = false): Promise<void> => {
       if (message.channel_id !== WATCHED_CHANNEL) return Promise.resolve();
-      if (phase === "idle") return Promise.resolve();
+      // A failed check refuses at once, not at the next tick.
+      if (!ready || phase === "idle") return Promise.resolve();
       if (phase === "catching") {
         pending.push({ message, invitable: !edited });
         return Promise.resolve();
@@ -923,6 +974,7 @@ export const createResponder = (deps: ResponderDeps) => {
     onDelete: (event: { channel_id: string; ids: readonly string[] }): void => {
       if (event.channel_id !== WATCHED_CHANNEL) return;
       for (const id of event.ids) {
+        deleted.set(id, deps.now());
         for (const c of conversations.values()) if (c.handled.has(id)) conversations.delete(c.memberId);
         try {
           eraseMessage(id);
@@ -964,6 +1016,7 @@ export const createResponder = (deps: ResponderDeps) => {
     try {
       const now = deps.now();
       for (const c of conversations.values()) if (now - c.lastAt >= DAY) conversations.delete(c.memberId);
+      for (const [id, at] of deleted) if (now - at >= DAY) deleted.delete(id);
       const { mode, settings, rows } = deps.store((s) => ({
         mode: s.mode(),
         settings: timingSettings(s),

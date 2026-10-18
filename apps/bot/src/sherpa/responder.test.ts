@@ -34,6 +34,7 @@ const MEMBER_ROLE = "900000000000000001";
 const entity = (over: Partial<Entity> & { id: string; name: string }): Entity => ({
   type: "post",
   view_roles: [MEMBER_ROLE],
+  allow_roles: [],
   deny_roles: [],
   url: `https://discord.com/channels/${GUILD}/${over.id}`,
   parent_id: null,
@@ -112,10 +113,14 @@ const harness = () => {
     clock: at(-30),
     history: [] as WatchedMessage[],
     members: new Map<string, { joinedAt: string | null; names: string[] } | null>(),
+    /** Runs inside every member lookup, when set: to hold it, or to make it throw. */
+    lookup: null as (() => Promise<void>) | null,
+    shadowVisibleToMember: false,
     writes: [] as Array<{ channelId: string; body: { content?: string } }>,
     extracts: [] as unknown[],
     readings: [] as unknown[],
     asks: [] as Array<AskRequest<unknown>>,
+    denied: new Map<string, ReadonlySet<string>>(),
     extraction: SAID,
     /** Holds every `ask` until released, when set. */
     askGate: null as Promise<void> | null,
@@ -135,7 +140,10 @@ const harness = () => {
   const deps: ResponderDeps = {
     guildId: GUILD,
     discord: {
-      member: touch(async (id: string) => (h.members.has(id) ? h.members.get(id)! : { joinedAt: JOINED, names: [`user-${id}`] })),
+      member: touch(async (id: string) => {
+        if (h.lookup) await h.lookup();
+        return h.members.has(id) ? h.members.get(id)! : { joinedAt: JOINED, names: [`user-${id}`] };
+      }),
       messages: touch(async (query: { after: string } | { before: string }) => {
         const sorted = [...h.history].sort((a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1));
         if ("after" in query) return sorted.filter((m) => BigInt(m.id) > BigInt(query.after)).slice(0, 100);
@@ -147,7 +155,7 @@ const harness = () => {
       botId: touch(async () => SHERPA),
       probe: touch(async () => {
         const all = { view: true, history: true, send: true };
-        return { messageContent: true, watched: all, shadow: all };
+        return { messageContent: true, watched: all, shadow: all, shadowVisibleToMember: h.shadowVisibleToMember };
       }),
       createMessage: touch(async (channelId: string, body: { content?: string }) => {
         h.writes.push({ channelId, body });
@@ -165,6 +173,7 @@ const harness = () => {
       monitored,
       vocabulary,
       memberRoles: [MEMBER_ROLE],
+      denied: (memberId: string) => h.denied.get(memberId) ?? new Set<string>(),
       boundary: {
         extractIntroduction: async (request) => {
           h.extracts.push(request);
@@ -332,6 +341,38 @@ describe("a restart (F12)", () => {
     expect(row()?.outcome).toBe("failed");
   });
 
+  it("closes an open row failed when the lookup that would rebuild its watch throws", async () => {
+    setMode("shadow", -60);
+    const intro = message(MEMBER, 0);
+    store((s) => s.startIntroduction(MEMBER, { messageId: intro.id, editedAt: null, joinedAt: JOINED }, new Date(at(0))));
+    const { h, responder } = harness();
+    h.history.push(intro);
+    h.lookup = async () => {
+      throw new Error("Discord answered 500");
+    };
+    h.clock = at(1);
+    await responder.start();
+    expect(row()?.outcome).toBe("failed");
+  });
+
+  it("times a rebuilt signal from the follow-up that carried it, so the post is never brought forward", async () => {
+    setMode("shadow", -60);
+    const intro = message(MEMBER, 0);
+    const followUp = message(MEMBER, 15, { content: "I fly gliders on Sundays" });
+    store((s) => s.startIntroduction(MEMBER, { messageId: intro.id, editedAt: null, joinedAt: JOINED }, new Date(at(0))));
+    store((s) => s.recordMessage(MEMBER, followUp.id, null));
+    const { h, responder } = harness();
+    h.history.push(intro, followUp);
+    h.clock = at(16);
+    await responder.start();
+    h.clock = at(21);
+    await responder.tick();
+    expect(h.writes).toEqual([]);
+    h.clock = at(35);
+    await responder.tick();
+    expect(h.writes).toHaveLength(1);
+  });
+
   it("gives a member answered before the restart nothing more", async () => {
     const first = await started();
     const intro = message(MEMBER, 0);
@@ -367,6 +408,59 @@ describe("an erasure during a model call (§5)", () => {
     await ticked;
     expect(h.writes).toEqual([]);
     expect(h.logs.some((m) => m.includes(`member ${MEMBER}: a result came back stale`))).toBe(true);
+  });
+});
+
+describe("a delete racing the first handling (§6)", () => {
+  it("drops a message deleted during its lookup or behind its member's queue: no row of it, no call", async () => {
+    const { h, responder, say } = await started();
+    let release = () => {};
+    const held = new Promise<void>((done) => (release = done));
+    let looking = 0;
+    let bothLooking = () => {};
+    const looked = new Promise<void>((done) => (bothLooking = done));
+    h.lookup = () => {
+      if (++looking === 2) bothLooking();
+      return held;
+    };
+    const intro = message(MEMBER, 0, { content: "Hi, I restore old motorbikes" });
+    const otherIntro = message(OTHER, 0);
+    const followUp = message(OTHER, 1, { content: "I fly gliders on Sundays" });
+    const handled = [say(intro), say(otherIntro), say(followUp)];
+    await looked;
+    // MEMBER's intro is mid-lookup; OTHER's follow-up waits behind OTHER's intro.
+    for (const gone of [intro, followUp]) {
+      h.history = h.history.filter((m) => m.id !== gone.id);
+      responder.onDelete({ channel_id: WATCHED_CHANNEL, ids: [gone.id] });
+    }
+    release();
+    await Promise.all(handled);
+    expect(row()).toBeNull();
+    expect(tombstone(MEMBER)).toBeUndefined();
+    expect(row(OTHER)?.messages.map((m) => m.id)).toEqual([otherIntro.id]);
+    expect(h.extracts).toHaveLength(1);
+    expect(JSON.stringify(h.extracts)).not.toMatch(/motorbikes|gliders/);
+  });
+});
+
+describe("a failed check (§2)", () => {
+  it("refuses at once, not at the next tick: a new message, and a call in flight", async () => {
+    const { h, responder, say } = await started();
+    await say(message(MEMBER, 0));
+    let release = () => {};
+    h.askGate = new Promise((done) => (release = done));
+    const asked = new Promise<void>((done) => (h.asked = done));
+    h.clock = at(21);
+    const ticked = responder.tick();
+    await asked;
+    h.shadowVisibleToMember = true;
+    expect(await responder.check()).toBe(false);
+    expect(h.logs.some((m) => m.includes("#bot-tests is visible to the Member role"))).toBe(true);
+    await say(message(OTHER, 22));
+    release();
+    await ticked;
+    expect(row(OTHER)).toBeNull();
+    expect(h.writes).toEqual([]);
   });
 });
 
@@ -463,6 +557,18 @@ describe("matching (§4)", () => {
     expect(h.asks[0]!.context).toContain("woodshop");
     expect(h.asks[0]!.context).not.toContain("staffroom");
   });
+
+  it("never shows the model a place Staff denied this member by name (#53)", async () => {
+    const { h, responder, say } = await started();
+    h.denied.set(MEMBER, new Set([woodshop.id]));
+    h.extraction = { signal: "some", interests: ["woodworking"], topics: [], life_stage: [] };
+    await say(message(MEMBER, 0));
+    h.clock = at(21);
+    await responder.tick();
+    expect(h.asks).toHaveLength(1);
+    expect(h.asks[0]!.context).toContain("gliders");
+    expect(h.asks[0]!.context).not.toContain("woodshop");
+  });
 });
 
 describe("images (§4)", () => {
@@ -525,11 +631,12 @@ describe("the invited path (§9)", () => {
     expect([...h.extracts, ...h.readings, ...h.asks]).toEqual([]);
   });
 
-  it("makes no call when the member lookup finds nobody: without their names, nothing is redacted", async () => {
+  it("makes no call when the member lookup finds nobody, for words or an image alone", async () => {
     const { h, say } = await started();
     h.members.set(MEMBER, null);
     await say(mention(MEMBER, 1));
-    expect([...h.extracts, ...h.asks]).toEqual([]);
+    await say({ ...mention(MEMBER, 2, ""), embeds: [gif] });
+    expect([...h.extracts, ...h.readings, ...h.asks]).toEqual([]);
     expect(h.writes).toEqual([]);
   });
 

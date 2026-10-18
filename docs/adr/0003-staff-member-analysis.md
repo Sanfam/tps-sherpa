@@ -108,8 +108,10 @@ Alternative: keep the carve-out whole.
 **O5. Child data.** Parents' messages are full of their children. Recommended:
 sources are sent as they are (filtering them out would blank most of a
 parent's history), the prompt forbids child details in output, and the schema
-has no field for them. **The owner accepts, as in D14, that children's details
-in members' messages reach the provider.** Alternative: drop every message in
+has no field for them. This would extend D14 (which the owner
+accepted for intro images only): children's details in members' messages
+would reach the provider. **Child data is a stop condition; the owner has not
+decided this, and nothing here is built on it until they do.** Alternative: drop every message in
 the parenting Channels and their Posts from sources, which costs most of the
 context for most members.
 
@@ -133,9 +135,15 @@ narrower group, since "moderator" is a word to avoid.
   So the `moderation` origin refuses a source from any Channel, or a Thread
   under one, that the Catalog marks withheld, as `ask()` refuses withheld
   subjects today.
-- **Only Channels a Member can reach.** Sources come from Catalog Entities and
-  their Threads and Posts. Staff-only Channels are not Catalog Entities, so
-  Staff's own conversations about a member are never swept in.
+- **Only places a Member can reach (a rule to build, not a property of the
+  Catalog).** The Catalog holds every container the bot can see, Staff-only
+  ones included (`catalog.ts`, `visibleContainers`), and #53 filters access
+  where places are *shown*, not at Catalog membership. So sources come from
+  Catalog Entities and their Threads and Posts **only if** the Entity is
+  visible to the `Member` role (by #53's role-id access fields, which fail
+  closed) and is neither withheld nor excluded. Without that check, Staff's
+  own conversations about a member could be swept in. #51 and #52 depend on
+  #53 for it.
 - **Life stage is never an output field,** and no output is scheduled on.
 
 ## Consequences
@@ -143,7 +151,7 @@ narrower group, since "moderator" is a word to avoid.
 **Gained:** Staff get a reviewed, cited summary of a member's history, and
 early notice under triggers they set, in the Forum they already use.
 
-**Accepted costs:**
+**Costs, if the proposal is accepted:**
 
 - A model's judgement about a person sits in Staff's records, and in #52
   outlives the member's erasure, as shadow posts do (responder D30). Sherpa

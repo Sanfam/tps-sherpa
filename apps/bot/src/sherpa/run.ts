@@ -35,8 +35,8 @@ import {
   retrying,
 } from "../llm/session.ts";
 import { parseVocabulary } from "../llm/vocabulary.ts";
-import { canReadHistory, canSend, canView, messageContentUsable } from "../sync/discord-adapter.ts";
-import { DURABLE_STORE_PATH, readMonitored, withDurableStore } from "../sync/durable-store.ts";
+import { MEMBER_ROLE_NAME, canReadHistory, canSend, canView, messageContentUsable } from "../sync/discord-adapter.ts";
+import { DURABLE_STORE_PATH, readDeniedPlaces, readMonitored, withDurableStore } from "../sync/durable-store.ts";
 import { TIER0_PATH } from "../sync/tier0-store.ts";
 import { FIND_TIMEOUT_MS } from "./find.ts";
 import { dailyCap, findDailyCap, handleInteraction, memberRoleIds, type Sherpa } from "./interactions.ts";
@@ -75,19 +75,29 @@ const probe = async () => {
   ]);
   const { roles: roleIds } = await api.guilds.getMember(guildId, me.id);
   const permissions = new Map(roles.map((r) => [r.id, BigInt(r.permissions)]));
-  const ctx = {
+  const holding = (held: string[], memberId: string) => ({
     guildId,
-    roleIds,
-    memberId: me.id,
-    basePermissions: [guildId, ...roleIds].reduce((p, id) => p | (permissions.get(id) ?? 0n), 0n),
-  };
+    roleIds: held,
+    memberId,
+    basePermissions: [guildId, ...held].reduce((p, id) => p | (permissions.get(id) ?? 0n), 0n),
+  });
+  const ctx = holding(roleIds, me.id);
   const access = (id: string): ChannelAccess | null => {
     const channel = channels.find((c) => c.id === id);
     return channel
       ? { view: canView(channel, ctx), history: canReadHistory(channel, ctx), send: canSend(channel, ctx) }
       : null;
   };
-  return { messageContent: messageContentUsable(app.flags ?? 0), watched: access(WATCHED_CHANNEL), shadow: access(SHADOW_CHANNEL) };
+  // A Member as the sync models one: @everyone and the Member role, no member-specific overwrite.
+  // With no Member role to test, #bot-tests cannot be shown hidden, so it counts as visible.
+  const memberRoles = roles.filter((r) => r.name === MEMBER_ROLE_NAME).map((r) => r.id);
+  const shadow = channels.find((c) => c.id === SHADOW_CHANNEL);
+  return {
+    messageContent: messageContentUsable(app.flags ?? 0),
+    watched: access(WATCHED_CHANNEL),
+    shadow: access(SHADOW_CHANNEL),
+    shadowVisibleToMember: !memberRoles.length || (shadow !== undefined && canView(shadow, holding(memberRoles, ""))),
+  };
 };
 
 const responder: Responder | null = introductions
@@ -129,7 +139,14 @@ const responder: Responder | null = introductions
         const catalog = loadCatalog();
         const { boundary, monitored } = openBoundary(catalog, {}, FIND_TIMEOUT_MS);
         const memberRoles = memberRoleIds(loadRoleManifest());
-        return { catalog, monitored, vocabulary: parseVocabulary(readIfPresent(VOCABULARY_PATH)), boundary, memberRoles };
+        return {
+          catalog,
+          monitored,
+          vocabulary: parseVocabulary(readIfPresent(VOCABULARY_PATH)),
+          boundary,
+          memberRoles,
+          denied: (memberId) => readDeniedPlaces(memberId),
+        };
       },
       fetchImage: (url, init) => fetch(url, init),
       cap: dailyCap(resolve(DATA_DIR, "responder-usage.json"), RESPONDER_DAILY_CAP, log),
@@ -170,6 +187,7 @@ const sherpa: Sherpa = {
   settings: (work) => withResponderStore(work, DURABLE_STORE_PATH),
   ...(responder ? { tally: async () => describeTally(await computeTally(await tallyDeps())) } : {}),
   loadMonitored: (catalog) => readMonitored(catalog),
+  loadDenied: (memberId) => readDeniedPlaces(memberId),
   askFor: (catalog) => openBoundary(catalog, {}, FIND_TIMEOUT_MS).boundary.ask,
   retrying: (work) => retrying(work, log),
   cap: dailyCap(resolve(DATA_DIR, "find-usage.json"), limit, log),
@@ -219,7 +237,11 @@ if (responder) {
         void responder.eraseLoop().catch(logged("erasure loop"));
         void responder.check().catch(logged("checks"));
       }, HOUR);
-      // The daily tally, and the go-live notice once the bar is reached (§8).
-      setInterval(() => void tallyDeps().then(runTally).catch(logged("tally")), 24 * HOUR);
+      // The daily tally, and the go-live notice once the bar is reached (§8). Also at
+      // startup, so a bot restarted more often than daily still tallies; the notice is
+      // recorded once, so running it again posts nothing more.
+      const tally = () => void tallyDeps().then(runTally).catch(logged("tally"));
+      tally();
+      setInterval(tally, 24 * HOUR);
     });
 }

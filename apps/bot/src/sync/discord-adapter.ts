@@ -212,33 +212,43 @@ export const discordRest = (config: {
           }
         : null;
 
-      // Per role, as `canView` decides it for a member holding @everyone and
-      // that one role (#53). Discord unions role overwrites, so a role's own
-      // deny can hide a place that another role a member holds would show
-      // them: the guild hides verification from `Member` that way. Holding a
-      // deny role therefore hides the place whatever else is held, which fails
-      // closed where another role's allow would win. Member-specific
-      // overwrites are not modelled.
+      // Per role, for `visibleTo` (#53). Discord applies @everyone's
+      // overwrite, then every held role's deny together, then every held
+      // role's allow together, so one role's allow beats another's deny:
+      //
+      // - allowRoles: the role's own overwrite allows VIEW, or it carries
+      //   ADMINISTRATOR, which no overwrite can hide a place from.
+      // - viewRoles: `canView` for a member holding @everyone and that role.
+      // - denyRoles: the role's own overwrite denies VIEW. The guild hides
+      //   verification from `Member` that way.
+      //
+      // deniedMembers: members whose own overwrite denies VIEW, which beats
+      // every role. Bot-side only, never on an Entity. A member's own allow
+      // is ignored, which fails closed.
+      const setsView = (o: Overwrite | undefined, side: "allow" | "deny") =>
+        o !== undefined && (BigInt(o[side]) & VIEW_CHANNEL) !== 0n;
       const roleAccess = (c: RawGuildChannel) => {
+        const allowRoles: string[] = [];
         const viewRoles: string[] = [];
         const denyRoles: string[] = [];
         for (const r of roles) {
           if (r.id === config.guildId) continue;
-          const alone: PermissionContext = {
-            guildId: config.guildId,
-            roleIds: [r.id],
-            memberId: "",
-            basePermissions: everyonePerms | BigInt(r.permissions),
-          };
-          if (canView(c, alone)) viewRoles.push(r.id);
-          else if (
-            c.permission_overwrites?.some(
-              (o) => o.id === r.id && o.type === 0 && (BigInt(o.deny) & VIEW_CHANNEL) !== 0n,
-            )
-          )
-            denyRoles.push(r.id);
+          const basePermissions = everyonePerms | BigInt(r.permissions);
+          const own = c.permission_overwrites?.find((o) => o.id === r.id && o.type === 0);
+          if ((basePermissions & ADMINISTRATOR) !== 0n || setsView(own, "allow")) allowRoles.push(r.id);
+          if (canView(c, { guildId: config.guildId, roleIds: [r.id], memberId: "", basePermissions }))
+            viewRoles.push(r.id);
+          if (setsView(own, "deny")) denyRoles.push(r.id);
         }
-        return { viewRoles: viewRoles.sort(), denyRoles: denyRoles.sort() };
+        const deniedMembers = (c.permission_overwrites ?? [])
+          .filter((o) => o.type === 1 && setsView(o, "deny"))
+          .map((o) => o.id);
+        return {
+          allowRoles: allowRoles.sort(),
+          viewRoles: viewRoles.sort(),
+          denyRoles: denyRoles.sort(),
+          deniedMembers: deniedMembers.sort(),
+        };
       };
       return channels.map((c) => ({
         id: c.id,
@@ -266,7 +276,10 @@ export const discordRest = (config: {
       // private Threads the bot can see. Those are dropped: a private Thread
       // is not something a Member can browse to, and its archived copy is
       // behind MANAGE_THREADS, so publishing it while active would also make
-      // it vanish rather than close when it is archived.
+      // it vanish rather than close when it is archived. So are those under a
+      // parent not asked for, a monitored Channel's included (#41): Discord
+      // returns them, but they are dropped here, before any first post is
+      // fetched, and never reach the Catalog.
       const active = (await rest.get(
         Routes.guildActiveThreads(config.guildId),
       )) as { threads: RawDiscordThread[] };

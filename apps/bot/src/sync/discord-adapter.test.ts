@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { type Entity, visibleTo } from "./catalog.ts";
 import { discordRest } from "./discord-adapter.ts";
 
 /** Answers the three routes listThreads calls, from canned Discord payloads. */
@@ -136,8 +137,10 @@ describe("listThreads", () => {
 
 describe("listChannels: who can see each place, by role (#53)", () => {
   const VIEW = (1n << 10n).toString();
-  const [GUILD, MEMBER, HOBBY, STAFF, BOT_ROLE] = ["1", "2", "3", "4", "9"] as const;
-  const ow = (id: string, allow: string, deny: string) => ({ id, type: 0, allow, deny });
+  const ADMINISTRATOR = (1n << 3n).toString();
+  const [GUILD, MEMBER, HOBBY, STAFF, ADMIN, BOT_ROLE] = ["1", "2", "3", "4", "5", "9"] as const;
+  const DENIED_MEMBER = "77";
+  const ow = (id: string, allow: string, deny: string, type = 0) => ({ id, type, allow, deny });
   const channels = [
     // The guild's verification shape: @everyone allowed, `Member` denied.
     { id: "10", name: "verification", type: 0, permission_overwrites: [ow(GUILD, VIEW, "0"), ow(MEMBER, "0", VIEW)] },
@@ -148,11 +151,22 @@ describe("listChannels: who can see each place, by role (#53)", () => {
       type: 0,
       permission_overwrites: [ow(GUILD, "0", VIEW), ow(STAFF, VIEW, "0"), ow(BOT_ROLE, VIEW, "0")],
     },
+    {
+      id: "13",
+      name: "hobby-room",
+      type: 0,
+      permission_overwrites: [
+        ow(MEMBER, "0", VIEW),
+        ow(HOBBY, VIEW, "0"),
+        ow(ADMIN, "0", VIEW),
+        ow(DENIED_MEMBER, "0", VIEW, 1),
+      ],
+    },
   ];
-  const roles = [GUILD, MEMBER, HOBBY, STAFF, BOT_ROLE].map((id) => ({
+  const roles = [GUILD, MEMBER, HOBBY, STAFF, ADMIN, BOT_ROLE].map((id) => ({
     id,
     name: id === MEMBER ? "Member" : id,
-    permissions: id === GUILD ? VIEW : "0",
+    permissions: id === GUILD ? VIEW : id === ADMIN ? ADMINISTRATOR : "0",
     color: 0,
   }));
   const port = discordRest({
@@ -171,12 +185,38 @@ describe("listChannels: who can see each place, by role (#53)", () => {
 
   it("honours a role's own deny and @everyone's allow, and grants a Member no place only Staff see", async () => {
     const access = Object.fromEntries(
-      (await port.listChannels()).map((c) => [c.name, { view: c.viewRoles, deny: c.denyRoles }]),
+      (await port.listChannels()).map((c) => [
+        c.name,
+        { allow: c.allowRoles, view: c.viewRoles, deny: c.denyRoles, members: c.deniedMembers },
+      ]),
     );
     expect(access).toEqual({
-      verification: { view: [HOBBY, STAFF, BOT_ROLE], deny: [MEMBER] },
-      fishing: { view: [HOBBY], deny: [] },
-      "staff-room": { view: [STAFF, BOT_ROLE], deny: [] },
+      verification: { allow: [ADMIN], view: [HOBBY, STAFF, ADMIN, BOT_ROLE], deny: [MEMBER], members: [] },
+      fishing: { allow: [HOBBY, ADMIN], view: [HOBBY, ADMIN], deny: [], members: [] },
+      "staff-room": { allow: [STAFF, ADMIN, BOT_ROLE], view: [STAFF, ADMIN, BOT_ROLE], deny: [], members: [] },
+      "hobby-room": {
+        allow: [HOBBY, ADMIN],
+        view: [HOBBY, STAFF, ADMIN, BOT_ROLE],
+        deny: [MEMBER, ADMIN],
+        members: [DENIED_MEMBER],
+      },
     });
+  });
+
+  // Discord: @everyone's overwrite, then every held role's deny, then every
+  // held role's allow. ADMINISTRATOR skips overwrites altogether.
+  it("lets one held role's allow beat another's deny, and ADMINISTRATOR beat any deny, as Discord does", async () => {
+    const byName = new Map((await port.listChannels()).map((c) => [c.name, c]));
+    const sees = (name: string, roles: string[]) => {
+      const c = byName.get(name)!;
+      return visibleTo({ allow_roles: c.allowRoles, view_roles: c.viewRoles, deny_roles: c.denyRoles } as Entity, roles);
+    };
+    expect(sees("hobby-room", [MEMBER, HOBBY])).toBe(true);
+    expect(sees("hobby-room", [MEMBER])).toBe(false);
+    expect(sees("hobby-room", [MEMBER, STAFF])).toBe(false);
+    expect(sees("hobby-room", [MEMBER, ADMIN])).toBe(true);
+    // A role seeing it only through @everyone does not outweigh a deny.
+    expect(sees("verification", [MEMBER, HOBBY])).toBe(false);
+    expect(sees("verification", [HOBBY])).toBe(true);
   });
 });

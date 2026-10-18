@@ -29,10 +29,11 @@ export const latelyPlaces = (
   catalog: Entity[],
   monitored: ReadonlySet<string>,
   roles: readonly string[],
+  denied: ReadonlySet<string>,
   topic: Topic | null,
   now: Date = new Date(),
 ): Entity[] =>
-  candidatesOf(catalog, monitored, roles)
+  candidatesOf(catalog, monitored, roles, denied)
     .filter(
       (e) =>
         e.type !== "forum" &&

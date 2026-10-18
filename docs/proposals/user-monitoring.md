@@ -39,8 +39,7 @@ Forum's topic in `sync/__fixtures__/guild-channels.json`, recorded
 - **#51's `analyseMember`** and the `moderation` origin (ADR-0003). An
   observation is that analysis run on a few new messages.
 - `/sherpa` and `isStaff` (responder §7), `sherpa_setting`, `dailyCap`.
-- **The exclusion table** in `bot.db`, and the once-per-store seed pattern of
-  `MONITORED_SEED` and the `seeded` table (`durable-store.ts`).
+- **The exclusion table** in `bot.db` (ADR-0001), for the Forum's exclusion.
 - The adapter's `listThreads` and the Forum's `availableTags`, carried on the
   read port (`discord-adapter.ts`).
 
@@ -51,7 +50,7 @@ Forum's topic in `sync/__fixtures__/guild-channels.json`, recorded
 - A write port for the Forum, whose only targets are Posts in it.
 - `/sherpa watch start|stop|list`.
 
-## 3. The Forum must leave the Catalog first
+## 3. The Forum enters the Catalog; #53 keeps it out of Member results
 
 **The bot cannot see `📊︱user-monitoring` today** *(verified: `visible: false`,
 `contentReadable: false` in the 2026-09-01 fixture; it may have changed since)*.
@@ -61,16 +60,19 @@ Send Messages in Threads and Read Message History there.
 **The moment they do, the next sync puts the Forum and every Post in it into
 the Catalog**: the sync takes every container the bot can see (`visible`), not
 only what a Member can see (`catalog.ts`, `visibleContainers`). From there its
-Post titles and opening messages would go to the snapshot and the site's
-Index, Tier 0 and activity summaries, and `/find`.
+Post titles and opening messages would reach Tier 0 and activity summaries,
+the snapshot and the site's Index.
 
-So **the Forum's id is added to the durable exclusions before any permission
-is granted.** An excluded container's Posts are never enumerated into the
-Catalog (`catalog.ts`). The packet does it as a one-time seed, the way
-`MONITORED_SEED` is applied, because no exclusion command exists yet
-(ADR-0001: "follow-up tickets"). The same seed covers `#ambassador-chamber`
-(`ambassador-alerts.md` §3). The startup checks (below) refuse to run the
-watch if the Forum is in the Catalog.
+#53 keeps it out of `/find` and `/lately`: the sync records the role ids that
+can view each Entity, and a place is named only to an asker whose roles can see
+it. The Forum has no granting role, so no Member is shown it. **#53 must land
+before Staff grant the bot access.** It does not remove the Forum from the
+Catalog, so the capture, summaries and snapshot remain unless **the Forum's id
+is in the durable exclusions** (ADR-0001), which Staff should do before
+granting permission, since its Posts are observations about members. An
+excluded container's Posts are never enumerated into the Catalog
+(`catalog.ts`). The startup checks (below) refuse to run the watch while the
+Forum is in the Catalog.
 
 ## 4. Design
 
@@ -225,7 +227,7 @@ continuously, and writes to Discord. Specific to this tool:
 7. **D52-7. Alerts ping the setter only.** Recommended. Alternatives: a Staff
    role ping, or no pings.
 8. **D52-8. The bot's permissions in the Forum,** granted by Staff after the
-   exclusion seed is deployed: View Channel, Send Messages, Send Messages in
+   exclusion is in place and #53 has landed: View Channel, Send Messages, Send Messages in
    Threads, Read Message History. New permissions, and Sherpa's first posts
    there.
 9. **D52-9. The policy.** If ADR-0003 O3 is B, the policy's new line covers
@@ -237,10 +239,9 @@ continuously, and writes to Discord. Specific to this tool:
 After #51's packets 2 and 3, and after the responder's gateway and `/sherpa`
 are merged.
 
-1. **The exclusion seed** for the Forum and `#ambassador-chamber`, applied
-   once per store, with the startup assertion. *Opus implementer, Medium:
-   durable data.* Shared with `ambassador-alerts.md`; whichever ships first
-   carries it. It deploys before Staff grant any permission.
+1. **The startup assertion** that the Forum is excluded from the Catalog.
+   *Sonnet, Medium.* #53 must be deployed, and the Forum excluded, before
+   Staff grant any permission. No seed packet.
 2. **`watch` and `monitoring_post`, and `/sherpa watch`.** *Sonnet, High.*
 3. **The second gateway filter and the buffer,** with the drops in §4 and the
    `/privacy` hook. *Opus implementer, High: a privacy filter.*

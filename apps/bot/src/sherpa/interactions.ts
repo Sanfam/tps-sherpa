@@ -236,6 +236,8 @@ export interface Sherpa {
    * when one is missing, so `/find` and `/lately` fail closed before any call.
    */
   loadMonitored: (catalog: Entity[]) => ReadonlySet<string>;
+  /** The invoker's denied places (`readDeniedPlaces`), read per command like the Catalog. */
+  loadDenied: (memberId: string) => ReadonlySet<string>;
   /** A boundary built against this Catalog, so its carve-out checks see what the candidates came from. */
   askFor: (catalog: Entity[]) => Boundary["ask"];
   /** One retry, as every other paid call gets. */
@@ -305,6 +307,8 @@ const answer = async (
 
   const vocabulary = sherpa.loadVocabulary();
   const monitored = sherpa.loadMonitored(catalog);
+  const roles = interaction.member!.roles;
+  const denied = sherpa.loadDenied(interaction.member!.user.id);
 
   if (interaction.data.name === "find") {
     const query = stringOption(interaction, "interests") ?? "";
@@ -321,7 +325,8 @@ const answer = async (
           invokerId: interaction.member!.user.id,
           catalog,
           monitored,
-          roles: interaction.member!.roles,
+          roles,
+          denied,
           vocabulary,
           ask,
           origin: { command: "find" },
@@ -344,7 +349,7 @@ const answer = async (
   if (interaction.data.name === "lately") {
     const slug = stringOption(interaction, "topic");
     const topic = vocabulary.topics.find((t) => t.slug === slug) ?? null;
-    const places = latelyPlaces(catalog, monitored, interaction.member!.roles, topic, sherpa.now?.());
+    const places = latelyPlaces(catalog, monitored, roles, denied, topic, sherpa.now?.());
     const activity = sherpa.loadActivity();
     sherpa.log(
       `${tag} topic=${topic?.slug ?? "-"} places=${places.length} ` +

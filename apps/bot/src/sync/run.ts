@@ -51,7 +51,7 @@ const regions = parseGazetteer(
   }),
 );
 const warn = (m: string) => console.warn(m);
-const { catalog, roleManifest, exclusionsApplied, outcome } = await buildCatalog({
+const { catalog, roleManifest, exclusionsApplied, outcome, memberDenies } = await buildCatalog({
   discord: discordRest({ token, guildId, warn }),
   guildId,
   previous,
@@ -74,7 +74,7 @@ if (!outcome.complete) {
 const unchanged =
   JSON.stringify(catalog) === JSON.stringify(previous) &&
   JSON.stringify(roleManifest) === JSON.stringify(current?.roleManifest ?? []);
-store.replaceCatalog({ catalog, roleManifest, outcome });
+store.replaceCatalog({ catalog, roleManifest, outcome, memberDenies });
 store.close();
 
 const exportJson = async (path: string, value: unknown) => {
