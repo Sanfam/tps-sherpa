@@ -89,7 +89,29 @@ export interface Entity {
    * correction cannot be clobbered by a later run.
    */
   summary_override: string | null;
+  /**
+   * Who can see it in Discord, by role id, as of the last sync (#53): the
+   * roles that show it, each held alone beside @everyone, and the roles whose
+   * own overwrite hides it. A Post or Thread has its parent's. Read only
+   * through `visibleTo`, in code: roles never reach a model.
+   *
+   * Absent on an Entity synced before #53, which `visibleTo` shows to nobody
+   * until the next sync writes them.
+   */
+  view_roles?: string[];
+  deny_roles?: string[];
 }
+
+/**
+ * Whether a holder of `roles` can see this Entity in Discord: some role shows
+ * it and none hides it. A place only the bot can see shows to nobody, and
+ * one only Staff can see to Staff alone. No access recorded means nobody.
+ */
+export const visibleTo = (entity: Entity, roles: readonly string[]): boolean =>
+  Array.isArray(entity.view_roles) &&
+  Array.isArray(entity.deny_roles) &&
+  roles.some((r) => entity.view_roles!.includes(r)) &&
+  !roles.some((r) => entity.deny_roles!.includes(r));
 
 /**
  * What an Entity *is*, as far as anything derived from it is concerned.
@@ -132,10 +154,18 @@ export const parsePrevious = (raw: string): Entity[] => {
   // A missing field would be carried forward as null, silently.
   const isEntity = (e: unknown) => {
     if (typeof e !== "object" || e === null) return false;
-    const { id, summary_override, summary_generated, topics, topics_version } = e as Entity;
+    const { id, summary_override, summary_generated, topics, topics_version, view_roles, deny_roles } =
+      e as Entity;
     const stringOrNull = (v: unknown) => v === null || typeof v === "string";
+    // Absent is accepted: a Catalog written before #53 shows its places to
+    // nobody (`visibleTo`) until the next sync, rather than its overrides
+    // being refused for a field the sync recomputes anyway.
+    const roleIds = (v: unknown) =>
+      v === undefined || (Array.isArray(v) && v.every((r) => typeof r === "string"));
     return (
       typeof id === "string" &&
+      roleIds(view_roles) &&
+      roleIds(deny_roles) &&
       stringOrNull(summary_override) &&
       stringOrNull(summary_generated) &&
       Array.isArray(topics) &&
@@ -266,7 +296,7 @@ export const buildCatalog = async (deps: {
     visibleContainers.filter((c) => c.contentReadable).map((c) => c.id),
   );
   const threads = allThreads.filter((t) => !excluded.has(t.id) && !excluded.has(t.parentId));
-  const containerType = new Map(containers.map((c) => [c.id, c.type]));
+  const containerById = new Map(containers.map((c) => [c.id, c]));
   const tagSets = new Map(
     containers.map((c) => [c.id, new Map((c.availableTags ?? []).map((t) => [t.id, t.name]))]),
   );
@@ -373,6 +403,8 @@ export const buildCatalog = async (deps: {
       last_activity_at: snowflakeTime(c.lastMessageId),
       summary_generated: null,
       summary_override: overrides.get(c.id) ?? null,
+      view_roles: c.viewRoles,
+      deny_roles: c.denyRoles,
     };
   };
 
@@ -383,7 +415,7 @@ export const buildCatalog = async (deps: {
       // A Post lives in a Forum; a Thread lives in a Channel. Same underlying
       // object, different Entity — only a Post carries applied_tags.
       type:
-        containerType.get(t.parentId) === ChannelType.GuildForum
+        containerById.get(t.parentId)?.type === ChannelType.GuildForum
           ? "post"
           : "thread",
       name: t.name,
@@ -402,6 +434,9 @@ export const buildCatalog = async (deps: {
       last_activity_at: snowflakeTime(t.lastMessageId),
       summary_generated: null,
       summary_override: overrides.get(t.id) ?? null,
+      // Discord gives a Post or Thread its parent's permissions.
+      view_roles: containerById.get(t.parentId)?.viewRoles ?? [],
+      deny_roles: containerById.get(t.parentId)?.denyRoles ?? [],
     };
   };
 

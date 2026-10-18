@@ -8,10 +8,12 @@ import type {
 
 export const fixtureDiscord = (data: {
   channels: Array<
-    Omit<RawChannel, "contentReadable" | "visible" | "memberVisible"> & {
+    Omit<RawChannel, "contentReadable" | "visible" | "memberVisible" | "viewRoles" | "denyRoles"> & {
       contentReadable?: boolean;
       visible?: boolean;
       memberVisible?: boolean;
+      viewRoles?: string[];
+      denyRoles?: string[];
     }
   >;
   threads?: RawThread[];
@@ -25,6 +27,8 @@ export const fixtureDiscord = (data: {
       visible: c.visible ?? true,
       memberVisible: c.memberVisible ?? c.visible ?? true,
       contentReadable: c.contentReadable ?? true,
+      viewRoles: c.viewRoles ?? [],
+      denyRoles: c.denyRoles ?? [],
     })),
   listThreads: async (parentIds) => ({
     threads: (data.threads ?? []).filter((t) => parentIds.includes(t.parentId)),

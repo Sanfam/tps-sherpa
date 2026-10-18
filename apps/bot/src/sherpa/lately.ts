@@ -21,17 +21,18 @@ export { MAX_MESSAGE_CHARS };
 export const MAX_LATELY = 8;
 
 /**
- * The same candidates `/find` may name, so the two commands cannot disagree
- * about what is somewhere to go. Forums are left out: a Forum's activity is
+ * The same candidates `/find` may name, for the same asker, so the two
+ * commands cannot disagree about what is somewhere to go. Forums are left out: a Forum's activity is
  * its Posts, which are listed in their own right.
  */
 export const latelyPlaces = (
   catalog: Entity[],
   monitored: ReadonlySet<string>,
+  roles: readonly string[],
   topic: Topic | null,
   now: Date = new Date(),
 ): Entity[] =>
-  candidatesOf(catalog, monitored)
+  candidatesOf(catalog, monitored, roles)
     .filter(
       (e) =>
         e.type !== "forum" &&

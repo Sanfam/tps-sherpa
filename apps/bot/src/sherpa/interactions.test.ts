@@ -68,6 +68,8 @@ const entity = (over: Partial<Entity> & { id: string; name: string }): Entity =>
   last_activity_at: new Date().toISOString(),
   summary_generated: null,
   summary_override: null,
+  view_roles: [MEMBER_ROLE],
+  deny_roles: [],
   ...over,
 });
 
@@ -474,6 +476,21 @@ describe("the Member gate", () => {
     const { run } = harness();
     const dm = { ...(command("lately") as object), member: undefined } as unknown as APIInteraction;
     expect(await run(dm)).toBe(NOT_A_MEMBER);
+  });
+});
+
+describe("the invoker's own roles decide what is named (#53)", () => {
+  const gated = entity({ id: "100000000000000003", name: "Moderators' corner", view_roles: [OTHER_ROLE] });
+  const link = `**Moderators' corner** ([open](${gated.url}))`;
+
+  it.each([
+    ["holds the role", [MEMBER_ROLE, OTHER_ROLE], true],
+    ["does not", [MEMBER_ROLE], false],
+  ])("a role-gated place, to a Member who %s", async (_, roles, shown) => {
+    const { run, calls } = harness({ loadCatalog: () => [...catalog, gated] });
+    await run(command("find", { interests: QUERY }, { roles }));
+    expect(calls[0]!.includes("Moderators' corner")).toBe(shown);
+    expect((await run(command("lately", {}, { roles })))!.includes(link)).toBe(shown);
   });
 });
 
