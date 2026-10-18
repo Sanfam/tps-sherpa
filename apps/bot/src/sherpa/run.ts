@@ -20,7 +20,7 @@ import { resolve } from "node:path";
 import { API, Client } from "@discordjs/core";
 import { DiscordAPIError, REST } from "@discordjs/rest";
 import { WebSocketManager } from "@discordjs/ws";
-import { GatewayDispatchEvents, GatewayIntentBits } from "discord-api-types/v10";
+import { GatewayDispatchEvents, GatewayIntentBits, ReactionType } from "discord-api-types/v10";
 import { WATCHED_CHANNEL } from "../llm/boundary.ts";
 import {
   ACTIVITY_PATH,
@@ -39,7 +39,7 @@ import { MEMBER_ROLE_NAME, canReadHistory, canSend, canView, messageContentUsabl
 import { DURABLE_STORE_PATH, readDeniedPlaces, readMonitored, withDurableStore } from "../sync/durable-store.ts";
 import { TIER0_PATH } from "../sync/tier0-store.ts";
 import { FIND_TIMEOUT_MS } from "./find.ts";
-import { dailyCap, findDailyCap, handleInteraction, memberRoleIds, type Sherpa } from "./interactions.ts";
+import { STAFF_ROLE_NAMES, dailyCap, findDailyCap, handleInteraction, memberRoleIds, type Sherpa } from "./interactions.ts";
 import { openMonitored } from "./monitored.ts";
 import { openPrivacy } from "./privacy.ts";
 import { withResponderStore } from "./responder-store.ts";
@@ -155,17 +155,45 @@ const responder: Responder | null = introductions
     })
   : null;
 
-/** The shadow tally's reads and its one notice (§8), only where the responder runs. */
+/**
+ * The shadow tally's reads and its one notice (§8), only where the responder
+ * runs. Built per run: the Staff roles are read from the manifest once, and
+ * each reactor is looked up as a guild member.
+ */
 let botId: string | undefined;
-const tallyDeps = async (): Promise<TallyDeps> => ({
-  messages: (channelId, before) => api.channels.getMessages(channelId, { limit: 100, ...(before ? { before } : {}) }),
-  botId: (botId ??= (await api.users.getCurrent()).id),
-  now: () => Date.now(),
-  store: (work) => withResponderStore(work, DURABLE_STORE_PATH),
-  monitored: () => readMonitored(loadCatalog()),
-  createMessage: (channelId, body) => api.channels.createMessage(channelId, body),
-  log,
-});
+const tallyDeps = async (): Promise<TallyDeps> => {
+  const staffRoles = new Set(
+    loadRoleManifest()
+      .filter((r) => STAFF_ROLE_NAMES.includes(r.name))
+      .flatMap((r) => r.ids),
+  );
+  return {
+    messages: (channelId, before) => api.channels.getMessages(channelId, { limit: 100, ...(before ? { before } : {}) }),
+    reactors: async ({ channelId, messageId, emoji, burst, after }) =>
+      (
+        await api.channels.getMessageReactions(channelId, messageId, emoji, {
+          limit: 100,
+          type: burst ? ReactionType.Burst : ReactionType.Normal,
+          ...(after ? { after } : {}),
+        })
+      ).map((u) => u.id),
+    staff: async (userId) => {
+      try {
+        return (await api.guilds.getMember(guildId, userId)).roles.some((id) => staffRoles.has(id));
+      } catch (error) {
+        if (notFound(error)) return false;
+        throw error;
+      }
+    },
+    passing: () => responder?.passing() ?? false,
+    botId: (botId ??= (await api.users.getCurrent()).id),
+    now: () => Date.now(),
+    store: (work) => withResponderStore(work, DURABLE_STORE_PATH),
+    monitored: () => readMonitored(loadCatalog()),
+    createMessage: (channelId, body) => api.channels.createMessage(channelId, body),
+    log,
+  };
+};
 
 const sherpa: Sherpa = {
   guildId,
@@ -239,7 +267,8 @@ if (responder) {
       }, HOUR);
       // The daily tally, and the go-live notice once the bar is reached (§8). Also at
       // startup, so a bot restarted more often than daily still tallies; the notice is
-      // recorded once, so running it again posts nothing more.
+      // recorded once, so running it again posts nothing more. Either refuses while the
+      // checks fail (`passing`).
       const tally = () => void tallyDeps().then(runTally).catch(logged("tally"));
       tally();
       setInterval(tally, 24 * HOUR);

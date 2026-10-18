@@ -22,12 +22,22 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 let seq = 0;
 const header = (kind: string) => `Intro responder (shadow) · would POST ${kind} · replying to: https://x/y\nTimeline: …`;
-const post = (kind: string, reactions: Record<string, number> = { "✅": 1 }, author = BOT): TallyMessage => ({
-  id: String(1_000_000 + seq++),
-  author: { id: author } as TallyMessage["author"],
-  content: header(kind),
-  reactions: Object.entries(reactions).map(([name, count]) => ({ emoji: { name }, count })) as TallyMessage["reactions"],
-});
+/** Who reacted, by message id and emoji, for the `reactors` fake. Ids starting `staff` are Staff. */
+const reactorsOf = new Map<string, Map<string, string[]>>();
+/** A count is that many Staff reactors; a list names them. */
+const post = (kind: string, reactions: Record<string, number | string[]> = { "✅": 1 }, author = BOT): TallyMessage => {
+  const id = String(1_000_000 + seq++);
+  const who = new Map(
+    Object.entries(reactions).map(([name, r]) => [name, typeof r === "number" ? Array.from({ length: r }, (_, i) => `staff-${i}`) : r]),
+  );
+  reactorsOf.set(id, who);
+  return {
+    id,
+    author: { id: author } as TallyMessage["author"],
+    content: header(kind),
+    reactions: [...who].map(([name, ids]) => ({ emoji: { name }, count: ids.length })) as TallyMessage["reactions"],
+  };
+};
 const good = (n: number, kind = "question") => Array.from({ length: n }, () => post(kind));
 
 /** A fake Channel that pages 100 at a time, newest first, over `all`. */
@@ -36,7 +46,7 @@ const world = (all: TallyMessage[], daysIn: number | null = 14) => {
   const store = openResponderStore(path);
   if (daysIn !== null) store.setMode("shadow", "t", new Date(T0));
   store.close();
-  const state = { all, monitored: new Set<string>(), fail: false };
+  const state = { all, monitored: new Set<string>(), fail: false, passing: true };
   const deps: TallyDeps = {
     messages: async (channel, before) => {
       expect(channel).toBe(SHADOW_CHANNEL);
@@ -46,6 +56,14 @@ const world = (all: TallyMessage[], daysIn: number | null = 14) => {
         .filter((m) => before === undefined || BigInt(m.id) < BigInt(before))
         .slice(0, 100);
     },
+    reactors: async ({ channelId, messageId, emoji, burst, after }) => {
+      expect(channelId).toBe(SHADOW_CHANNEL);
+      if (burst) return [];
+      const ids = reactorsOf.get(messageId)?.get(emoji) ?? [];
+      return ids.slice(after === undefined ? 0 : ids.indexOf(after) + 1).slice(0, 100);
+    },
+    staff: async (userId) => userId.startsWith("staff"),
+    passing: () => state.passing,
     botId: BOT,
     now: () => T0 + (daysIn ?? 0) * DAY,
     store: (work) => {
@@ -110,6 +128,18 @@ describe("the go-live bar", () => {
     expect(tally.autonomous).toMatchObject({ posts: 121, approved: 120, yes: 120 });
   });
 
+  it("counts only Staff's reactions: a non-Staff ✅ does not approve, and a non-Staff ⚠️ does not block", async () => {
+    const posts = [...good(29), post("question", { "✅": ["member-1"] }), post("recommend", { "✅": 1, "⚠️": ["member-2"] })];
+    const { tally } = await runTally(world(posts).deps);
+    expect(tally.autonomous).toMatchObject({ posts: 31, approved: 30, yes: 30, warn: 0 });
+    expect(tally.met).toBe(true);
+  });
+
+  it("reads every page of reactors", async () => {
+    const { tally } = await runTally(world([post("question", { "✅": 250 })]).deps);
+    expect(tally.autonomous.yes).toBe(250);
+  });
+
   it("is not reached if shadow was never set", async () => {
     expect((await runTally(world(good(30), null).deps)).tally).toMatchObject({ days: null, met: false });
   });
@@ -136,6 +166,27 @@ describe("the go-live notice", () => {
     const { deps, sent, state } = world(good(30));
     state.monitored.add(SHADOW_CHANNEL);
     await expect(runTally(deps)).rejects.toThrow(/monitored/);
+    expect(sent).toEqual([]);
+    expect(deps.store((s) => s.setting("shadow_notice_at"))).toBeNull();
+  });
+
+  it("is not posted, nor recorded, while the responder's checks fail, before the reads or during them", async () => {
+    const { deps, sent, state } = world(good(30));
+    // Paused, it reads nothing: a read here would answer 503, not the checks.
+    state.passing = false;
+    state.fail = true;
+    await expect(runTally(deps)).rejects.toThrow(/checks/);
+    state.passing = true;
+    state.fail = false;
+    await expect(
+      runTally({
+        ...deps,
+        messages: async (channel, before) => {
+          state.passing = false;
+          return deps.messages(channel, before);
+        },
+      }),
+    ).rejects.toThrow(/checks/);
     expect(sent).toEqual([]);
     expect(deps.store((s) => s.setting("shadow_notice_at"))).toBeNull();
   });

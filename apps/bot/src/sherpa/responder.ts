@@ -428,9 +428,11 @@ export const createResponder = (deps: ResponderDeps) => {
    * One extraction over every message that fed the watch (§3, §4), the
    * others re-fetched by id: their text is held for the call only (§5).
    * When this message added signal, returns when the latest message the call
-   * read was posted or edited; otherwise null.
+   * read was posted or edited; otherwise null. A rebuild claims none of the
+   * row's extractions: it reconstructs what was already extracted, so a row
+   * at the cap keeps its signal. It is still a paid call, under the cap.
    */
-  const extract = async (watch: Watch, message: WatchedMessage): Promise<number | null> => {
+  const extract = async (watch: Watch, message: WatchedMessage, rebuild: boolean): Promise<number | null> => {
     const row = deps.store((s) => s.introduction(watch.memberId));
     const messages = row && (await refetch(row.messages.map((m) => m.id), message));
     if (!messages) return null;
@@ -444,7 +446,7 @@ export const createResponder = (deps: ResponderDeps) => {
           memberNames: watch.names,
           vocabulary: s.vocabulary,
         }),
-      () => deps.store((s) => s.claimExtraction(watch.memberId)),
+      rebuild ? undefined : () => deps.store((s) => s.claimExtraction(watch.memberId)),
     );
     if (!result) return null;
     watch.extraction = result;
@@ -474,14 +476,14 @@ export const createResponder = (deps: ResponderDeps) => {
   };
 
   /** The member's own message in their watch: the intro, a follow-up, or an edit of either. */
-  const own = async (watch: Watch, message: WatchedMessage) => {
+  const own = async (watch: Watch, message: WatchedMessage, rebuild = false) => {
     if (!deps.store((s) => s.recordMessage(watch.memberId, message.id, message.edited_timestamp))) return;
     watch.ownIds.add(message.id);
     const key = `${message.id}@${message.edited_timestamp ?? ""}`;
     if (!watch.handled.has(key)) {
       watch.handled.add(key);
       // Words alone are signal: an image-only message is a greeting (§4).
-      const signalAt = message.content.trim() ? await extract(watch, message) : null;
+      const signalAt = message.content.trim() ? await extract(watch, message, rebuild) : null;
       const at = watch.messages.length ? Date.parse(message.edited_timestamp ?? message.timestamp) : watch.introAt;
       watch.messages.push({ at, signal: signalAt !== null && signalAt <= at });
       // A rebuild reads the intro's follow-ups with it: their signal keeps their own time, so a restart
@@ -538,13 +540,14 @@ export const createResponder = (deps: ResponderDeps) => {
       // An open row is rebuilt from its intro, read again by the catch-up. Nothing else of it is.
       if (row.postedAt !== null || row.messages[0]?.id !== message.id) return;
       const member = await deps.discord.member(author);
-      if (gone(message.id)) return;
+      // A check that failed during the lookup leaves the row to the next catch-up.
+      if (gone(message.id) || !ready) return;
       if (!member) {
         log(`[responder] member ${author}: not in the guild, so their open watch is not rebuilt`);
         return void deps.store((s) => s.closeIntroduction(author, "failed", "error", date()));
       }
       log(`[responder] member ${author} intro ${message.id}: watch rebuilt`);
-      return own(watch(author, message, member.names), message);
+      return own(watch(author, message, member.names), message, true);
     }
     // Older than the switch out of `off`: it may feed an open row, never start one (§2, F11).
     if (onSince !== null && Date.parse(message.timestamp) < Date.parse(onSince)) return;
@@ -556,8 +559,9 @@ export const createResponder = (deps: ResponderDeps) => {
       log(`[responder] member ${author} message ${message.id}: the lookup gave no joined_at, so not evaluated`);
       return;
     }
-    // After the last await: the row is one conditional insert (§5), never of a deleted message (§6).
-    if (gone(message.id) || deps.store((s) => s.mode()) === "off") return;
+    // After the last await: the row is one conditional insert (§5), never of a deleted message (§6),
+    // and never while the checks fail.
+    if (gone(message.id) || !ready || deps.store((s) => s.mode()) === "off") return;
     const joinedAt = member.joinedAt;
     const started = deps.store((s) =>
       s.startIntroduction(author, { messageId: message.id, editedAt: message.edited_timestamp, joinedAt }, date()),
@@ -751,8 +755,8 @@ export const createResponder = (deps: ResponderDeps) => {
     }
     for (const w of watches.values()) if (w.memberId !== author) notice(w, message);
     await serial(author, async () => {
-      // It may have waited behind their earlier work.
-      if (gone(message.id)) return;
+      // It may have waited behind their earlier work, and a check may have failed meanwhile.
+      if (gone(message.id) || !ready) return;
       if (invited && !watched(author)) return invite(message);
       const w = watches.get(author);
       await (w ? own(w, message) : consider(message));
@@ -824,7 +828,7 @@ export const createResponder = (deps: ResponderDeps) => {
       if (!probe.watched?.view || !probe.watched.history) failures.push("#introductions is not visible and readable");
       if (!probe.shadow?.view || !probe.shadow.send || !probe.shadow.history)
         failures.push("#bot-tests cannot be viewed, sent to and read");
-      // Shadow posts and the tally assume a Staff-only Channel.
+      // Shadow posts assume a Staff-only Channel; the tally checks each reactor itself.
       if (probe.shadowVisibleToMember) failures.push("#bot-tests is visible to the Member role");
       if (mode === "live" && !probe.watched?.send) failures.push("#introductions cannot be sent to");
       const monitored = deps.monitored();
@@ -1001,6 +1005,8 @@ export const createResponder = (deps: ResponderDeps) => {
     },
 
     check,
+    /** The checks passed and the seed is complete: the tally runs only then (§8). */
+    passing: () => ready,
     eraseLoop,
 
     /**

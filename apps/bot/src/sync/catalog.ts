@@ -132,6 +132,11 @@ export const visibleTo = (entity: Entity, roles: readonly string[]): boolean => 
  * Whether a member's own overwrite hides this Entity from them. `denied` is
  * their denied places (`readDeniedPlaces`); a Post or Thread is hidden with
  * its parent.
+ *
+ * ponytail: a member-specific deny wins even over ADMINISTRATOR, which Discord
+ * lets bypass it. That fails closed: an administrator denied a place by name
+ * is not shown it here, though they can open it. Carry guild-wide admin role
+ * ids beside the denies if that case ever matters.
  */
 export const deniedTo = (entity: Entity, denied: ReadonlySet<string>): boolean =>
   denied.has(entity.id) || (entity.parent_id !== null && denied.has(entity.parent_id));

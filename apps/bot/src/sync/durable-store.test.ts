@@ -181,6 +181,51 @@ describe("replacing the Catalog", () => {
   });
 });
 
+describe("members' own denies", () => {
+  const A = "500000000000000001";
+  const B = "500000000000000002";
+  const withDenies = (...ids: string[]) =>
+    fixtureDiscord({
+      channels: [{ id: "100", name: "general", type: ChannelType.GuildText, deniedMembers: ids }],
+    });
+  const syncInto = async (discord: ReturnType<typeof fixtureDiscord>) => {
+    const built = await sync(discord);
+    const store = openDurableStore(path);
+    store.replaceCatalog(built);
+    store.close();
+    return built;
+  };
+  const denied = (member: string) => {
+    const store = openDurableStore(path);
+    const places = [...store.deniedPlaces(member)];
+    store.close();
+    return places;
+  };
+
+  it("are replaced by the next complete sync, not merged into it", async () => {
+    await established();
+    await syncInto(withDenies(A, B));
+    expect([denied(A), denied(B)]).toEqual([["100"], ["100"]]);
+    await syncInto(withDenies(B));
+    expect([denied(A), denied(B)]).toEqual([[], ["100"]]);
+  });
+
+  it("reach neither the Catalog nor the exports the site is built from, nor any other table", async () => {
+    await established();
+    const built = await syncInto(withDenies(A));
+    // What sync/run.ts writes to catalog.json and roles.json.
+    const exported = JSON.stringify(built.catalog) + JSON.stringify(built.roleManifest);
+    expect(exported).not.toContain(A);
+    const db = new DatabaseSync(path);
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name != 'member_deny'")
+      .all() as Array<{ name: string }>;
+    for (const { name } of tables)
+      expect(JSON.stringify(db.prepare(`SELECT * FROM "${name}"`).all()), name).not.toContain(A);
+    db.close();
+  });
+});
+
 describe("enrichment writes", () => {
   it("patches only the fields given, leaving a Staff override in place", async () => {
     await established();

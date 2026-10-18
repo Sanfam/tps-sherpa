@@ -116,6 +116,8 @@ const harness = () => {
     /** Runs inside every member lookup, when set: to hold it, or to make it throw. */
     lookup: null as (() => Promise<void>) | null,
     shadowVisibleToMember: false,
+    /** Every send rejects, when set, as Discord answering 500. */
+    sendFails: false,
     writes: [] as Array<{ channelId: string; body: { content?: string } }>,
     extracts: [] as unknown[],
     readings: [] as unknown[],
@@ -158,6 +160,7 @@ const harness = () => {
         return { messageContent: true, watched: all, shadow: all, shadowVisibleToMember: h.shadowVisibleToMember };
       }),
       createMessage: touch(async (channelId: string, body: { content?: string }) => {
+        if (h.sendFails) throw new Error("Discord answered 500");
         h.writes.push({ channelId, body });
       }),
     },
@@ -373,6 +376,22 @@ describe("a restart (F12)", () => {
     expect(h.writes).toHaveLength(1);
   });
 
+  it("rebuilds a row whose 3 extractions were all claimed without losing its signal", async () => {
+    setMode("shadow", -60);
+    const intro = message(MEMBER, 0);
+    store((s) => s.startIntroduction(MEMBER, { messageId: intro.id, editedAt: null, joinedAt: JOINED }, new Date(at(0))));
+    for (let i = 0; i < 3; i++) store((s) => s.claimExtraction(MEMBER));
+    const { h, responder } = harness();
+    h.history.push(intro);
+    h.clock = at(1);
+    await responder.start();
+    h.clock = at(21);
+    await responder.tick();
+    expect(h.writes).toHaveLength(1);
+    expect(h.writes[0]!.body.content).toContain("would POST recommend");
+    expect(row()?.extractions).toBe(3);
+  });
+
   it("gives a member answered before the restart nothing more", async () => {
     const first = await started();
     const intro = message(MEMBER, 0);
@@ -461,6 +480,27 @@ describe("a failed check (§2)", () => {
     await ticked;
     expect(row(OTHER)).toBeNull();
     expect(h.writes).toEqual([]);
+    expect(responder.passing()).toBe(false);
+  });
+
+  it("records nothing of an intro whose member lookup was pending when it failed", async () => {
+    const { h, responder, say } = await started();
+    let release = () => {};
+    const held = new Promise<void>((done) => (release = done));
+    let looking = () => {};
+    const looked = new Promise<void>((done) => (looking = done));
+    h.lookup = () => {
+      looking();
+      return held;
+    };
+    const said = say(message(MEMBER, 0));
+    await looked;
+    h.shadowVisibleToMember = true;
+    expect(await responder.check()).toBe(false);
+    release();
+    await said;
+    expect(row()).toBeNull();
+    expect(h.extracts).toEqual([]);
   });
 });
 
@@ -690,6 +730,29 @@ describe("the invited path (§9)", () => {
     expect(h.extracts).toHaveLength(3);
     expect(h.asks).toHaveLength(3);
     expect(invitation()?.exchanges).toBe(3);
+  });
+
+  it("never names a place Staff denied this member by name, on any exchange (#53)", async () => {
+    const { h, say } = await started();
+    h.denied.set(MEMBER, new Set([woodshop.id]));
+    for (let minute = 1; minute <= 3; minute++) await say(mention(MEMBER, minute));
+    expect(posted(h)).toEqual(["invited_recommend", "invited_recommend", "widest_doors"]);
+    expect(h.asks.every((a) => a.context?.includes("gliders") && !a.context.includes("woodshop"))).toBe(true);
+    expect(h.writes.map((w) => w.body.content).join("\n")).not.toContain(woodshop.id);
+  });
+
+  it("drops the conversation when the third exchange's post fails", async () => {
+    const { h, say } = await started();
+    await say(mention(MEMBER, 1));
+    await say(mention(MEMBER, 2));
+    const third = mention(MEMBER, 3);
+    h.sendFails = true;
+    await say(third);
+    h.sendFails = false;
+    expect(h.asks).toHaveLength(3);
+    // A held conversation would swallow the redelivered event as already answered; a dropped one answers it.
+    await say(third);
+    expect(posted(h)).toEqual(["invited_recommend", "invited_recommend", "after_cap"]);
   });
 
   it("never takes an edit for an ask", async () => {

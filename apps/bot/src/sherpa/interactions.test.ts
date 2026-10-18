@@ -397,6 +397,16 @@ describe("/privacy", () => {
     other.close();
   });
 
+  it("keeps the places a member's own Discord overwrite hides from them", () => {
+    const { paths, privacy } = tempPrivacy();
+    withDurableStore(
+      (s) => s.replaceCatalog({ catalog, roleManifest: [], outcome: { complete: true }, memberDenies: [{ placeId: "100", memberId: INVOKER }] }),
+      paths.durable,
+    );
+    privacy.deleteMyData(INVOKER);
+    expect([...readDeniedPlaces(INVOKER, paths.durable)]).toEqual(["100"]);
+  });
+
   it("checkpoints Tier 0, so the deletion reaches the file while another process holds it open", () => {
     const { paths, privacy } = tempPrivacy();
     const other = openTier0(paths.tier0);
