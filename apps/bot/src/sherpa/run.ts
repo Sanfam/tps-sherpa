@@ -15,6 +15,12 @@
  * (owner, 2026-10-17): the process then receives every message in the guild,
  * and the responder's first line drops all but `#introductions`', unstored
  * and unlogged. Local runs leave the variable unset and read no messages.
+ *
+ * The same variable runs the alerts (alerts.ts), which read `#introductions`
+ * through the same gateway, and adds `GuildMembers` (owner, 2026-10-18): every
+ * join and member update in the guild then arrives. Only a member's id, roles
+ * and `joined_at` are read; the alerts keep the id and `joined_at` of those
+ * they alert about, and drop the rest unstored and unlogged.
  */
 import { resolve } from "node:path";
 import { API, Client } from "@discordjs/core";
@@ -35,14 +41,24 @@ import {
   retrying,
 } from "../llm/session.ts";
 import { parseVocabulary } from "../llm/vocabulary.ts";
+import { ALERTS_CHANNEL, type Alerts, createAlerts, withAlertsStore } from "./alerts.ts";
 import { MEMBER_ROLE_NAME, canReadHistory, canSend, canView, messageContentUsable } from "../sync/discord-adapter.ts";
 import { DURABLE_STORE_PATH, readDeniedPlaces, readMonitored, withDurableStore } from "../sync/durable-store.ts";
 import { TIER0_PATH } from "../sync/tier0-store.ts";
 import { FIND_TIMEOUT_MS } from "./find.ts";
-import { STAFF_ROLE_NAMES, dailyCap, findDailyCap, handleInteraction, memberRoleIds, type Sherpa } from "./interactions.ts";
+import {
+  HOLDER_ROLE_NAMES,
+  STAFF_ROLE_NAMES,
+  dailyCap,
+  findDailyCap,
+  handleInteraction,
+  memberRoleIds,
+  type Sherpa,
+} from "./interactions.ts";
 import { openMonitored } from "./monitored.ts";
 import { openPrivacy } from "./privacy.ts";
 import { withResponderStore } from "./responder-store.ts";
+import { alertsSwitch } from "./sherpa-command.ts";
 import { type TallyDeps, computeTally, describeTally, runTally } from "./responder-tally.ts";
 import { type ChannelAccess, type Responder, SHADOW_CHANNEL, createResponder } from "./responder.ts";
 
@@ -58,6 +74,8 @@ const limit = findDailyCap(process.env["SHERPA_FIND_DAILY_CAP"]);
 const introductions = process.env["SHERPA_INTRODUCTIONS"] === "1";
 /** Paid calls a day across the responder's paths (D29). */
 const RESPONDER_DAILY_CAP = 60;
+/** Alerts a day, against a raid of joins (#50 §6). */
+const alertsCap = findDailyCap(process.env["SHERPA_ALERTS_DAILY_CAP"], "SHERPA_ALERTS_DAILY_CAP");
 const HOUR = 60 * 60 * 1000;
 
 const rest = new REST({ version: "10" }).setToken(token);
@@ -96,6 +114,7 @@ const probe = async () => {
     messageContent: messageContentUsable(app.flags ?? 0),
     watched: access(WATCHED_CHANNEL),
     shadow: access(SHADOW_CHANNEL),
+    chamber: access(ALERTS_CHANNEL),
     shadowVisibleToMember: !memberRoles.length || (shadow !== undefined && canView(shadow, holding(memberRoles, ""))),
   };
 };
@@ -150,6 +169,45 @@ const responder: Responder | null = introductions
       },
       fetchImage: (url, init) => fetch(url, init),
       cap: dailyCap(resolve(DATA_DIR, "responder-usage.json"), RESPONDER_DAILY_CAP, log),
+      now: () => Date.now(),
+      log,
+    })
+  : null;
+
+const alerts: Alerts | null = introductions
+  ? createAlerts({
+      guildId,
+      discord: {
+        member: async (userId) => {
+          try {
+            const member = await api.guilds.getMember(guildId, userId);
+            return { joinedAt: member.joined_at ?? null, roles: member.roles };
+          } catch (error) {
+            if (notFound(error)) return null;
+            throw error;
+          }
+        },
+        access: async () => (await probe()).chamber,
+        createMessage: (channelId, body) => api.channels.createMessage(channelId, body),
+      },
+      store: (work) => withAlertsStore(work, DURABLE_STORE_PATH),
+      switch: () => withResponderStore(alertsSwitch, DURABLE_STORE_PATH),
+      seeded: () => withResponderStore((s) => s.setting("seeded_at") !== null, DURABLE_STORE_PATH),
+      introOf: (memberId, joinedAt) =>
+        withResponderStore((s) => {
+          const row = s.introduction(memberId);
+          return row?.joinedAt === joinedAt ? (row.messages[0]?.id ?? null) : null;
+        }, DURABLE_STORE_PATH),
+      preferences: (memberId) => withDurableStore((s) => s.preferences(memberId)),
+      loadCatalog,
+      roles: () => {
+        const manifest = loadRoleManifest();
+        return {
+          member: new Set(memberRoleIds(manifest)),
+          holder: new Set(manifest.filter((r) => HOLDER_ROLE_NAMES.includes(r.name)).flatMap((r) => r.ids)),
+        };
+      },
+      cap: dailyCap(resolve(DATA_DIR, "alerts-usage.json"), alertsCap, log),
       now: () => Date.now(),
       log,
     })
@@ -213,6 +271,7 @@ const sherpa: Sherpa = {
   ),
   monitored: openMonitored(DURABLE_STORE_PATH),
   settings: (work) => withResponderStore(work, DURABLE_STORE_PATH),
+  alerts: (work) => withAlertsStore(work, DURABLE_STORE_PATH),
   ...(responder ? { tally: async () => describeTally(await computeTally(await tallyDeps())) } : {}),
   loadMonitored: (catalog) => readMonitored(catalog),
   loadDenied: (memberId) => readDeniedPlaces(memberId),
@@ -223,7 +282,10 @@ const sherpa: Sherpa = {
 };
 
 const intents = introductions
-  ? GatewayIntentBits.Guilds | GatewayIntentBits.GuildMessages | GatewayIntentBits.MessageContent
+  ? GatewayIntentBits.Guilds |
+    GatewayIntentBits.GuildMessages |
+    GatewayIntentBits.MessageContent |
+    GatewayIntentBits.GuildMembers
   : GatewayIntentBits.Guilds;
 const gateway = new WebSocketManager({ token, intents, rest });
 const client = new Client({ rest, gateway });
@@ -235,6 +297,13 @@ if (responder) {
     responder.onDelete({ channel_id: data.channel_id, ids: [data.id] }),
   );
   client.on(GatewayDispatchEvents.MessageDeleteBulk, ({ data }) => responder.onDelete(data));
+}
+
+if (alerts) {
+  const logged = (error: unknown) => log(`[alerts] failed: ${failure(error)}`);
+  client.on(GatewayDispatchEvents.MessageCreate, ({ data }) => void alerts.onMessage(data).catch(logged));
+  client.on(GatewayDispatchEvents.GuildMemberAdd, ({ data }) => void alerts.onMember(data).catch(logged));
+  client.on(GatewayDispatchEvents.GuildMemberUpdate, ({ data }) => void alerts.onMember(data).catch(logged));
 }
 
 client.on(GatewayDispatchEvents.InteractionCreate, ({ data: interaction, api }) => {
@@ -252,6 +321,12 @@ client.once(GatewayDispatchEvents.Ready, ({ data }) =>
 );
 
 await gateway.connect();
+
+if (alerts) {
+  const checks = () => void alerts.check().catch((error: unknown) => log(`[alerts] checks failed: ${failure(error)}`));
+  checks();
+  setInterval(checks, HOUR);
+}
 
 if (responder) {
   const logged = (what: string) => (error: unknown) => log(`[responder] ${what} failed: ${failure(error)}`);

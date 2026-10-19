@@ -65,6 +65,11 @@ A person holding the `Staff` or `Event Managers` role in the guild. Administers
 the CMS, edits any content, and performs bot management actions.
 _Avoid_: mod, moderator, admin
 
+**Ambassador**:
+A person holding the `Ambassador` role in the guild. Welcomes new Members, and
+may opt in to Sherpa's alerts about them in `#ambassador-chamber`, as Staff may.
+_Avoid_: greeter, welcomer
+
 **Club Lead**:
 A person who owns a club or interest group and is expected to edit only that
 club's pages. The limit is a convention among a small, known group, not a

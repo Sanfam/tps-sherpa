@@ -40,7 +40,9 @@ export type SettingKey =
   | "seed_until"
   | "seeded_at"
   | "shadow_first_at"
-  | "shadow_notice_at";
+  | "shadow_notice_at"
+  | "alerts"
+  | "alerts_on_since";
 
 /** A message that fed the watch. `imagesRead`: its images went to the vision call. */
 export interface ContributingMessage {

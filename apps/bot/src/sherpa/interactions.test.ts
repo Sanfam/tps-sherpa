@@ -30,6 +30,7 @@ import {
   FIND_OPTED_OUT,
   DEFAULT_FIND_DAILY_CAP,
   FAILED,
+  NOT_A_HOLDER,
   NOT_A_MEMBER,
   NOT_STAFF,
   UNKNOWN,
@@ -51,6 +52,7 @@ import {
   openPrivacy,
   renderDeleted,
 } from "./privacy.ts";
+import { withAlertsStore } from "./alerts.ts";
 import { withResponderStore } from "./responder-store.ts";
 
 const GUILD = "400000000000000001";
@@ -217,6 +219,7 @@ const harness = (
     privacy,
     monitored,
     settings: (work) => withResponderStore(work, paths.durable),
+    alerts: (work) => withAlertsStore(work, paths.durable),
     tally: opts.tally,
     loadMonitored: (c) => readMonitored(c, paths.durable),
     loadDenied: (id) => readDeniedPlaces(id, paths.durable),
@@ -859,7 +862,7 @@ describe("the Staff gate, for /monitored and /sherpa", () => {
 
 describe("/sherpa introductions", () => {
   const SETTINGS =
-    "Mode: **off**\nClock: **wall**\nGreet: **10** minutes\nRecommend: **20** minutes\nCeiling: **6** active hours";
+    "Mode: **off**\nAlerts: **off**\nClock: **wall**\nGreet: **10** minutes\nRecommend: **20** minutes\nCeiling: **6** active hours";
 
   it("is off with no mode row, and shows the default thresholds, then the tally", async () => {
     const { run } = harness({ tally: async () => "TALLY" });
@@ -909,5 +912,29 @@ describe("/sherpa introductions", () => {
     expect(await run(sherpaCommand("timing", { recommend: 20 }))).toMatch(/^Nothing changed/);
     expect(await run(sherpaCommand("timing", { ceiling: 24 }))).toMatch(/^Done/);
     expect(stored()).toEqual(["30", "30", "24"]);
+  });
+});
+
+describe("/alerts", () => {
+  const AMBASSADOR_ROLE = "400000000000000020";
+  const roles = [...manifest, { name: "Ambassador", color: 6, ids: [AMBASSADOR_ROLE] }];
+  const alerts = (sub: string, held: string[], state?: string) => {
+    const base = privacyCommand(sub, state ? { state } : {}, { roles: held }) as unknown as { data: object };
+    return { ...base, data: { ...base.data, name: "alerts" } } as unknown as APIInteraction;
+  };
+
+  it("refuses a Member who is neither an Ambassador nor Staff, and records nothing", async () => {
+    const { run, paths } = harness({ roles });
+    expect(await run(alerts("joins", [MEMBER_ROLE], "on"))).toBe(NOT_A_HOLDER);
+    expect(withAlertsStore((s) => s.subscriptions(INVOKER), paths.durable)).toEqual([]);
+  });
+
+  it("opts an Ambassador in, and delete-my-data opts them out", async () => {
+    const { run, paths } = harness({ roles });
+    await run(alerts("joins", [AMBASSADOR_ROLE], "on"));
+    await run(alerts("intros", [AMBASSADOR_ROLE], "on"));
+    expect(withAlertsStore((s) => s.subscriptions(INVOKER), paths.durable)).toEqual(["intro", "join"]);
+    await run(privacyCommand("delete-my-data", { confirm: true }));
+    expect(withAlertsStore((s) => s.subscriptions(INVOKER), paths.durable)).toEqual([]);
   });
 });
