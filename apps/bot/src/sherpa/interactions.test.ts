@@ -475,7 +475,7 @@ describe("/lately through the dispatcher", () => {
     const { run, logs } = harness({
       loadActivity: () => ({ "100000000000000001": { summary: "distinctive-activity-text", as_of: "1" } }),
     });
-    expect(await run(command("lately"))).toContain("↳ Lately: distinctive-activity-text");
+    expect(await run(command("lately"))).toContain("-# distinctive-activity-text");
     expect(logs.join("\n")).not.toContain("distinctive-activity-text");
     expect(logs).toEqual([expect.stringMatching(/places=2 activity=1$/)]);
   });
@@ -508,7 +508,7 @@ describe("the Member gate", () => {
 
 describe("the invoker's own roles decide what is named (#53)", () => {
   const gated = entity({ id: "100000000000000003", name: "Moderators' corner", view_roles: [OTHER_ROLE] });
-  const link = `**Moderators' corner** ([open](${gated.url}))`;
+  const link = `<#${gated.id}>`;
 
   it.each([
     ["holds the role", [MEMBER_ROLE, OTHER_ROLE], true],
@@ -523,7 +523,7 @@ describe("the invoker's own roles decide what is named (#53)", () => {
 
 describe("a member's own Discord deny hides a place from them alone", () => {
   const [denied] = catalog;
-  const link = `**Rocket League** ([open](${denied!.url}))`;
+  const link = `<#${denied!.id}>`;
 
   it.each([
     ["the member it denies", INVOKER, false],
