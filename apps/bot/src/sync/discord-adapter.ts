@@ -35,6 +35,7 @@ export interface RawGuildChannel {
   id: string;
   name: string;
   type: number;
+  parent_id?: string | null;
   topic?: string | null;
   last_message_id?: string | null;
   permission_overwrites?: Overwrite[];
@@ -254,6 +255,7 @@ export const discordRest = (config: {
         id: c.id,
         name: c.name,
         type: c.type,
+        categoryId: c.parent_id ?? null,
         topic: c.topic ?? null,
         lastMessageId: c.last_message_id ?? null,
         visible: canView(c, ctx),

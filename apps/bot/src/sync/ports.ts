@@ -17,6 +17,8 @@ export interface RawChannel {
   id: string;
   name: string;
   type: number;
+  /** The category it sits under, if any. */
+  categoryId?: string | null;
   /** Channel topic. The best identity source for a Channel, and free. */
   topic?: string | null;
   /** Newest message, or null if never posted in. Its snowflake carries the time. */

@@ -216,6 +216,9 @@ export const parsePrevious = (raw: string): Entity[] => {
 /** Discord snowflakes embed a millisecond timestamp above the low 22 bits. */
 const DISCORD_EPOCH = 1420070400000;
 
+/** `👮 Staff`: its Channels and Forums are never in the Catalog. */
+export const STAFF_CATEGORY = "1088243110284365957";
+
 export const snowflakeTime = (id: string | null | undefined): string | null => {
   if (!id || !/^\d{17,20}$/.test(id)) return null;
   return new Date(Number(BigInt(id) >> 22n) + DISCORD_EPOCH).toISOString();
@@ -299,8 +302,14 @@ export const buildCatalog = async (deps: {
     ChannelType.GuildAnnouncement,
     ChannelType.GuildForum,
   ];
-  const excluded = deps.exclusions ?? new Set<string>();
   const allChannels = await deps.discord.listChannels();
+  // Everything under the Staff category is excluded as a durable exclusion is,
+  // whatever its permissions, and so is anything added there later (owner, 2026-10-19).
+  const configured = deps.exclusions ?? new Set<string>();
+  const excluded = new Set([
+    ...configured,
+    ...allChannels.filter((c) => c.categoryId === STAFF_CATEGORY).map((c) => c.id),
+  ]);
 
   // A Channel is a standing text channel that is not a Forum. Categories are
   // headers and voice channels are not readable — neither is a Catalog Entity.
@@ -313,7 +322,7 @@ export const buildCatalog = async (deps: {
   // channels are never Entities, and warning about them buries the real gaps
   // in noise — which is how an alarm gets ignored.
   for (const c of allChannels)
-    if (containerTypes.includes(c.type) && c.memberVisible && !c.visible)
+    if (containerTypes.includes(c.type) && c.memberVisible && !c.visible && c.categoryId !== STAFF_CATEGORY)
       deps.warn?.(
         `[visibility] "${c.name}" (${c.id}) is visible to Members but not to ` +
           `the bot, so it is missing from the Catalog.`,
@@ -500,8 +509,8 @@ export const buildCatalog = async (deps: {
     catalog: built.map((e) => carryDerived(e, builtById)).sort(byId),
     roleManifest,
     exclusionsApplied: [
-      ...visibleContainers.filter((c) => excluded.has(c.id)).map((c) => c.id),
-      ...allThreads.filter((t) => excluded.has(t.id)).map((t) => t.id),
+      ...visibleContainers.filter((c) => configured.has(c.id)).map((c) => c.id),
+      ...allThreads.filter((t) => configured.has(t.id)).map((t) => t.id),
     ].sort(),
     outcome: failed.length ? { complete: false, failed } : { complete: true },
     memberDenies: containers.flatMap((c) => c.deniedMembers.map((memberId) => ({ placeId: c.id, memberId }))),
