@@ -250,8 +250,19 @@ export const placeRef = (entity: Entity): string =>
     : `<#${entity.id}>`;
 
 /**
- * One place: how it is named (above), then anything to say beside it, then
- * the Catalog's own summary.
+ * How `/find` and `/lately` name a place (#54): an open Post or Thread is
+ * loaded in the reader's client, so a native mention shows its real name.
+ * One archived, or of unknown state, is named as `placeRef` names it.
+ */
+export const anchorOf = (entity: Entity): string =>
+  entity.thread_state === "open" ? `<#${entity.id}>` : placeRef(entity);
+
+/** Text as Discord subtext beneath an anchor: whitespace collapsed, so it cannot leave the subtext for a line of its own. */
+export const oneLine = (text: string): string => text.replace(/\s+/g, " ").trim();
+
+/**
+ * One place for the responder's posts: how it is named (above), then anything
+ * to say beside it, then the Catalog's own summary.
  */
 export const placeLine = (
   entity: Entity,
@@ -276,14 +287,19 @@ export const renderFind = ({ matches, topics }: Pick<FindResult, "matches" | "to
   const topicLine = topics.length ? [`Topics: ${topics.map((t) => t.label).join(" · ")}`] : [];
   const confident = matches.length >= MIN_CONFIDENT;
   const head = confident
-    ? "Places that fit what you're into:"
+    ? "**Places that fit what you're into**\n"
     : matches.length === 1
-      ? "I found one place that fits, not a handful:"
+      ? "I found one place that fits, not a handful:\n"
       : "I couldn't find a place that clearly fits that.";
-  const tail = [...topicLine, ...(confident ? [] : [MORE_DETAIL])];
+  const tail = [...(matches.length ? [""] : []), ...topicLine, ...(confident ? [] : [MORE_DETAIL])];
+  // Each place as `/lately` shows one: its anchor, its summary beneath as subtext.
   // Whole places come off the end, weakest first, rather than Discord
   // refusing the reply: five long, heavily escaped names can pass the limit.
-  const lines = matches.map((e) => placeLine(e));
+  const lines = matches.map((e) => {
+    const summary = summaryOf(e);
+    const text = summary && oneLine(summary);
+    return text ? `${anchorOf(e)}\n-# ${clip(text)}` : anchorOf(e);
+  });
   while (lines.length > 1 && [head, ...lines, ...tail].join("\n").length > MAX_MESSAGE_CHARS) lines.pop();
   return [head, ...lines, ...tail].join("\n");
 };

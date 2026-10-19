@@ -18,7 +18,8 @@ import {
   MAX_SUMMARY_CHARS,
   candidatesOf,
   clip,
-  placeRef,
+  anchorOf,
+  oneLine,
   summaryOf,
 } from "./find.ts";
 
@@ -53,14 +54,6 @@ export const latelyPlaces = (
 /** Topics whose activity lines can spoil a plot or a result: click to reveal. */
 const SPOILER_TOPICS = ["movies-and-tv", "anime-and-manga", "books-and-reading"];
 
-/**
- * Everything here was active in the last fortnight, so a client has it loaded
- * and a native mention shows its real name. A Post archived inside the window
- * would show as "#unknown", so anything not open is named as `/find` names it.
- */
-const anchorOf = (entity: Entity): string =>
-  entity.thread_state === null || entity.thread_state === "open" ? `<#${entity.id}>` : placeRef(entity);
-
 const lineFor = (entity: Entity, activity: ActivityStore): string => {
   // Discord renders the time in the reader's own terms ("3 days ago").
   const line = `${anchorOf(entity)} · <t:${Math.floor(new Date(entity.last_activity_at!).getTime() / 1000)}:R>`;
@@ -69,7 +62,7 @@ const lineFor = (entity: Entity, activity: ActivityStore): string => {
   // its own. Pipes and backslashes dropped so the text can neither close the
   // spoiler tag nor escape its closing pipes; clipped short of the tag's four
   // characters so the wrapped text is no longer than an unwrapped one.
-  const text = (lately ?? summaryOf(entity))?.replace(/\s+/g, " ").trim();
+  const text = oneLine(lately ?? summaryOf(entity) ?? "");
   if (!text) return line;
   const shown =
     lately && entity.topics.some((t) => SPOILER_TOPICS.includes(t))
