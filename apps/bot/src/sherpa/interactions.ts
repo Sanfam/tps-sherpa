@@ -24,7 +24,7 @@ import type { Vocabulary } from "../llm/vocabulary.ts";
 import type { Entity } from "../sync/catalog.ts";
 import { MEMBER_ROLE_NAME } from "../sync/discord-adapter.ts";
 import type { RoleManifestEntry } from "../sync/ports.ts";
-import { ALERTS_COMMAND, AMBASSADOR_ROLE_NAME, type AlertsStore, answerAlerts } from "./alerts.ts";
+import { ALERTS_COMMAND, type AlertsStore, answerAlerts } from "./alerts.ts";
 import { EMPTY_QUERY, MAX_QUERY_LENGTH, findPlaces, renderFind } from "./find.ts";
 import { latelyPlaces, renderLately } from "./lately.ts";
 import { MONITORED_COMMAND, type Monitored, answerMonitored } from "./monitored.ts";
@@ -132,8 +132,12 @@ export const isStaff = (
   manifest: RoleManifestEntry[],
 ): boolean => holdsRoleNamed(interaction, guildId, manifest, STAFF_ROLE_NAMES);
 
-/** Who may opt in to alerts (#50): an `Ambassador`, or Staff. Resolved and failing closed as `isStaff`. */
-export const HOLDER_ROLE_NAMES = [AMBASSADOR_ROLE_NAME, ...STAFF_ROLE_NAMES];
+/**
+ * Who may opt in to alerts (#50): an `Ambassador`, or Staff. Resolved and
+ * failing closed as `isStaff`. Spelled here, not imported: alerts.ts imports
+ * this module, and a value read at load time across that cycle crashes startup.
+ */
+export const HOLDER_ROLE_NAMES = ["Ambassador", ...STAFF_ROLE_NAMES];
 
 const holdsRoleNamed = (
   interaction: APIChatInputApplicationCommandInteraction,
