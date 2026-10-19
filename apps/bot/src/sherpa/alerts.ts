@@ -34,7 +34,6 @@ import type { ChannelAccess, WatchedMessage } from "./responder.ts";
 
 /** `#ambassador-chamber`: the alerts' only target (owner, 2026-10-18). */
 export const ALERTS_CHANNEL = "1550882422189596672";
-export const AMBASSADOR_ROLE_NAME = "Ambassador";
 /** Discord's ceiling on a message's content. */
 const MAX_MESSAGE_CHARS = 2000;
 
