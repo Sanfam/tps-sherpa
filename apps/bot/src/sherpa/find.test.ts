@@ -8,7 +8,9 @@ import {
   candidatesOf,
   findPlaces,
   parseFind,
+  clip,
   renderFind,
+  summaryOf,
 } from "./find.ts";
 import { MAX_LATELY, latelyPlaces, renderLately } from "./lately.ts";
 
@@ -269,54 +271,56 @@ describe("parseFind", () => {
 });
 
 describe("renderFind", () => {
-  it("lists two or more matches, the human summary ahead of the generated one", () => {
+  it("lists two or more matches, each an anchor with its summary beneath as subtext, the human one first", () => {
     const reply = renderFind({ matches: [flight, rocket], topics: [vocabulary.topics[0]!] });
-    expect(reply).toContain(`**Flight Simulators** ([open](${flight.url})) — Staff-written blurb about sims.`);
-    expect(reply).not.toContain("Generated blurb.");
-    expect(reply).toContain(`**Rocket League** ([open](${rocket.url})) — Car football`);
-    expect(reply).toContain("Topics: Gaming");
-    expect(reply).not.toContain(MORE_DETAIL);
+    expect(reply).toBe(
+      "**Places that fit what you're into**\n\n" +
+        `**Flight Simulators** ([open](${flight.url}))\n-# Staff-written blurb about sims.\n` +
+        `<#${rocket.id}>\n-# ${clip(summaryOf(rocket)!)}\n\n` +
+        "Topics: Gaming",
+    );
   });
 
   it("says so with one match, rather than padding", () => {
     const reply = renderFind({ matches: [rocket], topics: [] });
     expect(reply).toMatch(/^I found one place/);
-    expect(reply).toContain(`**Rocket League** ([open](${rocket.url}))`);
+    expect(reply).toContain(`<#${rocket.id}>`);
     expect(reply).toContain(MORE_DETAIL);
   });
 
-  it("names a Post or Thread in text with a separate link, which an archived one needs; a Forum keeps its mention", () => {
+  it("mentions an open Post and a Forum, and names any other Post or Thread with a link, which an archived one needs", () => {
     // A client that has not loaded an archived Thread renders `<#id>` as "#unknown".
-    const thread = entity({ id: "10", name: "Weekly raid", type: "thread", parent_id: null });
-    const reply = renderFind({ matches: [flight, thread, games], topics: [] });
-    expect(reply).toContain(`• **Flight Simulators** ([open](${flight.url}))`);
-    expect(reply).not.toContain(`<#${flight.id}>`);
-    expect(reply).toContain(`• **Weekly raid** ([open](${thread.url}))`);
+    const open = entity({ id: "12", name: "Open now", thread_state: "open" });
+    const thread = entity({ id: "10", name: "Weekly raid", type: "thread", parent_id: null, thread_state: "closed" });
+    const reply = renderFind({ matches: [open, flight, thread, games], topics: [] });
+    expect(reply).toContain(`\n<#${open.id}>\n`);
+    expect(reply).toContain(`\n**Flight Simulators** ([open](${flight.url}))`);
+    expect(reply).toContain(`\n**Weekly raid** ([open](${thread.url}))`);
     expect(reply).not.toContain(`<#${thread.id}>`);
-    expect(reply).toContain(`• <#${games.id}>`);
+    expect(reply).toContain(`\n<#${games.id}>`);
   });
 
-  it("keeps a member-written name inert and on one line", () => {
+  it("keeps a member-written name inert and on one line, and a summary inside its subtext", () => {
     const sly = entity({
       id: "8",
       name: "a](https://evil.example) *b* @everyone 🚙\n• Fake place",
-      summary_generated: "S.",
+      summary_generated: "S.\n<#1> Fake",
     });
     const reply = renderFind({ matches: [sly, rocket], topics: [] });
-    expect(reply.split("\n")[1]).toBe(
-      `• **a\\]\\(https\\://evil.example\\) \\*b\\* \\@everyone 🚙 • Fake place** ([open](${sly.url})) — S.`,
-    );
-    expect(reply.match(/^• /gm)).toHaveLength(2);
+    expect(reply.split("\n").slice(2, 4)).toEqual([
+      `**a\\]\\(https\\://evil.example\\) \\*b\\* \\@everyone 🚙 • Fake place** ([open](${sly.url}))`,
+      "-# S. <#1> Fake",
+    ]);
   });
 
   it("doubles a trailing backslash, so it cannot escape the closing bold", () => {
     const slash = entity({ id: "11", name: "ends in \\", summary_generated: "S." });
-    expect(renderFind({ matches: [slash, rocket], topics: [] })).toContain("• **ends in \\\\** ([open](");
+    expect(renderFind({ matches: [slash, rocket], topics: [] })).toContain("**ends in \\\\** ([open](");
   });
 
   it("falls back to the mention when a Post has no deep link", () => {
     const bare = entity({ id: "9", name: "Bare", url: "" });
-    expect(renderFind({ matches: [bare, rocket], topics: [] })).toContain(`• <#${bare.id}>`);
+    expect(renderFind({ matches: [bare, rocket], topics: [] })).toContain(`\n<#${bare.id}>`);
   });
 
   it("leaves whole places off the end rather than pass Discord's limit", () => {
@@ -324,7 +328,7 @@ describe("renderFind", () => {
       entity({ id: `7${i}`, name: "*".repeat(100), summary_generated: "y".repeat(400) });
     const reply = renderFind({ matches: [1, 2, 3, 4, 5].map(long), topics: [vocabulary.topics[0]!] });
     expect(reply.length).toBeLessThanOrEqual(2000);
-    expect(reply.match(/^• /gm)!.length).toBeLessThan(5);
+    expect(reply.match(/^-# /gm)!.length).toBeLessThan(5);
     expect(reply.endsWith("Topics: Gaming")).toBe(true);
   });
 
@@ -336,8 +340,8 @@ describe("renderFind", () => {
 
   it("clips a long override", () => {
     const long = entity({ id: "9", name: "x", summary_override: "word ".repeat(100) });
-    const line = renderFind({ matches: [long, rocket], topics: [] }).split("\n")[1]!;
-    expect(line.split(" — ")[1]!.length).toBeLessThanOrEqual(150);
+    const line = renderFind({ matches: [long, rocket], topics: [] }).split("\n")[3]!;
+    expect(line.slice(3).length).toBeLessThanOrEqual(150);
   });
 });
 
