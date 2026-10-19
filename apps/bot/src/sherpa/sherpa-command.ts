@@ -5,7 +5,8 @@
  * ephemeral, like every other.
  *
  * Setting `live` is what lets Sherpa post in `#introductions` (D6), so it is
- * logged loudly, with who did it.
+ * logged loudly, with who did it. `/sherpa alerts on` is the same for
+ * `#ambassador-chamber` (D50-1).
  */
 import {
   type APIApplicationCommandIntegerOption,
@@ -88,8 +89,31 @@ export const SHERPA_COMMAND: RESTPostAPIChatInputApplicationCommandsJSONBody = {
         { name: "status", type: ApplicationCommandOptionType.Subcommand, description: "Show the current settings." },
       ],
     },
+    {
+      name: "alerts",
+      type: ApplicationCommandOptionType.Subcommand,
+      description: "Switch the alerts to Ambassadors and Staff in #ambassador-chamber on or off.",
+      options: [
+        {
+          name: "state",
+          type: ApplicationCommandOptionType.String,
+          description: "On or off.",
+          required: true,
+          choices: [
+            { name: "on", value: "on" },
+            { name: "off", value: "off" },
+          ],
+        },
+      ],
+    },
   ],
 };
+
+/** Staff's switch for the alerts (#50): off with no row, or one it cannot read. */
+export const alertsSwitch = (settings: Pick<Settings, "setting">): { on: boolean; since: string | null } => ({
+  on: settings.setting("alerts") === "on",
+  since: settings.setting("alerts_on_since"),
+});
 
 /** What `/sherpa` reads and changes, on one connection per command. A real store on a temp path in tests. */
 export type Settings = Pick<ResponderStore, "mode" | "setMode" | "setting" | "setSetting">;
@@ -116,6 +140,7 @@ export const timingSettings = (settings: Pick<Settings, "setting">): TimingSetti
 const status = (settings: Settings): string => {
   return [
     `Mode: **${settings.mode()}**`,
+    `Alerts: **${alertsSwitch(settings).on ? "on" : "off"}**`,
     `Clock: **${clockOf(settings)}**`,
     ...TIMING_NAMES.map((n) => `${n[0]!.toUpperCase()}${n.slice(1)}: **${timing(settings, n)}** ${TIMING[n].unit}`),
   ].join("\n");
@@ -137,6 +162,20 @@ export const answerSherpa = async (
 ): Promise<string | null> => {
   const by = interaction.member?.user.id;
   const group = interaction.data.options?.[0];
+  if (by && group?.type === ApplicationCommandOptionType.Subcommand && group.name === "alerts") {
+    const state = group.options?.find((o) => o.name === "state")?.value;
+    if (state !== "on" && state !== "off") return null;
+    withSettings((s) => {
+      // The floor for join alerts moves only on a switch from off, as `on_since` does.
+      if (state === "on" && !alertsSwitch(s).on) s.setSetting("alerts_on_since", new Date().toISOString(), by);
+      s.setSetting("alerts", state, by);
+    });
+    if (state === "on") log(`${tag} ALERTS SWITCHED ON by ${by}: Sherpa now posts in #ambassador-chamber.`);
+    else log(`${tag} alerts off by ${by}`);
+    return state === "on"
+      ? "Done. Alerts are **on**: Sherpa posts in #ambassador-chamber for the Ambassadors and Staff who opted in."
+      : "Done. Alerts are **off**.";
+  }
   if (!by || group?.type !== ApplicationCommandOptionType.SubcommandGroup || group.name !== "introductions")
     return null;
   const sub = group.options[0];

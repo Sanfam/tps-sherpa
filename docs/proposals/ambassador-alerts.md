@@ -73,8 +73,8 @@ snapshot and site Index carry it, unless Staff add it to the durable exclusions 
 ```
 alert_subscription(member_id TEXT NOT NULL, event TEXT NOT NULL CHECK (event IN ('join','intro')),
                    set_at TEXT NOT NULL, PRIMARY KEY (member_id, event))
-alert_sent(member_id TEXT NOT NULL, event TEXT NOT NULL, joined_at TEXT, sent_at TEXT NOT NULL,
-           PRIMARY KEY (member_id, event))   -- one alert per member, per event, per join
+alert_sent(member_id TEXT NOT NULL, event TEXT NOT NULL, joined_at TEXT NOT NULL, sent_at TEXT NOT NULL,
+           PRIMARY KEY (member_id, event, joined_at))   -- one alert per member, per event, per join
 ```
 
 ### The two events
@@ -240,3 +240,20 @@ D50-1 to D50-7 are accepted as recommended.
 - **D50-2:** Discord's join message if the server posts one. The owner also
   granted the **Guild Members intent** (see user-monitoring D52-6), so
   "becomes a Member", or a raw join, can be detected directly.
+
+## As built (2026-10-19)
+
+- **Joins are "becomes a Member" (C).** The server suppresses Discord's join
+  message (`system_channel_flags` has `SUPPRESS_JOIN_NOTIFICATIONS`, read
+  2026-10-19), so A is not available. `GUILD_MEMBER_ADD` and
+  `GUILD_MEMBER_UPDATE` alert once the member holds `Member`, and only for a
+  member whose `joined_at` is after Staff last turned the switch on
+  (`alerts_on_since`), so an existing Member's next role change does not alert.
+- **A join alert links the introduction** only while the responder's
+  `introduction` row for that join holds it; `alert_sent` keeps no message id.
+- **The alerts run under `SHERPA_INTRODUCTIONS=1`**, which also requests the
+  Guild Members intent. The portal toggle is on
+  (`GATEWAY_GUILD_MEMBERS_LIMITED`, read 2026-10-19). An `Ambassador` role
+  exists.
+- **The "cap reached" line is a log line**, once a day.
+- **The Catalog check pauses the alerts until Staff exclude the Channel.**

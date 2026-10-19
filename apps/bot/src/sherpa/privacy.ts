@@ -22,6 +22,7 @@ import {
 import { readActivity, writeActivity } from "../llm/session.ts";
 import { SETTINGS, type Preferences, type Setting, withDurableStore } from "../sync/durable-store.ts";
 import { RETAIN_MS, openTier0 } from "../sync/tier0-store.ts";
+import { withAlertsStore } from "./alerts.ts";
 import { withResponderStore } from "./responder-store.ts";
 
 /** Discord's ceiling on an embed's description. */
@@ -132,7 +133,8 @@ export const openPrivacy = (
      *
      * 1. Processing off, first and durably. Capture drops their messages from
      *    here on, so nothing deleted below is stored again behind the deletion.
-     *    Then the introductions responder's rows and memory.
+     *    Then the introductions responder's rows and memory, and their alert
+     *    subscriptions.
      * 2. Their messages, checkpointed so the zeroed pages reach the file —
      *    before anything parses activity.json, so a corrupt file there cannot
      *    hold the erasure back. Where they wrote is noted first.
@@ -145,6 +147,7 @@ export const openPrivacy = (
     deleteMyData: (memberId) => {
       withDurableStore((s) => s.setPreference(memberId, "processing", false), paths.durable);
       eraseIntroductions(memberId);
+      withAlertsStore((a) => a.forget(memberId), paths.durable);
       const tier0 = openTier0(paths.tier0);
       let places: string[], messages: number, checkpointed: boolean;
       try {

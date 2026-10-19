@@ -87,6 +87,12 @@ export interface Generation {
  * state, not theirs: replaced whole by every complete sync, in the same
  * transaction as the Catalog, so it is never older than the last sync. It
  * never leaves the bot: not in the Catalog, an Entity or the site's snapshot.
+ *
+ * The alerts' two (#50; through `sherpa/alerts.ts` only): `alert_subscription`,
+ * which Ambassadors and Staff are opted in to which alert, until they turn it
+ * off or delete their data; and `alert_sent`, one alert per member, per event,
+ * per `joined_at`, kept indefinitely and through erasure, as tombstones are
+ * (D50-5). Ids and times only.
  */
 const MIGRATIONS = `
   CREATE TABLE IF NOT EXISTS heartbeat (
@@ -152,6 +158,19 @@ const MIGRATIONS = `
     member_id TEXT NOT NULL,
     place_id  TEXT NOT NULL,
     PRIMARY KEY (member_id, place_id)
+  );
+  CREATE TABLE IF NOT EXISTS alert_subscription (
+    member_id TEXT NOT NULL,
+    event     TEXT NOT NULL CHECK (event IN ('join', 'intro')),
+    set_at    TEXT NOT NULL,
+    PRIMARY KEY (member_id, event)
+  );
+  CREATE TABLE IF NOT EXISTS alert_sent (
+    member_id TEXT NOT NULL,
+    event     TEXT NOT NULL CHECK (event IN ('join', 'intro')),
+    joined_at TEXT NOT NULL,
+    sent_at   TEXT NOT NULL,
+    PRIMARY KEY (member_id, event, joined_at)
   );
 `;
 

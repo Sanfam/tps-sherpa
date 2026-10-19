@@ -24,6 +24,7 @@ import type { Vocabulary } from "../llm/vocabulary.ts";
 import type { Entity } from "../sync/catalog.ts";
 import { MEMBER_ROLE_NAME } from "../sync/discord-adapter.ts";
 import type { RoleManifestEntry } from "../sync/ports.ts";
+import { ALERTS_COMMAND, AMBASSADOR_ROLE_NAME, type AlertsStore, answerAlerts } from "./alerts.ts";
 import { EMPTY_QUERY, MAX_QUERY_LENGTH, findPlaces, renderFind } from "./find.ts";
 import { latelyPlaces, renderLately } from "./lately.ts";
 import { MONITORED_COMMAND, type Monitored, answerMonitored } from "./monitored.ts";
@@ -71,6 +72,7 @@ export const commandDefinitions = (vocabulary: Vocabulary): RESTPutAPIApplicatio
     PRIVACY_COMMAND,
     MONITORED_COMMAND,
     SHERPA_COMMAND,
+    ALERTS_COMMAND,
   ];
 };
 
@@ -130,6 +132,9 @@ export const isStaff = (
   manifest: RoleManifestEntry[],
 ): boolean => holdsRoleNamed(interaction, guildId, manifest, STAFF_ROLE_NAMES);
 
+/** Who may opt in to alerts (#50): an `Ambassador`, or Staff. Resolved and failing closed as `isStaff`. */
+export const HOLDER_ROLE_NAMES = [AMBASSADOR_ROLE_NAME, ...STAFF_ROLE_NAMES];
+
 const holdsRoleNamed = (
   interaction: APIChatInputApplicationCommandInteraction,
   guildId: string,
@@ -148,11 +153,11 @@ export const DEFAULT_FIND_DAILY_CAP = 50;
  * stops the bot at startup: a typo read as "no cap" is a bill, and one read as
  * zero is a feature that quietly stopped working.
  */
-export const findDailyCap = (raw: string | undefined): number => {
+export const findDailyCap = (raw: string | undefined, name = "SHERPA_FIND_DAILY_CAP"): number => {
   if (raw === undefined || raw.trim() === "") return DEFAULT_FIND_DAILY_CAP;
   const limit = Number(raw.trim());
   if (!/^\d+$/.test(raw.trim()) || !Number.isSafeInteger(limit))
-    throw new Error(`SHERPA_FIND_DAILY_CAP must be a non-negative integer. Got: ${raw}`);
+    throw new Error(`${name} must be a non-negative integer. Got: ${raw}`);
   return limit;
 };
 
@@ -183,7 +188,7 @@ export const dailyCap = (
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") used = 0;
       else {
-        warn(`[sherpa] ${path} is unreadable; treating today's /find allowance as spent.`);
+        warn(`[sherpa] ${path} is unreadable; treating today's allowance as spent.`);
         used = limit;
       }
     }
@@ -199,6 +204,7 @@ export type DailyCap = ReturnType<typeof dailyCap>;
 export const NOT_A_MEMBER =
   "Sherpa is for Members of the server. Once you have the Member role, try again.";
 export const NOT_STAFF = "This command is for Staff: holders of the Staff or Event Managers role.";
+export const NOT_A_HOLDER = "This command is for Ambassadors and Staff.";
 export const CAP_REACHED =
   "Sherpa has answered all the `/find` questions it can for today. Try again tomorrow, " +
   "or use `/lately` to see what's active.";
@@ -229,6 +235,8 @@ export interface Sherpa {
   monitored: Monitored;
   /** The introductions responder's settings, for `/sherpa`. */
   settings: WithSettings;
+  /** Each holder's alert subscriptions, for `/alerts`. */
+  alerts: <T>(work: (store: AlertsStore) => T) => T;
   /** The shadow tally for `/sherpa introductions status`. Without it, status says the tally is unavailable. */
   tally?: TallyText;
   /**
@@ -284,6 +292,16 @@ const answer = async (
       interaction.data.name === "monitored"
         ? answerMonitored(interaction, sherpa.monitored, sherpa.loadCatalog(), sherpa.log, tag)
         : await answerSherpa(interaction, sherpa.settings, sherpa.log, tag, sherpa.tally);
+    if (answered !== null) return answered;
+    sherpa.log(`${tag} unknown subcommand`);
+    return UNKNOWN;
+  }
+  if (interaction.data.name === "alerts") {
+    if (!holdsRoleNamed(interaction, sherpa.guildId, sherpa.loadRoleManifest(), HOLDER_ROLE_NAMES)) {
+      sherpa.log(`${tag} refused: not an Ambassador or Staff`);
+      return NOT_A_HOLDER;
+    }
+    const answered = answerAlerts(interaction, sherpa.alerts, sherpa.log, tag);
     if (answered !== null) return answered;
     sherpa.log(`${tag} unknown subcommand`);
     return UNKNOWN;
