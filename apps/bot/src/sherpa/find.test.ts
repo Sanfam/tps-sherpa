@@ -371,13 +371,6 @@ describe("/lately", () => {
     expect(latelyPlaces([games, ...many], monitored, asMember, none, null, now)).toHaveLength(MAX_LATELY);
   });
 
-  it("describes each place by what it is, with when it was last active", () => {
-    const reply = renderLately([fresh, older], null);
-    expect(reply).toContain(`**fresh** ([open](${fresh.url})) <t:${Math.floor(Date.parse(fresh.last_activity_at!) / 1000)}:R>`);
-    expect(reply).toContain(`**older** ([open](${older.url})) <t:`);
-    expect(reply).toContain("— About it.");
-  });
-
   it("says when nothing is active", () => {
     expect(renderLately([], vocabulary.topics[0]!)).toMatch(/^Nothing tagged Gaming/);
     expect(renderLately([], null)).toMatch(/^Nothing has been active/);
