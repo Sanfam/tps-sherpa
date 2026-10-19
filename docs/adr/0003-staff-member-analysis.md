@@ -1,7 +1,6 @@
 # ADR-0003: Staff analysis of a member's messages
 
-**Status:** Proposed, 2026-10-18. Awaiting the owner's decisions; not ready for
-acceptance until they are recorded below.
+**Status:** Accepted, 2026-10-18. The owner's decisions are recorded at the end.
 **Covers:** Deep User Analysis (#51, `docs/proposals/deep-user-analysis.md`)
 and User Monitoring (#52, `docs/proposals/user-monitoring.md`).
 **Departs from:** the rules listed under *What this lifts*. Each departure is an
@@ -33,7 +32,7 @@ as moderation, where "the normal privacy considerations need not be as
 comprehensively respected". That framing is not yet reconciled with the
 published policy or the locked rules above. This ADR is where it is.
 
-## Decision (proposed)
+## Decision
 
 **Sherpa gains one new boundary origin, `moderation`, used only by the two
 Staff tools.** It is a separate function in `boundary.ts`, as
@@ -62,15 +61,15 @@ Staff tools.** It is a separate function in `boundary.ts`, as
 5. **Who may run them** is a role check at the command, refused otherwise,
    with every reply ephemeral (as `/sherpa`, responder §7).
 
-### What this lifts, each pending an owner decision
+### What this lifts (each decided by the owner, 2026-10-18; see the end)
 
 | Rule | Lifted how | Decision |
 |---|---|---|
 | Describe subjects, never people | Lifted for `moderation` output to Staff only | O1 |
 | No model prose to Discord | Bounded strings in a template, Staff audience only | O2 |
-| `opt-out processing` stops sending a member's words to the model | Not decided: see O3 | O3 |
-| Monitored conversation is never sent, except by `extractIntroduction` | Not decided: see O4 | O4 |
-| Child data never echoed, never sent beyond intro images | Not decided: see O5 | O5 |
+| `opt-out processing` stops sending a member's words to the model | Lifted, with a published policy line (B) | O3 |
+| Monitored conversation is never sent, except by `extractIntroduction` | The subject's own messages, sent and discarded | O4 |
+| Child data never echoed, never sent beyond intro images | Sent as is; never in output | O5 |
 | Never put roles in an LLM prompt (`ASTRO-ARCHITECTURE.md`, *Role data*) | **Not lifted.** Roles stay out of every prompt | — |
 | Withheld Channels never read | **Not lifted.** Withheld is enforced in code too (below) | — |
 
@@ -167,3 +166,24 @@ early notice under triggers they set, in the Forum they already use.
 - That Discord's Search Guild Messages endpoint serves bots, and its rate
   limits (deep-user-analysis proposal §2).
 - The gateway delivering messages from Channels where history is denied.
+
+## Owner decisions (2026-10-18)
+
+- **O1:** people may be subjects, for Staff-only `moderation` output.
+- **O2:** bounded model text in that output.
+- **O3:** **B, a published moderation exception.** The privacy policy gains
+  one line saying Staff can have Sherpa review a member's messages for
+  moderation, whatever their settings, that reviews go only to Staff, and
+  that a watch can run for up to 90 days. The owner approves the exact
+  wording before it ships.
+- **O4:** the subject's own messages in monitored Channels are admitted,
+  sent and discarded.
+- **O5:** accepted as recommended. Sources are sent as they are; no child
+  details in the output, and no field for them. This extends D14 for these
+  tools.
+- **O6:** as recommended. For a reply, the one message it replies to,
+  redacted, with opted-out authors dropped; for #52, the Staff notes
+  already in the member's Post.
+- **O7:** **holders of the role named `Staff` alone**, not the glossary's
+  Staff (`Staff` or `Event Managers`). `CONTEXT.md` needs an entry for this
+  narrower group when the tools are built.

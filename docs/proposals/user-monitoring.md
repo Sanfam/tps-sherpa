@@ -1,6 +1,6 @@
 # Design: User Monitoring (#52)
 
-**Status:** Draft for the owner's decisions, 2026-10-18. Not accepted. Builds
+**Status:** Accepted by the owner, 2026-10-18 (*Owner decisions*, at the end). **Where the owner's decisions at the end differ from the body, the decisions win**; the body is updated when this is built. Builds
 on Deep User Analysis (#51, `deep-user-analysis.md`) and shares
 [ADR-0003](../adr/0003-staff-member-analysis.md).
 
@@ -271,3 +271,22 @@ Then the final review.
 - **Validation:** an unknown trigger index, tag or citation fails the call.
 
 Each is shown to fail against a broken guard before it is kept.
+
+## Owner decisions (2026-10-18)
+
+D52-1, D52-3, D52-5, D52-7 and D52-8 are accepted as recommended.
+
+- **D52-2:** a watch lasts **up to 90 days**.
+- **D52-4:** the Post title is the member's **server name and Discord
+  username**.
+- **D52-6:** when the member leaves, the watch ends and the Post is kept.
+  Sherpa **adds a note to the Post that the member left, and when, with up
+  to 5 of the member's messages from just before the departure.** The owner
+  granted the **Guild Members intent** for this. *Open, for build time:*
+  whether those messages are quoted or linked. Quoted text is posted with
+  `allowed_mentions: { parse: [] }`. The owner confirms whether it falls
+  under ADR-0003 O5's "no child details in output", which governs model
+  output; these are the member's own words.
+- **D52-9:** the policy follows ADR-0003 O3 (B). Its line should say a watch
+  can run for up to 90 days.
+- Staff here means **holders of the role named `Staff` alone** (ADR-0003 O7).

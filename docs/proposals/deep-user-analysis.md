@@ -1,8 +1,9 @@
 # Design: Deep User Analysis (#51)
 
-**Status:** Draft for the owner's decisions, 2026-10-18. Not accepted; build
-nothing until the decisions below and [ADR-0003](../adr/0003-staff-member-analysis.md)
-are recorded.
+**Status:** Accepted by the owner, 2026-10-18, with
+[ADR-0003](../adr/0003-staff-member-analysis.md) (*Owner decisions*, at the end). **Where the owner's decisions at the end differ from the body, the decisions win**; the body is updated when this is built. In
+particular, the depth is everything since the member joined, not 1,000
+messages, so the call counts and cost figures are re-derived at build.
 
 "User" is the owner's name for the feature. In this repo's vocabulary the
 subject is a **member**, and the person running it is **Staff**.
@@ -248,3 +249,13 @@ Only where a failure would be invisible or easy to get almost right:
 
 Each is shown to fail against a broken guard before it is kept. No real
 member's messages go into fixtures, tests or docs.
+
+## Owner decisions (2026-10-18)
+
+D51-1, D51-2 and D51-4 to D51-6 are accepted as recommended.
+
+- **D51-3:** the depth is **everything since the member joined**. Runs should
+  be deliberate and infrequent, and the caps (D51-4) keep them so. The depth
+  can be revisited later.
+- ADR-0003 is decided; see its owner decisions. Staff here means **holders of
+  the role named `Staff` alone** (O7).
