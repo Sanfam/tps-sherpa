@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCatalog } from "./catalog.ts";
+import { STAFF_CATEGORY, buildCatalog } from "./catalog.ts";
 import { parseExclusions } from "./exclusions.ts";
 import { fixtureDiscord } from "./fixture-discord.ts";
 import { ChannelType } from "./ports.ts";
@@ -77,6 +77,23 @@ describe("exclusions applied to the Catalog", () => {
   it("excludes an individual Post without touching its Forum", async () => {
     const { catalog } = await guild(new Set(["444"]));
     expect(catalog.map((e) => e.id)).toEqual(["111", "222", "333"]);
+  });
+});
+
+describe("the Staff category", () => {
+  it("keeps its Channels and Forums, and their Posts, out of the Catalog, whoever can see them", async () => {
+    const { catalog } = await buildCatalog({
+      discord: fixtureDiscord({
+        channels: [
+          { id: "111", name: "general", type: ChannelType.GuildText, topic: "Chat here", categoryId: "900" },
+          { id: "222", name: "staff-chat", type: ChannelType.GuildText, topic: "Staff", categoryId: STAFF_CATEGORY },
+          { id: "333", name: "staff-forum", type: ChannelType.GuildForum, topic: "Staff", categoryId: STAFF_CATEGORY },
+        ],
+        threads: [{ id: "444", name: "A member", parentId: "333", appliedTags: [], firstPost: "Notes" }],
+      }),
+      guildId: GUILD_ID,
+    });
+    expect(catalog.map((e) => e.id)).toEqual(["111"]);
   });
 });
 

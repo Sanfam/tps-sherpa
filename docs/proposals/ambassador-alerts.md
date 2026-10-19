@@ -256,4 +256,7 @@ D50-1 to D50-7 are accepted as recommended.
   (`GATEWAY_GUILD_MEMBERS_LIMITED`, read 2026-10-19). An `Ambassador` role
   exists.
 - **The "cap reached" line is a log line**, once a day.
-- **The Catalog check pauses the alerts until Staff exclude the Channel.**
+- **The Catalog check pauses the alerts while the Channel is in the Catalog.**
+  Since 2026-10-19, everything under the `👮 Staff` category, this Channel
+  included, is excluded by the sync itself (owner), so no manual exclusion is
+  needed.

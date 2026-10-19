@@ -149,6 +149,7 @@ describe("listChannels: who can see each place, by role (#53)", () => {
       id: "12",
       name: "staff-room",
       type: 0,
+      parent_id: "88",
       permission_overwrites: [ow(GUILD, "0", VIEW), ow(STAFF, VIEW, "0"), ow(BOT_ROLE, VIEW, "0")],
     },
     {
@@ -181,6 +182,11 @@ describe("listChannels: who can see each place, by role (#53)", () => {
         throw new Error(`unexpected route ${route}`);
       },
     } as never,
+  });
+
+  it("carries each place's category, which the sync's Staff-category exclusion reads", async () => {
+    const byName = new Map((await port.listChannels()).map((c) => [c.name, c.categoryId]));
+    expect([byName.get("staff-room"), byName.get("fishing")]).toEqual(["88", null]);
   });
 
   it("honours a role's own deny and @everyone's allow, and grants a Member no place only Staff see", async () => {
