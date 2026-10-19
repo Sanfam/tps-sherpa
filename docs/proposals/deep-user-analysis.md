@@ -1,8 +1,9 @@
 # Design: Deep User Analysis (#51)
 
-**Status:** Draft for the owner's decisions, 2026-10-18. Not accepted; build
-nothing until the decisions below and [ADR-0003](../adr/0003-staff-member-analysis.md)
-are recorded.
+**Status:** Accepted by the owner, 2026-10-18, with
+[ADR-0003](../adr/0003-staff-member-analysis.md) (*Owner decisions*, at the end). **Where the owner's decisions at the end differ from the body, the decisions win**; the body is updated when this is built. In
+particular, the depth is everything since the member joined, not 1,000
+messages, so the call counts and cost figures are re-derived at build.
 
 "User" is the owner's name for the feature. In this repo's vocabulary the
 subject is a **member**, and the person running it is **Staff**.

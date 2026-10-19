@@ -1,8 +1,7 @@
 # Evaluation: a themed reply to @mentions (#49)
 
-**Status:** Evaluation for the owner, 2026-10-18. The owner asked for an
-evaluation, not a build. If accepted, the containment decision is recorded as
-an ADR (ADR-0004) before any code.
+**Status:** Decided by the owner, 2026-10-18 (*Owner decisions*, at the end).
+The containment decision is recorded as ADR-0004 before any code. **Where the owner's decisions at the end differ from the body, the decisions win**; the body is updated when this is built.
 
 Source read: `Sanfam/discord-pakled-helmetbot` at its default branch on
 2026-10-18, through the GitHub API, read only: `README.md`, `src/llm.ts`,

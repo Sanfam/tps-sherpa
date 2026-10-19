@@ -32,7 +32,7 @@ as moderation, where "the normal privacy considerations need not be as
 comprehensively respected". That framing is not yet reconciled with the
 published policy or the locked rules above. This ADR is where it is.
 
-## Decision (proposed)
+## Decision
 
 **Sherpa gains one new boundary origin, `moderation`, used only by the two
 Staff tools.** It is a separate function in `boundary.ts`, as
@@ -61,15 +61,15 @@ Staff tools.** It is a separate function in `boundary.ts`, as
 5. **Who may run them** is a role check at the command, refused otherwise,
    with every reply ephemeral (as `/sherpa`, responder §7).
 
-### What this lifts, each pending an owner decision
+### What this lifts (each decided by the owner, 2026-10-18; see the end)
 
 | Rule | Lifted how | Decision |
 |---|---|---|
 | Describe subjects, never people | Lifted for `moderation` output to Staff only | O1 |
 | No model prose to Discord | Bounded strings in a template, Staff audience only | O2 |
-| `opt-out processing` stops sending a member's words to the model | Not decided: see O3 | O3 |
-| Monitored conversation is never sent, except by `extractIntroduction` | Not decided: see O4 | O4 |
-| Child data never echoed, never sent beyond intro images | Not decided: see O5 | O5 |
+| `opt-out processing` stops sending a member's words to the model | Lifted, with a published policy line (B) | O3 |
+| Monitored conversation is never sent, except by `extractIntroduction` | The subject's own messages, sent and discarded | O4 |
+| Child data never echoed, never sent beyond intro images | Sent as is; never in output | O5 |
 | Never put roles in an LLM prompt (`ASTRO-ARCHITECTURE.md`, *Role data*) | **Not lifted.** Roles stay out of every prompt | — |
 | Withheld Channels never read | **Not lifted.** Withheld is enforced in code too (below) | — |
 

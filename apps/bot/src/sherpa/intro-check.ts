@@ -8,14 +8,14 @@
  * Run where the Catalog and the model keys are: in the deployed container
  * (`railway ssh -s bot`, then `cd /app/apps/bot`). Every intro is synthetic,
  * and every image must be one with no real person in it (§10). About a dozen
- * cheap calls, well under 5¢. The daily cap does not apply.
+ * cheap calls, well under 5¢. The daily cap does not apply. The welcome-only
+ * cases (ConnorDavidSmith, xEMPTYCANx) are confirmed live, in shadow (§3).
  */
 import { WATCHED_CHANNEL } from "../llm/boundary.ts";
 import { VOCABULARY_PATH, loadCatalog, loadRoleManifest, openBoundary, readIfPresent } from "../llm/session.ts";
 import { parseVocabulary } from "../llm/vocabulary.ts";
 import { findPlaces } from "./find.ts";
 import { memberRoleIds } from "./interactions.ts";
-import { novelty } from "./responder-decide.ts";
 import { matchQuery } from "./responder.ts";
 
 /** A synthetic member: no real member has this id. */
@@ -73,11 +73,7 @@ for (const intro of INTROS) {
     ask: boundary.ask,
     origin: { derivedFromIntroduction: MEMBER },
   });
-  const ids = found.matches.map((e) => e.id);
   console.log("matches:", found.matches.map((e) => e.name).join(" | ") || "(none)");
-  // The ConnorDavidSmith / xEMPTYCANx shape: humans already named every match, so novelty leaves none.
-  const left = novelty(ids, ids.map((id) => `try <#${id}>`));
-  console.log(`welcome-only when humans named them all: ${left.length === 0 ? "yes" : `no (${left.length} left)`}`);
 }
 
 for (const url of images) {
@@ -88,7 +84,17 @@ for (const url of images) {
     console.log(`skipped: ${response.status} ${type || "no type"} (needs a JPEG, PNG or WebP)`);
     continue;
   }
-  const dataUrl = `data:${type};base64,${Buffer.from(await response.arrayBuffer()).toString("base64")}`;
+  const MAX = 4 * 1024 * 1024; // as the bot's own fetch (responder-images.ts)
+  if (Number(response.headers.get("content-length")) > MAX) {
+    console.log("skipped: over 4 MB");
+    continue;
+  }
+  const body = Buffer.from(await response.arrayBuffer());
+  if (body.length > MAX) {
+    console.log("skipped: over 4 MB");
+    continue;
+  }
+  const dataUrl = `data:${type};base64,${body.toString("base64")}`;
   const reading = await boundary.readImage({
     memberId: MEMBER,
     image: { authorId: MEMBER, origin: WATCHED_CHANNEL, dataUrl },

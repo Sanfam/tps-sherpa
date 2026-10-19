@@ -1,6 +1,6 @@
 # Design: alerts for Ambassadors and Staff (#50)
 
-**Status:** Draft for the owner's decisions, 2026-10-18. Not accepted. Builds
+**Status:** Accepted by the owner, 2026-10-18 (*Owner decisions*, at the end). **Where the owner's decisions at the end differ from the body, the decisions win**; the body is updated when this is built. Builds
 on the introductions responder's gateway (`introductions-responder.md` §2–§3).
 
 Claims about Discord or library behaviour are marked *(verified: how)* or
