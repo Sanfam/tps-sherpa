@@ -142,6 +142,26 @@ describe("the moderation origin", () => {
   });
 });
 
+describe("a field over its cap (owner's review of 2026-10-20 failed on one)", () => {
+  it("is cut on a word boundary, never failing the review, and a list keeps its first items", async () => {
+    const noted = { events: [{ at: 0, kind: "contribution" as const, note: "Organised a raid", date: "2026-10-01" }], tone: [] };
+    const reply = {
+      // A hard cut at 159 would land inside a word.
+      timeline: [{ month: "2026-10", line: `ab ${"abcdefghij ".repeat(20)}` }],
+      key_events: [0],
+      recent: "Calm.",
+      trend: "stable",
+      notes: "None.",
+      actions: ["one", "two", "three", "four"],
+    };
+    const parsed = await fixture(JSON.stringify(reply)).boundary.analyseReduce(subject, noted, [message(0)]);
+    const line = parsed.timeline[0]!.line;
+    expect([...line].length).toBeLessThanOrEqual(160);
+    expect(line).toMatch(/ abcdefghij…$/);
+    expect(parsed.actions).toEqual(["one", "two", "three"]);
+  });
+});
+
 describe("an observation", () => {
   const observe = (reply: string) =>
     fixture(reply).boundary.observeMember(subject, {

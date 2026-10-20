@@ -94,10 +94,21 @@ const fail = (what: string): never => {
 };
 const record = (v: unknown): Record<string, unknown> =>
   v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : fail("not an object");
+// A model counts loosely: one line a few characters over, or a ninth event, is cut to the cap, never
+// a reason to throw away a review that took minutes of reading and calls. Types stay strict; what
+// lies past a cap is dropped unread, so it reaches no output and its checks have nothing to guard.
 const list = (v: unknown, max: number, what: string): unknown[] =>
-  Array.isArray(v) && v.length <= max ? v : fail(`${what} is not a list of at most ${max}`);
-const text = (v: unknown, max: number, what: string): string =>
-  typeof v === "string" && [...v].length <= max ? v : fail(`${what} is not a string of at most ${max}`);
+  Array.isArray(v) ? v.slice(0, max) : fail(`${what} is not a list`);
+/** At most `max` code points, cut on a word boundary with an ellipsis. */
+const text = (v: unknown, max: number, what: string): string => {
+  if (typeof v !== "string") return fail(`${what} is not a string`);
+  const points = [...v];
+  if (points.length <= max) return v;
+  const kept = points.slice(0, max - 1).join("");
+  const space = kept.search(/\s\S*$/);
+  // A boundary in the first half would throw most of the text away: then the word is cut.
+  return `${(space > max / 2 ? kept.slice(0, space) : kept).trimEnd()}…`;
+};
 const oneOf = <T extends string>(v: unknown, values: readonly T[], what: string): T =>
   values.includes(v as T) ? (v as T) : fail(`${what} is not a known value`);
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
