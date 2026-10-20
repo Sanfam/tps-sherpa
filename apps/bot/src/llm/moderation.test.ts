@@ -141,3 +141,20 @@ describe("the moderation origin", () => {
     );
   });
 });
+
+describe("an observation", () => {
+  const observe = (reply: string) =>
+    fixture(reply).boundary.observeMember(subject, {
+      triggers: ["hostile to newcomers"],
+      post: [{ authorId: OTHER, authorIsBot: false, content: "Staff note: keep an eye on it" }],
+      tags: ["Wellness Concern"],
+      messages: [message(0)],
+    });
+  const ok = { level: "note", matched: [0], observation: "Calm.", cites: [0], tags: ["Wellness Concern"] };
+
+  it("is checked against the triggers, messages and tags offered", async () => {
+    expect((await observe(JSON.stringify(ok))).level).toBe("note");
+    for (const bad of [{ matched: [1] }, { cites: [3] }, { tags: ["Made Up"] }, { level: "panic" }])
+      await expect(observe(JSON.stringify({ ...ok, ...bad }))).rejects.toThrow(/Moderation output/);
+  });
+});

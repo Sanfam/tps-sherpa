@@ -18,9 +18,11 @@
  *
  * The same variable runs the alerts (alerts.ts), which read `#introductions`
  * through the same gateway, and adds `GuildMembers` (owner, 2026-10-18): every
- * join and member update in the guild then arrives. Only a member's id, roles
- * and `joined_at` are read; the alerts keep the id and `joined_at` of those
- * they alert about, and drop the rest unstored and unlogged.
+ * join, member update and departure in the guild then arrives. Only a
+ * member's id, roles and `joined_at` are read; the alerts keep the id and
+ * `joined_at` of those they alert about, and drop the rest unstored and
+ * unlogged. User Monitoring (watch.ts) reads the same gateway: a watched
+ * member's own messages, buffered in memory, and their departure.
  */
 import { resolve } from "node:path";
 import { API, Client } from "@discordjs/core";
@@ -42,8 +44,16 @@ import {
 } from "../llm/session.ts";
 import { parseVocabulary } from "../llm/vocabulary.ts";
 import { createAnalyse } from "./analyse.ts";
+import { WATCH_FORUM, createWatch, withWatchStore } from "./watch.ts";
 import { ALERTS_CHANNEL, type Alerts, createAlerts, withAlertsStore } from "./alerts.ts";
-import { MEMBER_ROLE_NAME, canReadHistory, canSend, canView, messageContentUsable } from "../sync/discord-adapter.ts";
+import {
+  MEMBER_ROLE_NAME,
+  canReadHistory,
+  canSend,
+  canSendInThreads,
+  canView,
+  messageContentUsable,
+} from "../sync/discord-adapter.ts";
 import { DURABLE_STORE_PATH, readDeniedPlaces, readMonitored, withDurableStore } from "../sync/durable-store.ts";
 import { TIER0_PATH } from "../sync/tier0-store.ts";
 import { FIND_TIMEOUT_MS } from "./find.ts";
@@ -79,6 +89,8 @@ const RESPONDER_DAILY_CAP = 60;
 const alertsCap = findDailyCap(process.env["SHERPA_ALERTS_DAILY_CAP"], "SHERPA_ALERTS_DAILY_CAP");
 /** `/sherpa analyse` runs a day across all Staff (D51-4). */
 const analyseCap = findDailyCap(process.env["SHERPA_ANALYSE_DAILY_CAP"], "SHERPA_ANALYSE_DAILY_CAP", 10);
+/** Observation calls a day across every watch (#52 §6). */
+const watchCap = findDailyCap(process.env["SHERPA_WATCH_DAILY_CAP"], "SHERPA_WATCH_DAILY_CAP", 200);
 /** A chunk is up to 200 messages: longer than `/find`'s calls, well inside a run's 12 minutes. */
 const ANALYSE_TIMEOUT_MS = 120_000;
 const HOUR = 60 * 60 * 1000;
@@ -120,6 +132,17 @@ const probe = async () => {
     watched: access(WATCHED_CHANNEL),
     shadow: access(SHADOW_CHANNEL),
     chamber: access(ALERTS_CHANNEL),
+    forum: (() => {
+      const forum = channels.find((c) => c.id === WATCH_FORUM);
+      return forum
+        ? {
+            ...access(WATCH_FORUM)!,
+            threads: canSendInThreads(forum, ctx),
+            // As for #bot-tests: with no Member role to test, it counts as visible, and the watches pause.
+            memberVisible: !memberRoles.length || canView(forum, holding(memberRoles, "")),
+          }
+        : null;
+    })(),
     shadowVisibleToMember: !memberRoles.length || (shadow !== undefined && canView(shadow, holding(memberRoles, ""))),
   };
 };
@@ -213,6 +236,60 @@ const alerts: Alerts | null = introductions
         };
       },
       cap: dailyCap(resolve(DATA_DIR, "alerts-usage.json"), alertsCap, log),
+      now: () => Date.now(),
+      log,
+    })
+  : null;
+
+const watch = introductions
+  ? createWatch({
+      guildId,
+      discord: {
+        member: async (userId) => {
+          try {
+            const m = await api.guilds.getMember(guildId, userId);
+            const names = [m.user.username, m.user.global_name, m.nick].filter(
+              (n): n is string => typeof n === "string" && n.trim() !== "",
+            );
+            return { names, serverName: m.nick ?? m.user.global_name ?? m.user.username, username: m.user.username };
+          } catch (error) {
+            if (notFound(error)) return null;
+            throw error;
+          }
+        },
+        channel: async (id) => {
+          try {
+            const c = (await api.channels.get(id)) as { type: number; parent_id?: string | null; thread_metadata?: { locked?: boolean } };
+            return { type: c.type, parent_id: c.parent_id ?? null, locked: c.thread_metadata?.locked === true };
+          } catch (error) {
+            // Gone is a 404 only: a 403 is lost access, which may come back, and must not unlink a live Post.
+            if (notFound(error)) return null;
+            throw error;
+          }
+        },
+        forumTags: async () =>
+          ((await api.channels.get(WATCH_FORUM)) as { available_tags?: Array<{ id: string; name: string }> }).available_tags ?? [],
+        access: async () => (await probe()).forum,
+        createPost: (forumId, body) => api.channels.createForumThread(forumId, body),
+        send: (postId, body) => api.channels.createMessage(postId, body),
+        setTags: (postId, tagIds) => api.channels.edit(postId, { applied_tags: tagIds }),
+        postMessages: (postId) => api.channels.getMessages(postId, { limit: 50 }),
+        postTags: async (postId) => ((await api.channels.get(postId)) as { applied_tags?: string[] }).applied_tags ?? [],
+        search: (query) => api.guilds.searchForMessages(guildId, query),
+        botId: async () => (botId ??= (await api.users.getCurrent()).id),
+      },
+      store: (work) => withWatchStore(work, DURABLE_STORE_PATH),
+      session: () => {
+        const catalog = loadCatalog();
+        return {
+          catalog,
+          memberRoles: memberRoleIds(loadRoleManifest()),
+          excluded: withDurableStore((s) => s.exclusions()),
+          boundary: openBoundary(catalog, {}, ANALYSE_TIMEOUT_MS).boundary,
+        };
+      },
+      retrying: (work) => retrying(work, log),
+      cap: dailyCap(resolve(DATA_DIR, "watch-usage.json"), watchCap, log),
       now: () => Date.now(),
       log,
     })
@@ -318,6 +395,7 @@ const sherpa: Sherpa = {
     log,
   }),
   alerts: (work) => withAlertsStore(work, DURABLE_STORE_PATH),
+  ...(watch ? { watch: watch.answer } : {}),
   ...(responder ? { tally: async () => describeTally(await computeTally(await tallyDeps())) } : {}),
   loadMonitored: (catalog) => readMonitored(catalog),
   loadDenied: (memberId) => readDeniedPlaces(memberId),
@@ -345,6 +423,14 @@ if (responder) {
   client.on(GatewayDispatchEvents.MessageDeleteBulk, ({ data }) => responder.onDelete(data));
 }
 
+if (watch) {
+  const logged = (error: unknown) => log(`[watch] failed: ${failure(error)}`);
+  client.on(GatewayDispatchEvents.MessageCreate, ({ data }) => void watch.onMessage(data).catch(logged));
+  client.on(GatewayDispatchEvents.MessageDelete, ({ data }) => watch.onDelete([data.id]));
+  client.on(GatewayDispatchEvents.MessageDeleteBulk, ({ data }) => watch.onDelete(data.ids));
+  client.on(GatewayDispatchEvents.GuildMemberRemove, ({ data }) => void watch.onLeave(data.user.id).catch(logged));
+}
+
 if (alerts) {
   const logged = (error: unknown) => log(`[alerts] failed: ${failure(error)}`);
   client.on(GatewayDispatchEvents.MessageCreate, ({ data }) => void alerts.onMessage(data).catch(logged));
@@ -368,6 +454,17 @@ client.once(GatewayDispatchEvents.Ready, ({ data }) =>
 );
 
 await gateway.connect();
+
+if (watch) {
+  const logged = (what: string) => (error: unknown) => log(`[watch] ${what} failed: ${failure(error)}`);
+  void watch
+    .check()
+    .catch(logged("checks"))
+    .finally(() => {
+      setInterval(() => void watch.tick().catch(logged("tick")), 60_000);
+      setInterval(() => void watch.check().catch(logged("checks")), HOUR);
+    });
+}
 
 if (alerts) {
   const checks = () => void alerts.check().catch((error: unknown) => log(`[alerts] checks failed: ${failure(error)}`));

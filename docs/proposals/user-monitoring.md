@@ -290,3 +290,35 @@ D52-1, D52-3, D52-5, D52-7 and D52-8 are accepted as recommended.
 - **D52-9:** the policy follows ADR-0003 O3 (B). Its line should say a watch
   can run for up to 90 days.
 - Staff here means **holders of the role named `Staff` alone** (ADR-0003 O7).
+
+## As built (2026-10-19)
+
+- **The Forum is never in the Catalog.** It sits under the `👮 Staff` category,
+  which the sync excludes as a whole (owner, 2026-10-19), so §3's manual
+  exclusion is not needed. The checks still pause the watches if it ever is.
+- **Watches last 1–90 days** (D52-2), under 1–5 triggers of at most 200
+  characters, separated by `;`. At most 10 at once.
+- **The Post is made when the watch starts,** so Staff have its link from the
+  start, titled `<server name> (<username>)` (D52-4), opening with the
+  setter, the end and the triggers, and tagged *Monitor Activity*.
+- **The departure note quotes** up to 5 of the member's newest messages from
+  places a Member can see, each clipped to 200 characters and escaped, with
+  its jump link and `allowed_mentions: { parse: [] }`. The owner chose quotes
+  over links on 2026-10-19, which settles §7's open question: the member's
+  own words are not model output, so ADR-0003 O5 does not apply to them.
+- **Caps:** 24 observation calls per member a day, in memory, and 200 a day
+  across all watches (`SHERPA_WATCH_DAILY_CAP`). At either, the buffer is
+  dropped, and the Post gets one line a day saying so.
+- **The opt-out does not pause a watch** (ADR-0003 O3 B). A Staff note by an
+  author with processing off is dropped from the Post's history.
+- **The watches run under `SHERPA_INTRODUCTIONS=1`**, the gateway that
+  carries messages and departures.
+- **A Post Staff delete is replaced** by a new one at the next write. Only a
+  404 counts as deleted; lost access (a 403) is retried, never unlinked.
+- **Tags on a Post Staff made and linked** need Manage Threads, which D52-8
+  does not grant. Without it they fail softly and are logged. Posts Sherpa
+  made take tags without it.
+- **A departure while the bot is down is missed:** Discord does not replay
+  `GUILD_MEMBER_REMOVE`. The watch then runs to its end.
+- **A departure note that cannot post** (a locked Post, say) is retried each
+  minute until the watch would have ended, then given up.

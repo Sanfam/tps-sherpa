@@ -259,6 +259,8 @@ export interface Sherpa {
     progress: (text: string) => Promise<unknown>,
     tag: string,
   ) => Promise<Answer>;
+  /** `/sherpa watch` (#52). Without it, the subcommands say they are unavailable. */
+  watch?: (interaction: APIChatInputApplicationCommandInteraction, tag: string) => Promise<string | null>;
   /** Each holder's alert subscriptions, for `/alerts`. */
   alerts: <T>(work: (store: AlertsStore) => T) => T;
   /** The shadow tally for `/sherpa introductions status`. Without it, status says the tally is unavailable. */
@@ -314,6 +316,14 @@ const answer = async (
       return NOT_STAFF;
     }
     const sub = interaction.data.options?.[0];
+    if (interaction.data.name === "sherpa" && sub?.type === ApplicationCommandOptionType.SubcommandGroup && sub.name === "watch") {
+      if (!holdsRoleNamed(interaction, sherpa.guildId, sherpa.loadRoleManifest(), STAFF_ROLE_ONLY)) {
+        sherpa.log(`${tag} watch refused: not the Staff role`);
+        return NOT_STAFF_ROLE;
+      }
+      if (!sherpa.watch) return "Watches are unavailable right now.";
+      return (await sherpa.watch(interaction, tag)) ?? UNKNOWN;
+    }
     if (interaction.data.name === "sherpa" && sub?.type === ApplicationCommandOptionType.Subcommand && sub.name === "analyse") {
       if (!holdsRoleNamed(interaction, sherpa.guildId, sherpa.loadRoleManifest(), STAFF_ROLE_ONLY)) {
         sherpa.log(`${tag} analyse refused: not the Staff role`);

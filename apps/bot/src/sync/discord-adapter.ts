@@ -14,6 +14,7 @@ const VIEW_CHANNEL = 1n << 10n;
 const SEND_MESSAGES = 1n << 11n;
 const READ_MESSAGE_HISTORY = 1n << 16n;
 const ADMINISTRATOR = 1n << 3n;
+const SEND_MESSAGES_IN_THREADS = 1n << 38n;
 
 export interface Overwrite {
   id: string;
@@ -76,6 +77,15 @@ export const canSend = (
 ): boolean => {
   const p = effective(channel, ctx);
   return (p & VIEW_CHANNEL) !== 0n && (p & SEND_MESSAGES) !== 0n;
+};
+
+/** Whether the bot may write in a Forum's Posts: User Monitoring's checks (#52). */
+export const canSendInThreads = (
+  channel: { permission_overwrites?: Overwrite[] },
+  ctx: PermissionContext,
+): boolean => {
+  const p = effective(channel, ctx);
+  return (p & VIEW_CHANNEL) !== 0n && (p & SEND_MESSAGES_IN_THREADS) !== 0n;
 };
 
 const effective = (

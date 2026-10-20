@@ -93,6 +93,11 @@ export interface Generation {
  * off or delete their data; and `alert_sent`, one alert per member, per event,
  * per `joined_at`, kept indefinitely and through erasure, as tombstones are
  * (D50-5). Ids and times only.
+ *
+ * User Monitoring's two (#52; through `sherpa/watch.ts` only): `watch`, one
+ * per member, Staff's triggers and who set it, deleted when it ends (at most
+ * 90 days, D52-2); and `monitoring_post`, which Post in the Forum is the
+ * member's, kept when a watch ends or they leave (D52-6).
  */
 const MIGRATIONS = `
   CREATE TABLE IF NOT EXISTS heartbeat (
@@ -164,6 +169,19 @@ const MIGRATIONS = `
     event     TEXT NOT NULL CHECK (event IN ('join', 'intro')),
     set_at    TEXT NOT NULL,
     PRIMARY KEY (member_id, event)
+  );
+  CREATE TABLE IF NOT EXISTS watch (
+    member_id  TEXT PRIMARY KEY,
+    set_by     TEXT NOT NULL,
+    set_at     TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    triggers   TEXT NOT NULL,
+    left_at    TEXT
+  );
+  CREATE TABLE IF NOT EXISTS monitoring_post (
+    member_id TEXT PRIMARY KEY,
+    post_id   TEXT NOT NULL UNIQUE,
+    linked_by TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS alert_sent (
     member_id TEXT NOT NULL,

@@ -19,6 +19,9 @@ import {
   CHUNK_PROMPT,
   type ChunkEvent,
   type ChunkResult,
+  OBSERVE_PROMPT,
+  type Observation,
+  parseObservation,
   REDUCE_PROMPT,
   type Report,
   moderationPlace,
@@ -616,6 +619,45 @@ export const createBoundary = (deps: BoundaryDeps) => {
         new Set(noted.events.map((e) => e.at)),
         new Set([...noted.events.map((e) => e.date.slice(0, 7)), ...noted.tone.map((t) => t.month), ...recent.map((m) => m.date.slice(0, 7))]),
       );
+    },
+
+    /**
+     * One observation on a watched member (#52): Staff's triggers, the
+     * member's Post (Staff's notes, redacted, with an opted-out author's
+     * dropped, and Sherpa's earlier observations), and their new messages,
+     * under the same rules as a review. Every number and tag is checked
+     * against what was offered.
+     */
+    observeMember: async (
+      subject: ModerationSubject,
+      request: {
+        triggers: readonly string[];
+        /** The Post's messages, oldest first. Staff's words, or Sherpa's own (`authorIsBot`). */
+        post: ReadonlyArray<{ authorId: string; authorIsBot: boolean; content: string }>;
+        tags: readonly string[];
+        messages: readonly ModerationMessage[];
+      },
+    ): Promise<Observation> => {
+      const { lines, patterns, redacted } = moderationLines(subject, request.messages);
+      const post = request.post
+        .filter((m) => m.authorIsBot || !hasOptedOut(m.authorId))
+        .map((m) => `${m.authorIsBot ? "Sherpa" : "Staff"}: ${redacted(m.content).replace(/\s+/g, " ").trim()}`);
+      let kept = post;
+      while (kept.join("\n").length > 6_000) kept = kept.slice(1);
+      const user = [
+        "Triggers:",
+        ...request.triggers.map((t, i) => `${i}. ${redacted(t)}`),
+        `Tags: ${request.tags.join(", ") || "(none)"}`,
+        "The Post:",
+        ...(kept.length ? kept : ["(empty)"]),
+        "New messages:",
+        ...lines,
+      ].join("\n");
+      return parseObservation(await call({ model: deps.models.cheap, system: OBSERVE_PROMPT, user, patterns }), {
+        triggers: request.triggers.length,
+        sent: new Set(request.messages.map((m) => m.n)),
+        tags: request.tags,
+      });
     },
 
     ask: async <T>(request: AskRequest<T>): Promise<T> => {
