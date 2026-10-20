@@ -74,9 +74,10 @@ describe("each step is taken once, across two connections", () => {
     expect(a.introduction(MEMBER)).toMatchObject({ outcome: "expired", reason: "cap" });
   });
 
-  it("claims at most three text extractions", () => {
+  it("claims at most five text extractions as messages arrive, and two more for the reads before the post", () => {
     start(a);
-    expect([a, b, a, b].map((s) => s.claimExtraction(MEMBER))).toEqual([true, true, true, false]);
+    expect([a, b, a, b, a, b].map((s) => s.claimExtraction(MEMBER))).toEqual([true, true, true, true, true, false]);
+    expect([a, b, a].map((s) => s.claimExtraction(MEMBER, true))).toEqual([true, true, false]);
   });
 
   it("claims a message's images once", () => {

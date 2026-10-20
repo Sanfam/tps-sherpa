@@ -71,6 +71,7 @@ export type WatchedMessage = Pick<
   | "type"
   | "mentions"
   | "message_reference"
+  | "mention_roles"
   | "attachments"
   | "embeds"
   | "webhook_id"
@@ -121,6 +122,8 @@ export interface ResponderDeps {
     }>;
     /** Sherpa's own user id, for telling a mention of it or a reply to it (§9). */
     botId: () => Promise<string>;
+    /** Sherpa's managed role, which the @ list offers beside the bot itself (#65). Null when it has none. */
+    botRoleId: () => Promise<string | null>;
     /** The raw send. Only the write port calls it. */
     createMessage: (channelId: string, body: RESTPostAPIChannelMessageJSONBody) => Promise<unknown>;
   };
@@ -272,6 +275,8 @@ export const createResponder = (deps: ResponderDeps) => {
   const conversations = new Map<string, Conversation>();
   /** Learned by the checks; until then nothing is taken for an invitation. */
   let botId: string | null = null;
+  /** Sherpa's managed role, learned with its id: a mention of it is a mention of Sherpa (#65). */
+  let botRole: string | null = null;
   const erasures = new Map<string, number>();
   /**
    * Ids deleted in `#introductions`, and when, for a day: a delete that lands
@@ -388,10 +393,10 @@ export const createResponder = (deps: ResponderDeps) => {
    * call only (§5); `fresh` is used as the event gave it. Null if one is gone,
    * which erases the row.
    */
-  const refetch = async (ids: readonly string[], fresh: WatchedMessage): Promise<WatchedMessage[] | null> => {
+  const refetch = async (ids: readonly string[], fresh?: WatchedMessage): Promise<WatchedMessage[] | null> => {
     const messages: WatchedMessage[] = [];
     for (const id of ids) {
-      const found = id === fresh.id ? fresh : await deps.discord.message(id);
+      const found = id === fresh?.id ? fresh : await deps.discord.message(id);
       if (!found) {
         eraseMessage(id);
         return null;
@@ -436,9 +441,10 @@ export const createResponder = (deps: ResponderDeps) => {
    */
   const extract = async (
     watch: Watch,
-    message: WatchedMessage,
-    rebuild: boolean,
+    message: WatchedMessage | undefined,
+    claim: "message" | "rebuild" | "final",
   ): Promise<number | null | undefined> => {
+    const rebuild = claim === "rebuild";
     const row = deps.store((s) => s.introduction(watch.memberId));
     const messages = row && (await refetch(row.messages.map((m) => m.id), message));
     if (!messages) return undefined;
@@ -452,7 +458,7 @@ export const createResponder = (deps: ResponderDeps) => {
           memberNames: watch.names,
           vocabulary: s.vocabulary,
         }),
-      () => deps.store((s) => (rebuild ? s.claimRebuild : s.claimExtraction)(watch.memberId)),
+      () => deps.store((s) => (rebuild ? s.claimRebuild(watch.memberId) : s.claimExtraction(watch.memberId, claim === "final"))),
     );
     if (!result) return undefined;
     // The rebuild read every message the row holds, so the catch-up's replay of
@@ -462,7 +468,12 @@ export const createResponder = (deps: ResponderDeps) => {
     if (result.signal !== "some") return null;
     const had = new Set([...(before?.interests ?? []), ...(before?.topics ?? [])]);
     const added = before?.signal !== "some" || [...result.interests, ...result.topics].some((x) => !had.has(x));
-    return added ? Math.max(...messages.map((m) => Date.parse(m.edited_timestamp ?? m.timestamp))) : null;
+    // Words carry signal, so an image-only message never moves its time (§4).
+    // ponytail: one read over many messages cannot say which carried the signal, so it is timed from
+    // the latest with words: the post can come later than reading each on arrival, never earlier, as
+    // with a rebuild. Source attribution from the extraction, if that delay ever matters.
+    const worded = messages.filter((m) => m.content.trim());
+    return added ? Math.max(...worded.map((m) => Date.parse(m.edited_timestamp ?? m.timestamp))) : null;
   };
 
   /** A message's images, claimed together, each read as a gesture and never as signal (§4). */
@@ -492,7 +503,7 @@ export const createResponder = (deps: ResponderDeps) => {
     if (!watch.handled.has(key)) {
       watch.handled.add(key);
       // Words alone are signal: an image-only message is a greeting (§4).
-      const signalAt = message.content.trim() ? await extract(watch, message, rebuild) : null;
+      const signalAt = message.content.trim() ? await extract(watch, message, rebuild ? "rebuild" : "message") : null;
       // No result (a pause or a stale call): forget it was read, so a replay reads it again.
       if (signalAt === undefined) {
         watch.handled.delete(key);
@@ -590,7 +601,9 @@ export const createResponder = (deps: ResponderDeps) => {
   /** Mentions Sherpa, or replies to one of its posts. */
   const invites = (message: WatchedMessage): boolean =>
     botId !== null &&
-    (message.mentions.some((u) => u.id === botId) || message.referenced_message?.author.id === botId);
+    (message.mentions.some((u) => u.id === botId) ||
+      (botRole !== null && (message.mention_roles ?? []).includes(botRole)) ||
+      message.referenced_message?.author.id === botId);
 
   /** Being watched: an open, unposted row. A closed row and a tombstone never hold back an ask (F9). */
   const watched = (memberId: string): boolean => {
@@ -837,6 +850,12 @@ export const createResponder = (deps: ResponderDeps) => {
     try {
       const mode = deps.store((s) => s.mode());
       botId ??= await deps.discord.botId();
+      // Read each check, so a role made or remade later is found. A failed read keeps the last one and is
+      // retried next hour: a role mention is one more way in, not worth pausing every intro over.
+      botRole = await deps.discord.botRoleId().catch((error: unknown) => {
+        log(`[responder] Sherpa's role could not be read: ${reason(error)}`);
+        return botRole;
+      });
       const probe = await deps.discord.probe();
       if (!probe.messageContent) failures.push("Message Content is not granted");
       if (!probe.watched?.view || !probe.watched.history) failures.push("#introductions is not visible and readable");
@@ -944,16 +963,44 @@ export const createResponder = (deps: ResponderDeps) => {
     close(watch, "responded", kind === "recommend" ? "recommended" : kind);
   };
 
+  /**
+   * The member's messages that no extraction has read: ones the per-message
+   * allowance refused, or edited since. Words only: an image-only message is
+   * marked read when it arrives.
+   */
+  const unread = (watch: Watch) =>
+    (deps.store((s) => s.introduction(watch.memberId))?.messages ?? []).filter(
+      (m) => !watch.handled.has(`${m.id}@${m.editedAt ?? ""}`),
+    );
+
   const evaluate = async (watch: Watch, settings: TimingSettings, now: number) => {
     if (watches.get(watch.memberId) !== watch) return;
-    const [intro, ...followUps] = watch.messages;
-    if (!intro) return;
-    const decided = decide(
-      { intro, followUps, askedByHuman: watch.askedByHuman, activeMinutes: [...watch.active] },
-      settings,
-      now,
-    );
-    if (decided.action === "post") await respond(watch, decided.kind, settings, now);
+    const decideNow = () => {
+      const [intro, ...followUps] = watch.messages;
+      return intro
+        ? decide({ intro, followUps, askedByHuman: watch.askedByHuman, activeMinutes: [...watch.active] }, settings, now)
+        : null;
+    };
+    let decided = decideNow();
+    // Before the post, what the cap left unread is read with everything else, up to
+    // `MAX_FINAL_READS` times. New signal moves the decision as a follow-up read in time would have;
+    // past the last read, the post goes with what was read. Not at the ceiling or the hard stop:
+    // the watch is over, and the welcome carries no suggestions.
+    if (decided?.action === "post" && decided.kind !== "welcome_only") {
+      const missed = unread(watch);
+      if (missed.length) {
+        const signalAt = await extract(watch, undefined, "final");
+        if (signalAt !== undefined) {
+          for (const m of missed) watch.handled.add(`${m.id}@${m.editedAt ?? ""}`);
+          log(`[responder] member ${watch.memberId}: read ${missed.length} unread before the post`);
+        }
+        if (typeof signalAt === "number") {
+          watch.messages.push({ at: signalAt, signal: true });
+          decided = decideNow();
+        }
+      }
+    }
+    if (decided?.action === "post") await respond(watch, decided.kind, settings, now);
   };
 
   /** In `off`, a watch past the hard stop closes unanswered: there is no catch-up to finish it (F11). */
