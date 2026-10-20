@@ -1,4 +1,4 @@
-**Papa Sherpa privacy policy** · effective 2026-10-19
+**Papa Sherpa privacy policy** · effective 2026-10-20
 
 Papa Sherpa is the Papa Squad's own bot. Papa Squad Staff run it. It reads the server so it can point members to the places that suit them.
 
@@ -18,6 +18,7 @@ Staff can have Sherpa review a member's messages for moderation, whatever their 
 • Places: the server's channels, forums and posts, with short summaries. Staff can withhold or exclude any of them. A Post is described by its opening message. Opting out or deleting your data does not yet remove that: delete the Post in Discord, or ask Staff to exclude it.
 • Recent messages: their text and author, including the author's Discord username and display name, used to summarise what each place has been talking about lately. Names are kept only while Sherpa holds a message of yours, and only to keep them out of what goes to the AI model. Summaries describe places, not people.
 • Your `/find` question: sent to the model to answer you, then dropped. It isn't stored or logged.
+• When you @mention Sherpa, your message and the 10 before it in that channel go to its AI model for the reply, then are dropped. Opted-out members' messages are skipped, and names are kept out.
 • Your choices in `/privacy`.
 • If you opt out of processing: your username, display name and server nickname, only so they're kept out of what other members' messages send to the AI model. Removed when you opt back in or delete your data, and from backups within 30 days.
 
