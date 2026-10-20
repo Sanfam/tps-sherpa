@@ -70,6 +70,12 @@ A person holding the `Ambassador` role in the guild. Welcomes new Members, and
 may opt in to Sherpa's alerts about them in `#ambassador-chamber`, as Staff may.
 _Avoid_: greeter, welcomer
 
+**Staff role holder**:
+A person holding the role named `Staff` itself, not `Event Managers`. Only they
+may run Sherpa's moderation tools: Deep User Analysis and User Monitoring
+(ADR-0003 O7). A narrower group than **Staff**.
+_Avoid_: mod, moderator, admin
+
 **Club Lead**:
 A person who owns a club or interest group and is expected to edit only that
 club's pages. The limit is a convention among a small, known group, not a

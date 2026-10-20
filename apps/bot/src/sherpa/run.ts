@@ -41,6 +41,7 @@ import {
   retrying,
 } from "../llm/session.ts";
 import { parseVocabulary } from "../llm/vocabulary.ts";
+import { createAnalyse } from "./analyse.ts";
 import { ALERTS_CHANNEL, type Alerts, createAlerts, withAlertsStore } from "./alerts.ts";
 import { MEMBER_ROLE_NAME, canReadHistory, canSend, canView, messageContentUsable } from "../sync/discord-adapter.ts";
 import { DURABLE_STORE_PATH, readDeniedPlaces, readMonitored, withDurableStore } from "../sync/durable-store.ts";
@@ -76,6 +77,10 @@ const introductions = process.env["SHERPA_INTRODUCTIONS"] === "1";
 const RESPONDER_DAILY_CAP = 60;
 /** Alerts a day, against a raid of joins (#50 §6). */
 const alertsCap = findDailyCap(process.env["SHERPA_ALERTS_DAILY_CAP"], "SHERPA_ALERTS_DAILY_CAP");
+/** `/sherpa analyse` runs a day across all Staff (D51-4). */
+const analyseCap = findDailyCap(process.env["SHERPA_ANALYSE_DAILY_CAP"], "SHERPA_ANALYSE_DAILY_CAP", 10);
+/** A chunk is up to 200 messages: longer than `/find`'s calls, well inside a run's 12 minutes. */
+const ANALYSE_TIMEOUT_MS = 120_000;
 const HOUR = 60 * 60 * 1000;
 
 const rest = new REST({ version: "10" }).setToken(token);
@@ -271,6 +276,47 @@ const sherpa: Sherpa = {
   ),
   monitored: openMonitored(DURABLE_STORE_PATH),
   settings: (work) => withResponderStore(work, DURABLE_STORE_PATH),
+  analyse: createAnalyse({
+    guildId,
+    discord: {
+      search: (query) => api.guilds.searchForMessages(guildId, query),
+      member: async (userId) => {
+        try {
+          const member = await api.guilds.getMember(guildId, userId);
+          return {
+            joinedAt: member.joined_at ?? null,
+            names: [member.user.username, member.user.global_name, member.nick].filter(
+              (n): n is string => typeof n === "string" && n.trim() !== "",
+            ),
+          };
+        } catch (error) {
+          if (notFound(error)) return null;
+          throw error;
+        }
+      },
+      message: async (channelId, messageId) => {
+        try {
+          return await api.channels.getMessage(channelId, messageId);
+        } catch (error) {
+          if (notFound(error)) return null;
+          throw error;
+        }
+      },
+    },
+    session: () => {
+      const catalog = loadCatalog();
+      return {
+        catalog,
+        memberRoles: memberRoleIds(loadRoleManifest()),
+        excluded: withDurableStore((s) => s.exclusions()),
+        boundary: openBoundary(catalog, {}, ANALYSE_TIMEOUT_MS).boundary,
+      };
+    },
+    retrying: (work) => retrying(work, log),
+    cap: dailyCap(resolve(DATA_DIR, "analyse-usage.json"), analyseCap, log),
+    now: () => Date.now(),
+    log,
+  }),
   alerts: (work) => withAlertsStore(work, DURABLE_STORE_PATH),
   ...(responder ? { tally: async () => describeTally(await computeTally(await tallyDeps())) } : {}),
   loadMonitored: (catalog) => readMonitored(catalog),
@@ -310,6 +356,7 @@ client.on(GatewayDispatchEvents.InteractionCreate, ({ data: interaction, api }) 
   handleInteraction(interaction, sherpa, {
     defer: (body) => api.interactions.defer(interaction.id, interaction.token, body),
     followUp: (body) => api.interactions.followUp(interaction.application_id, interaction.token, body),
+    edit: (body) => api.interactions.editReply(interaction.application_id, interaction.token, body),
   }).catch((error: Error) =>
     // Defer or follow-up itself failed — Discord, not Sherpa. Nothing to send.
     log(`[sherpa] interaction ${interaction.id} undelivered: ${error.message.slice(0, 160)}`),

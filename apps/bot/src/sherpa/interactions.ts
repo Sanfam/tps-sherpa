@@ -93,10 +93,12 @@ export const reply = (content: string, embeds?: APIEmbed[]): EphemeralReply => (
   allowed_mentions: { parse: [] },
 });
 
-/** The interaction's two calls back to Discord. A fake in tests. */
+/** The interaction's calls back to Discord. A fake in tests. */
 export interface ReplyPort {
   defer: (body: { flags: MessageFlags.Ephemeral }) => Promise<unknown>;
   followUp: (body: EphemeralReply) => Promise<unknown>;
+  /** Rewrites the deferred reply: progress on a long command, then its answer in the same place. */
+  edit?: (body: Omit<EphemeralReply, "flags">) => Promise<unknown>;
 }
 
 /**
@@ -133,6 +135,12 @@ export const isStaff = (
 ): boolean => holdsRoleNamed(interaction, guildId, manifest, STAFF_ROLE_NAMES);
 
 /**
+ * Who may run the moderation tools (ADR-0003 O7): holders of the role named
+ * `Staff` alone, a narrower group than the glossary's Staff.
+ */
+export const STAFF_ROLE_ONLY = ["Staff"];
+
+/**
  * Who may opt in to alerts (#50): an `Ambassador`, or Staff. Resolved and
  * failing closed as `isStaff`. Spelled here, not imported: alerts.ts imports
  * this module, and a value read at load time across that cycle crashes startup.
@@ -157,8 +165,12 @@ export const DEFAULT_FIND_DAILY_CAP = 50;
  * stops the bot at startup: a typo read as "no cap" is a bill, and one read as
  * zero is a feature that quietly stopped working.
  */
-export const findDailyCap = (raw: string | undefined, name = "SHERPA_FIND_DAILY_CAP"): number => {
-  if (raw === undefined || raw.trim() === "") return DEFAULT_FIND_DAILY_CAP;
+export const findDailyCap = (
+  raw: string | undefined,
+  name = "SHERPA_FIND_DAILY_CAP",
+  fallback = DEFAULT_FIND_DAILY_CAP,
+): number => {
+  if (raw === undefined || raw.trim() === "") return fallback;
   const limit = Number(raw.trim());
   if (!/^\d+$/.test(raw.trim()) || !Number.isSafeInteger(limit))
     throw new Error(`${name} must be a non-negative integer. Got: ${raw}`);
@@ -209,6 +221,7 @@ export const NOT_A_MEMBER =
   "Sherpa is for Members of the server. Once you have the Member role, try again.";
 export const NOT_STAFF = "This command is for Staff: holders of the Staff or Event Managers role.";
 export const NOT_A_HOLDER = "This command is for Ambassadors and Staff.";
+export const NOT_STAFF_ROLE = "This command is for holders of the Staff role.";
 export const CAP_REACHED =
   "Sherpa has answered all the `/find` questions it can for today. Try again tomorrow, " +
   "or use `/lately` to see what's active.";
@@ -239,6 +252,13 @@ export interface Sherpa {
   monitored: Monitored;
   /** The introductions responder's settings, for `/sherpa`. */
   settings: WithSettings;
+  /** `/sherpa analyse` (#51). Without it, the subcommand says it is unavailable. */
+  analyse?: (
+    subject: { id: string; bot?: boolean },
+    since: string | null,
+    progress: (text: string) => Promise<unknown>,
+    tag: string,
+  ) => Promise<Answer>;
   /** Each holder's alert subscriptions, for `/alerts`. */
   alerts: <T>(work: (store: AlertsStore) => T) => T;
   /** The shadow tally for `/sherpa introductions status`. Without it, status says the tally is unavailable. */
@@ -268,6 +288,7 @@ const stringOption = (interaction: APIChatInputApplicationCommandInteraction, na
 const answer = async (
   interaction: APIChatInputApplicationCommandInteraction,
   sherpa: Sherpa,
+  progress: (text: string) => Promise<unknown>,
 ): Promise<Answer> => {
   const tag = `[sherpa] /${interaction.data.name} ${interaction.id}`;
   // Ahead of the Member gate: anyone in the guild may opt out or delete.
@@ -291,6 +312,24 @@ const answer = async (
     if (!isStaff(interaction, sherpa.guildId, sherpa.loadRoleManifest())) {
       sherpa.log(`${tag} refused: not Staff`);
       return NOT_STAFF;
+    }
+    const sub = interaction.data.options?.[0];
+    if (interaction.data.name === "sherpa" && sub?.type === ApplicationCommandOptionType.Subcommand && sub.name === "analyse") {
+      if (!holdsRoleNamed(interaction, sherpa.guildId, sherpa.loadRoleManifest(), STAFF_ROLE_ONLY)) {
+        sherpa.log(`${tag} analyse refused: not the Staff role`);
+        return NOT_STAFF_ROLE;
+      }
+      const id = sub.options?.find((o) => o.name === "member")?.value;
+      const since = sub.options?.find((o) => o.name === "since")?.value;
+      if (typeof id !== "string") return UNKNOWN;
+      if (!sherpa.analyse) return "Reviews are unavailable right now.";
+      sherpa.log(`${tag} analyse subject ${id} by ${interaction.member!.user.id}`);
+      return sherpa.analyse(
+        { id, bot: interaction.data.resolved?.users?.[id]?.bot },
+        typeof since === "string" ? since : null,
+        progress,
+        tag,
+      );
     }
     const answered =
       interaction.data.name === "monitored"
@@ -402,15 +441,24 @@ export const handleInteraction = async (
   const command = interaction as APIChatInputApplicationCommandInteraction;
   await discord.defer({ flags: MessageFlags.Ephemeral });
   let answered: Answer;
+  /** Once the deferred reply shows progress, a follow-up would be a second message beside it. */
+  let progressed = false;
   try {
-    answered = await answer(command, sherpa);
+    answered = await answer(command, sherpa, async (text) => {
+      if (!discord.edit) return;
+      progressed = true;
+      // Progress is a courtesy: a failed edit never fails the command.
+      await discord.edit({ content: text, allowed_mentions: { parse: [] } }).catch(() => {});
+    });
   } catch (error) {
     sherpa.log(
       `[sherpa] /${command.data.name} ${command.id} failed: ${(error as Error).message.slice(0, 160)}`,
     );
     answered = FAILED;
   }
-  await discord.followUp(
-    typeof answered === "string" ? reply(answered) : reply(answered.content, answered.embeds),
-  );
+  const body = typeof answered === "string" ? reply(answered) : reply(answered.content, answered.embeds);
+  if (progressed && discord.edit) {
+    const { flags: _, ...edit } = body;
+    await discord.edit(edit);
+  } else await discord.followUp(body);
 };

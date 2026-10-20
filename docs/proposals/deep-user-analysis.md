@@ -259,3 +259,29 @@ D51-1, D51-2 and D51-4 to D51-6 are accepted as recommended.
   can be revisited later.
 - ADR-0003 is decided; see its owner decisions. Staff here means **holders of
   the role named `Staff` alone** (O7).
+
+## As built (2026-10-19)
+
+- **Search serves bots** (packet 1, 2026-10-19): 200 with results, a rate
+  limit of a burst of 6 then about one call a second, and no
+  `referenced_message` on results (0 of 9 replies had one). So the context of
+  O6 is fetched, one message per reply, for the newest 200 replies only.
+- **Everything since the member joined** (D51-3) is bounded by time, not
+  count: reading stops at 6 minutes (about 9,000 messages at 25 a second),
+  and the run at 12, inside the interaction token's 15. A run that stops
+  reading early says so. Chunks of 200 messages, 4 at a time, then one reduce
+  call. At ~40 tokens a message, 9,000 messages is ~360,000 input tokens over
+  46 calls, about 2¢ at the measured `/find` rate.
+- **The cap counts runs, not calls:** 10 a day (`SHERPA_ANALYSE_DAILY_CAP`).
+  Counting every call, as the body says, would allow no run of a long
+  history. One run at a time, one per subject an hour, both in memory.
+- **Sources** are the subject's messages from Catalog Entities a Member can
+  see, and from public Threads under them (search's `threads` give the
+  parent), never private Threads. Their own opt-out does not apply (O3 B);
+  a context author's does.
+- **The privacy policy line** is the owner's chosen wording (2026-10-19):
+  "Staff can have Sherpa review a member's messages for moderation, whatever
+  their settings above, for up to 90 days at a time; the reviews go only to
+  Staff."
+- **Staff here** is the `Staff` role alone (O7), checked inside `/sherpa`,
+  after its own Staff check.

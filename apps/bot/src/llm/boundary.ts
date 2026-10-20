@@ -15,6 +15,16 @@ import type { Entity } from "../sync/catalog.ts";
 import { resolveIdentifiers } from "../sync/normalise.ts";
 import type { NameLookup } from "../sync/normalise.ts";
 import { isMonitored } from "../sync/tier0.ts";
+import {
+  CHUNK_PROMPT,
+  type ChunkEvent,
+  type ChunkResult,
+  REDUCE_PROMPT,
+  type Report,
+  moderationPlace,
+  parseChunk,
+  parseReport,
+} from "./moderation.ts";
 import type { Vocabulary } from "./vocabulary.ts";
 
 /**
@@ -133,6 +143,32 @@ export interface IntroductionImage {
    * an animation never goes out whole.
    */
   dataUrl: string;
+}
+
+/** A `moderation` source's text: written in a Catalog Entity, by id. */
+export type PlacedSource = Source & { origin: string };
+
+/** One of the subject's messages as Staff's review sends it, numbered for citation (ADR-0003). */
+export interface ModerationMessage {
+  n: number;
+  /** `YYYY-MM-DD`. */
+  date: string;
+  /** The place's name, for the line. Redacted like the text. */
+  place: string;
+  source: PlacedSource;
+  /** The one message it replies to, someone else's, as context (O6). */
+  repliesTo?: PlacedSource;
+}
+
+/** Who a review is about, and whose names it must keep out. */
+export interface ModerationSubject {
+  memberId: string;
+  /** Their username, global name and nickname. */
+  memberNames: Iterable<string>;
+  /** The names of the authors of the context messages. */
+  otherNames: Iterable<string>;
+  /** The `Member` role's ids: only places a Member can see are sources. */
+  memberRoles: readonly string[];
 }
 
 export interface AskRequest<T> {
@@ -501,7 +537,87 @@ export const createBoundary = (deps: BoundaryDeps) => {
     }
   };
 
+  /**
+   * The `moderation` origin's rules (ADR-0003), for the subject's messages and
+   * their context. Each of the subject's must be theirs, from a place a
+   * Member can see (monitored included, O4); a failure throws, since it is a
+   * caller's bug. A context message from a bot, an opted-out author or the
+   * subject is dropped. The subject's own opt-out does not apply: the policy
+   * says Staff can review a member whatever their settings (O3 B).
+   */
+  const moderationLines = (subject: ModerationSubject, messages: readonly ModerationMessage[]) => {
+    for (const m of messages) {
+      if (m.source.authorId !== subject.memberId || m.source.authorIsBot)
+        throw new Error("A moderation source is not the member's own. Refusing it.");
+      if (!moderationPlace(m.source.origin, byId, subject.memberRoles) || (m.repliesTo && !moderationPlace(m.repliesTo.origin, byId, subject.memberRoles)))
+        throw new Error("A moderation source is not from a place a Member can see. Refusing it.");
+    }
+    // Every name of the subject and of the context's authors is replaced on the way out, whatever it
+    // collides with: a member called "general" or "Dad" costs that word in these lines, never a leak.
+    // On the way back the subject's are refused as they are, and others' by the usual rule, so a
+    // reply to someone called "Dad" does not fail every review that says the word.
+    // A one-character name is replaced too, but not refused on return, or a member called "I" would
+    // fail every review.
+    const atLeast = (names: Iterable<string>, length: number) => [...names].filter((n) => [...n.trim()].length >= length);
+    const outbound = patternsFor(
+      new Set([...(deps.memberNames ?? []), ...atLeast(subject.memberNames, 1), ...atLeast(subject.otherNames, 1)]),
+    );
+    const patterns = patternsFor(
+      new Set([
+        ...(deps.memberNames ?? []),
+        ...atLeast(subject.memberNames, 2),
+        ...usableMemberNames(subject.otherNames, deps.catalog, []),
+      ]),
+    );
+    const out = (t: string, max: number) => cutText(redactOutbound(t, outbound).replace(/\s+/g, " ").trim(), max) || "(no text)";
+    const lines = messages.map((m) => {
+      const context = m.repliesTo;
+      const shown = context && context.authorId !== subject.memberId && !context.authorIsBot && !hasOptedOut(context.authorId);
+      return `[${m.n}] ${m.date} ${out(m.place, 100)}: ${out(m.source.content, 500)}` +
+        (shown ? `\n  ↳ replying to another member: ${out(context.content, 300)}` : "");
+    });
+    return { lines, patterns, redacted: (t: string) => redactOutbound(t, outbound) };
+  };
+
   return {
+    /**
+     * One part of Staff's review of a member (#51): their messages in order,
+     * each event citing one by its number. Only `analyseReduce` sees more.
+     */
+    analyseChunk: async (subject: ModerationSubject, messages: readonly ModerationMessage[]): Promise<ChunkResult> => {
+      const { lines, patterns } = moderationLines(subject, messages);
+      return parseChunk(
+        await call({ model: deps.models.cheap, system: CHUNK_PROMPT, user: lines.join("\n"), patterns }),
+        new Set(messages.map((m) => m.n)),
+        new Set(messages.map((m) => m.date.slice(0, 7))),
+      );
+    },
+
+    /**
+     * The review itself, from what the chunks noted (derived text, redacted
+     * again) and the newest messages. Key events may cite only the events.
+     */
+    analyseReduce: async (
+      subject: ModerationSubject,
+      noted: { events: Array<ChunkEvent & { date: string }>; tone: ChunkResult["tone"] },
+      recent: readonly ModerationMessage[],
+    ): Promise<Report> => {
+      const { lines, patterns, redacted } = moderationLines(subject, recent);
+      const user = [
+        "Events:",
+        ...noted.events.map((e) => `[${e.at}] ${e.date} ${e.kind}: ${redacted(e.note)}`),
+        "Tone by month:",
+        ...noted.tone.map((t) => `${t.month}: ${t.tone}`),
+        "Newest messages:",
+        ...lines,
+      ].join("\n");
+      return parseReport(
+        await call({ model: deps.models.cheap, system: REDUCE_PROMPT, user, patterns }),
+        new Set(noted.events.map((e) => e.at)),
+        new Set([...noted.events.map((e) => e.date.slice(0, 7)), ...noted.tone.map((t) => t.month), ...recent.map((m) => m.date.slice(0, 7))]),
+      );
+    },
+
     ask: async <T>(request: AskRequest<T>): Promise<T> => {
       const subjects = Array.isArray(request.subject) ? request.subject : [request.subject];
       if (subjects.length === 0)

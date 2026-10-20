@@ -228,7 +228,7 @@ export const clip = (text: string, max = MAX_SUMMARY_CHARS): string =>
  * the Unicode line separators included) collapsed, so a name cannot fake a
  * second row, and Discord markdown escaped, so it cannot format or link.
  */
-const plainName = (name: string): string =>
+export const plainName = (name: string): string =>
   name.replace(/\s+/g, " ").trim().replace(/[\\[\]()*_~`|>#<@:-]/g, "\\$&");
 
 /**
