@@ -33,6 +33,7 @@ import {
   NOT_A_HOLDER,
   NOT_A_MEMBER,
   NOT_STAFF,
+  NOT_STAFF_ROLE,
   UNKNOWN,
   type EphemeralReply,
   type Sherpa,
@@ -186,7 +187,7 @@ const harness = (
     optedOut?: boolean;
     /** Members' own denies, written by a sync as the real one writes them. */
     memberDenies?: Array<{ placeId: string; memberId: string }>;
-  } & Partial<Pick<Sherpa, "loadCatalog" | "loadVocabulary" | "loadActivity" | "tally">> = {},
+  } & Partial<Pick<Sherpa, "loadCatalog" | "loadVocabulary" | "loadActivity" | "tally" | "analyse">> = {},
 ) => {
   const calls: string[] = [];
   const logs: string[] = [];
@@ -221,6 +222,7 @@ const harness = (
     settings: (work) => withResponderStore(work, paths.durable),
     alerts: (work) => withAlertsStore(work, paths.durable),
     tally: opts.tally,
+    ...(opts.analyse ? { analyse: opts.analyse } : {}),
     loadMonitored: (c) => readMonitored(c, paths.durable),
     loadDenied: (id) => readDeniedPlaces(id, paths.durable),
     askFor: (c) =>
@@ -243,7 +245,7 @@ const harness = (
     });
     return sent.replies.at(-1)?.content;
   };
-  return { run, sent, calls, logs, capPath: path, privacy, paths };
+  return { run, sent, calls, logs, capPath: path, privacy, paths, sherpa };
 };
 
 describe("every reply is ephemeral", () => {
@@ -936,5 +938,45 @@ describe("/alerts", () => {
     expect(withAlertsStore((s) => s.subscriptions(INVOKER), paths.durable)).toEqual(["intro", "join"]);
     await run(privacyCommand("delete-my-data", { confirm: true }));
     expect(withAlertsStore((s) => s.subscriptions(INVOKER), paths.durable)).toEqual([]);
+  });
+});
+
+describe("/sherpa analyse", () => {
+  const analyse = (roles: string[]) => {
+    const base = command("sherpa", {}, { roles }) as unknown as { data: object };
+    return {
+      ...base,
+      data: {
+        ...base.data,
+        options: [
+          {
+            name: "analyse",
+            type: ApplicationCommandOptionType.Subcommand,
+            options: [{ name: "member", type: ApplicationCommandOptionType.User, value: "500000000000000009" }],
+          },
+        ],
+      },
+    } as unknown as APIInteraction;
+  };
+
+  it("is for the Staff role alone: Event Managers, Staff elsewhere, are refused before any review", async () => {
+    const reviewed: string[] = [];
+    const { run } = harness({ analyse: async (subject) => (reviewed.push(subject.id), "REVIEW") });
+    expect(await run(analyse([EVENT_MANAGERS_ROLE]))).toBe(NOT_STAFF_ROLE);
+    expect(reviewed).toEqual([]);
+    expect(await run(analyse([STAFF_ROLE]))).toBe("REVIEW");
+    expect(reviewed).toEqual(["500000000000000009"]);
+  });
+
+  it("puts the answer in place of its progress, not in a second message beside it", async () => {
+    const { sherpa } = harness({ analyse: async (_, __, progress) => (await progress("Reading…"), "REVIEW") });
+    const edits: string[] = [];
+    const followUps: string[] = [];
+    await handleInteraction(analyse([STAFF_ROLE]), sherpa, {
+      defer: async () => {},
+      followUp: async (body) => followUps.push(body.content),
+      edit: async (body) => edits.push(body.content),
+    });
+    expect([edits, followUps]).toEqual([["Reading…", "REVIEW"], []]);
   });
 });

@@ -90,6 +90,21 @@ export const SHERPA_COMMAND: RESTPostAPIChatInputApplicationCommandsJSONBody = {
       ],
     },
     {
+      name: "analyse",
+      type: ApplicationCommandOptionType.Subcommand,
+      description: "Staff role only: a model's review of one member's messages since they joined.",
+      options: [
+        { name: "member", type: ApplicationCommandOptionType.User, description: "Who to review.", required: true },
+        {
+          name: "since",
+          type: ApplicationCommandOptionType.String,
+          description: "Only messages from this date on, like 2026-01-31.",
+          required: false,
+          max_length: 10,
+        },
+      ],
+    },
+    {
       name: "alerts",
       type: ApplicationCommandOptionType.Subcommand,
       description: "Switch the alerts to Ambassadors and Staff in #ambassador-chamber on or off.",

@@ -1,4 +1,4 @@
-**Papa Sherpa privacy policy** · effective 2026-10-16
+**Papa Sherpa privacy policy** · effective 2026-10-19
 
 Papa Sherpa is the Papa Squad's own bot. Papa Squad Staff run it. It reads the server so it can point members to the places that suit them.
 
@@ -10,6 +10,9 @@ Sherpa is on for everyone by default. You can withdraw that consent at any time 
 • `backfill`: after opting back in, Sherpa re-reads your messages from the last 6 days within about six hours. Older messages can't be recovered.
 • `settings`: shows your current choices.
 • `delete-my-data`: erases the messages Sherpa has kept from you and turns processing off.
+
+**Moderation**
+Staff can have Sherpa review a member's messages for moderation, whatever their settings above, for up to 90 days at a time; the reviews go only to Staff.
 
 **What Sherpa holds**
 • Places: the server's channels, forums and posts, with short summaries. Staff can withhold or exclude any of them. A Post is described by its opening message. Opting out or deleting your data does not yet remove that: delete the Post in Discord, or ask Staff to exclude it.
