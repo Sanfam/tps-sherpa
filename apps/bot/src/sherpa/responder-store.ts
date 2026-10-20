@@ -18,8 +18,17 @@ import type { DatabaseSync } from "node:sqlite";
 import { DURABLE_STORE_PATH, openDurableDatabase, transaction } from "../sync/durable-store.ts";
 
 /** Text extractions per watch (§3), and invited exchanges per `invitation` row (§9). */
-export const MAX_EXTRACTIONS = 3;
+/** Text extractions per watch as messages arrive (§3). */
+export const MAX_EXTRACTIONS = 5;
+/**
+ * Reads before the post of what the arrival allowance left unread. Two: a
+ * read that finds new signal moves the post later, and what arrives meanwhile
+ * is read once more. Past that, the post goes with what was read.
+ */
+export const MAX_FINAL_READS = 2;
 export const MAX_EXCHANGES = 3;
+/** Rebuilds after a restart, apart from the text allowance, so a crash loop cannot spend the daily cap. */
+const MAX_REBUILDS = 3;
 /** Images sent to the vision call per member, both rows together (§4). */
 export const MAX_IMAGES = 6;
 /** `introduction` rows from `started_at`, `invitation` rows from `last_at` (§5, F9). */
@@ -182,22 +191,26 @@ export const openResponderStore = (path: string = DURABLE_STORE_PATH) => {
       ),
 
     /**
-     * Before a rebuild's extraction after a restart: at most `MAX_EXTRACTIONS`
+     * Before a rebuild's extraction after a restart: at most `MAX_REBUILDS`
      * per watch, apart from the text allowance, so a crash loop cannot spend
      * the daily cap on one row.
      */
     claimRebuild: (memberId: string): boolean =>
       changedOne(
         `UPDATE introduction SET rebuilds = rebuilds + 1
-         WHERE member_id = :member AND rebuilds < ${MAX_EXTRACTIONS} AND ${WATCHED}`,
+         WHERE member_id = :member AND rebuilds < ${MAX_REBUILDS} AND ${WATCHED}`,
         { member: memberId },
       ),
 
-    /** Before each text extraction call: at most `MAX_EXTRACTIONS` per watch. */
-    claimExtraction: (memberId: string): boolean =>
+    /**
+     * Before each text extraction call: at most `MAX_EXTRACTIONS` per watch, or
+     * `MAX_FINAL_READS` more for `final`, the reads before the post of what the
+     * cap left unread.
+     */
+    claimExtraction: (memberId: string, final = false): boolean =>
       changedOne(
         `UPDATE introduction SET extractions = extractions + 1
-         WHERE member_id = :member AND extractions < ${MAX_EXTRACTIONS} AND ${WATCHED}`,
+         WHERE member_id = :member AND extractions < ${MAX_EXTRACTIONS + (final ? MAX_FINAL_READS : 0)} AND ${WATCHED}`,
         { member: memberId },
       ),
 

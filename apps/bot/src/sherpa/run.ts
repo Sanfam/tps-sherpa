@@ -156,6 +156,23 @@ const probe = async () => {
   };
 };
 
+let botId: string | undefined;
+let botRole: Promise<string | null> | undefined;
+/**
+ * Sherpa's managed role, which the @ list offers beside the bot itself. The
+ * promise is kept, so one lookup serves every caller; a failed one is dropped
+ * and retried. `fresh` reads it again: the responder's hourly checks do, and
+ * the mention replies share what they learn.
+ */
+const botRoleId = (fresh = false): Promise<string | null> =>
+  (botRole = (!fresh && botRole) || (async () => {
+    const id = (botId ??= (await api.users.getCurrent()).id);
+    return (await api.guilds.getRoles(guildId)).find((r) => r.tags?.bot_id === id)?.id ?? null;
+  })().catch((error: unknown) => {
+    botRole = undefined;
+    throw error;
+  }));
+
 const responder: Responder | null = introductions
   ? createResponder({
       guildId,
@@ -184,7 +201,8 @@ const responder: Responder | null = introductions
           }
         },
         probe,
-        botId: async () => (await api.users.getCurrent()).id,
+        botId: async () => (botId ??= (await api.users.getCurrent()).id),
+        botRoleId: () => botRoleId(true),
         createMessage: (channelId, body) => api.channels.createMessage(channelId, body),
       },
       store: (work) => withResponderStore(work, DURABLE_STORE_PATH),
@@ -304,21 +322,12 @@ const watch = introductions
     })
   : null;
 
-let botRole: Promise<string | null> | undefined;
 const mentions = introductions
   ? createMentions({
       guildId,
       discord: {
         botId: async () => (botId ??= (await api.users.getCurrent()).id),
-        // The promise is kept, so one lookup serves every message; a failed one is dropped and retried.
-        botRoleId: () =>
-          (botRole ??= (async () => {
-            const id = (botId ??= (await api.users.getCurrent()).id);
-            return (await api.guilds.getRoles(guildId)).find((r) => r.tags?.bot_id === id)?.id ?? null;
-          })().catch((error: unknown) => {
-            botRole = undefined;
-            throw error;
-          })),
+        botRoleId,
         nickOf: async (userId) => {
           try {
             return (await api.guilds.getMember(guildId, userId)).nick ?? null;
@@ -359,7 +368,6 @@ const mentions = introductions
  * runs. Built per run: the Staff roles are read from the manifest once, and
  * each reactor is looked up as a guild member.
  */
-let botId: string | undefined;
 const tallyDeps = async (): Promise<TallyDeps> => {
   const staffRoles = new Set(
     loadRoleManifest()

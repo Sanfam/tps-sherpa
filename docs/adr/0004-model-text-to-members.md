@@ -110,11 +110,14 @@ name it knows. Shadow mode is where that is measured, and the switch turns it of
 - **The privacy-policy line** is published, in the owner's wording (policy
   effective 2026-10-20).
 
+- **`#bot-tests`** is answered: a valid place for Staff to test (owner,
+  2026-10-20).
+
 ## Open, for the owner
 
-- **Staff places.** `#ambassador-chamber` (Staff talk about new members, and
-  the alerts) and `#bot-tests` (the responder's shadow posts) are answered
-  today. Whether to refuse them as the User Monitoring Forum is refused.
+- **`#ambassador-chamber`** (Staff talk about new members, and the alerts)
+  is answered today. Whether to refuse it as the User Monitoring Forum is
+  refused.
 
 ## Consequences
 

@@ -180,8 +180,9 @@ autonomous post. While watching, Sherpa:
 
 - holds what it extracted from the member's words and images, **in memory
   only**;
-- reads the member's own follow-ups, re-extracting each time, up to 3
-  extractions;
+- reads the member's own follow-ups, re-extracting each time, up to 5
+  extractions, and reads any the allowance left unread just before its post
+  (at most twice; owner, 2026-10-20);
 - notes, mechanically, whether other members welcomed the member, asked
   them a question, or named places;
 - counts the minutes in which other members were active.
@@ -256,7 +257,7 @@ This is the only path through which monitored content reaches a model.
     reading schema (§ *What an image means*). An intro with both makes both
     calls: "I love climbing" plus a meme keeps its interest, and the meme
     adds only a reading. Each call counts against the daily cap. Only the
-    text call counts toward the extraction cap of 3.
+    text call counts toward the extraction cap of 5 (and 2 reads before the post).
   - **Catalog:** none is sent.
   - **Text length:** cut at 2,000 code points, on a whitespace boundary.
 - **Names.** `memberNames` is the cache together with the member's own
@@ -466,7 +467,11 @@ sherpa_setting(key TEXT PRIMARY KEY, value TEXT NOT NULL, set_by TEXT NOT NULL, 
   change count of 1 is required before any slow or visible step:
   - `posted_at` before the one post;
   - `outcome` before closing;
-  - `extractions < 3` before each text extraction call;
+  - `extractions < 5` before each text extraction as a message arrives, and
+    `extractions < 7` for up to two more just before the post, which read
+    what the allowance left unread. New signal there moves the post later,
+    timed from the latest message with words; past the second read the post
+    goes with what was read (owner, 2026-10-20);
   - `rebuilds < 3` before the extraction that rebuilds an open row after a
     restart. A rebuild reconstructs what was already extracted, so it takes
     none of the text allowance, but a crash loop cannot spend the daily cap
@@ -784,7 +789,7 @@ docs.
 
 | Per introduction | Calls | Cost |
 |---|---|---|
-| Extraction, text | ≤ 3, plus ≤ 3 rebuilds after restarts | well under 1¢ |
+| Extraction, text | ≤ 5, plus ≤ 2 reads before the post, plus ≤ 3 rebuilds after restarts | well under 1¢ |
 | Image reading (separate `vision` call; ≤ 3 per message, ≤ 6 per member) | 1 per image-carrying message | ~$0.00017 per image, measured |
 | Match (`findPlaces`, ~50k tokens) | ≤ 1, plus a retry | ~$0.003 each (`f6e7d9d`) |
 | Invited path | ≤ 3 exchanges × (extraction + match) | ≤ ~$0.01 |

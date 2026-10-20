@@ -25,6 +25,8 @@ const OTHER = "500000000000000002";
 const QUIET = "500000000000000003";
 const VETERAN = "500000000000000004";
 const SHERPA = "500000000000000009";
+/** Sherpa's managed role, as the @ list offers it (#65). */
+const SHERPA_ROLE = "900000000000000009";
 const JOINED = "2026-01-01T00:00:00.000000+00:00";
 const MIN = 60_000;
 const T0 = Date.parse("2026-10-20T03:00:00.000Z");
@@ -75,6 +77,7 @@ const message = (author: string, minutes: number, over: Partial<WatchedMessage> 
   edited_timestamp: null,
   type: MessageType.Default,
   mentions: [],
+  mention_roles: [],
   attachments: [],
   embeds: [],
   ...over,
@@ -155,6 +158,7 @@ const harness = () => {
       }),
       message: touch(async (id: string) => h.history.find((m) => m.id === id) ?? null),
       botId: touch(async () => SHERPA),
+      botRoleId: touch(async () => SHERPA_ROLE),
       probe: touch(async () => {
         const all = { view: true, history: true, send: true };
         return { messageContent: true, watched: all, shadow: all, shadowVisibleToMember: h.shadowVisibleToMember };
@@ -689,6 +693,13 @@ describe("the invited path (§9)", () => {
     expect(row(VETERAN)?.messages.map((m) => m.id)).toContain(asked.id);
   });
 
+  it("takes a mention of Sherpa's managed role, picked from the @ list, as an invitation (#65)", async () => {
+    const { h, say } = await started();
+    await say(message(VETERAN, 1, { content: `<@&${SHERPA_ROLE}> anything for me?`, mention_roles: [SHERPA_ROLE] }));
+    await say(message(OTHER, 2, { content: "<@&900000000000000077> hi", mention_roles: ["900000000000000077"] }));
+    expect(posted(h)).toEqual(["invited_recommend"]);
+  });
+
   it("answers processing off with the fixed text alone: no row, no claim, no model call", async () => {
     withDurableStore((s) => s.setPreference(QUIET, "processing", false), path);
     const { h, say } = await started();
@@ -787,5 +798,74 @@ describe("the invited path (§9)", () => {
     await responder.onMessage({ ...mention(MEMBER, 1), edited_timestamp: new Date(at(2)).toISOString() }, true);
     expect(h.writes).toEqual([]);
     expect(invitation()).toBeNull();
+  });
+});
+
+describe("follow-ups the allowance left unread (owner, 2026-10-20)", () => {
+  const followUps = (from: number, count: number) =>
+    Array.from({ length: count }, (_, i) => message(MEMBER, from + i, { content: `Also, follow-up ${i + 1} about my weekends` }));
+
+  it("are read with everything else before the post, so it considers every message", async () => {
+    const { h, responder, say } = await started();
+    const intro = message(MEMBER, 0);
+    await say(intro);
+    for (const m of followUps(1, 6)) await say(m);
+    // The intro and four follow-ups use the five; the last two wait.
+    expect(h.extracts).toHaveLength(5);
+    h.clock = at(30);
+    await responder.tick();
+    expect(h.extracts).toHaveLength(6);
+    expect((h.extracts.at(-1) as { sources: unknown[] }).sources).toHaveLength(7);
+    expect(h.writes).toHaveLength(1);
+    await responder.tick();
+    expect(h.extracts).toHaveLength(6);
+  });
+
+  it("move the decision when they carry the first signal: no question, a recommendation timed from them", async () => {
+    const { h, responder, say } = await started();
+    h.extraction = { signal: "none", interests: [], topics: [], life_stage: [] };
+    await say(message(MEMBER, 0));
+    for (const m of followUps(1, 5)) await say(m);
+    h.extraction = SAID;
+    h.clock = at(10);
+    await responder.tick();
+    expect(h.writes).toHaveLength(0);
+    h.clock = at(25);
+    await responder.tick();
+    expect(h.writes.map((w) => /would POST (\w+)/.exec(w.body.content ?? "")?.[1])).toEqual(["recommend"]);
+  });
+
+  it("read again what arrived while a read before the post moved it later", async () => {
+    const { h, responder, say } = await started();
+    h.extraction = { signal: "none", interests: [], topics: [], life_stage: [] };
+    await say(message(MEMBER, 0));
+    for (const m of followUps(1, 5)) await say(m);
+    h.extraction = SAID;
+    h.clock = at(10);
+    await responder.tick();
+    // The first read found signal and moved the post to minute 25; this one arrives meanwhile.
+    h.extraction = { ...SAID, interests: ["woodworking", "gliding"] };
+    await say(message(MEMBER, 12, { content: "And I fly gliders on Sundays" }));
+    h.clock = at(32);
+    await responder.tick();
+    // The intro, five follow-ups and the new one: the second read before the post saw all seven.
+    expect(h.extracts).toHaveLength(7);
+    expect((h.extracts.at(-1) as { sources: unknown[] }).sources).toHaveLength(7);
+    expect(h.writes).toHaveLength(1);
+  });
+
+  it("time new signal from their words, never from an image posted after them", async () => {
+    const { h, responder, say } = await started();
+    h.extraction = { signal: "none", interests: [], topics: [], life_stage: [] };
+    await say(message(MEMBER, 0));
+    for (const m of followUps(1, 5)) await say(m);
+    await say(message(MEMBER, 9, { content: "", embeds: [gif] }));
+    h.extraction = SAID;
+    h.clock = at(10);
+    await responder.tick();
+    // The words are from minute 5: the recommendation is due at 25, not 29.
+    h.clock = at(25);
+    await responder.tick();
+    expect(h.writes).toHaveLength(1);
   });
 });

@@ -79,6 +79,7 @@ const intro = (over: Partial<WatchedMessage> = {}): WatchedMessage => ({
   edited_timestamp: null,
   type: MessageType.Default,
   mentions: [],
+  mention_roles: [],
   attachments: [],
   embeds: [],
   ...over,
