@@ -565,3 +565,88 @@ describe("an introduction", () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe("replyToMention (ADR-0004)", () => {
+  const general = entity({ id: "40", name: "general", type: "channel" });
+  const hidden = entity({ id: "41", name: "vault", type: "channel", description_status: "withheld" });
+  const ASKER = "500";
+  const SHERPA = "900";
+  const mention = (over: Partial<Parameters<ReturnType<typeof createBoundary>["replyToMention"]>[0]> = {}) => ({
+    place: { id: general.id, parentId: null },
+    sherpaId: SHERPA,
+    question: { authorId: ASKER, authorIsBot: false, content: "any good co-op games?", origin: general.id },
+    context: [],
+    askerNames: ["Jughfer"],
+    otherNames: [],
+    voice: "You are a kindly gamer dad.",
+    ...over,
+  });
+  const mentionBoundary = (chat: ChatPort, over: Partial<Parameters<typeof createBoundary>[0]> = {}) =>
+    boundary(chat, { catalog: [post, intro, introThread, general, hidden], ...over });
+
+  it("refuses a line that could link, ping, hide, name or run long, and passes a plain one", async () => {
+    const refused: Array<[string, RegExp]> = [
+      ["see https://example.org", /link/],
+      ["try www.example.org", /link/],
+      ["join discord.gg/abcd", /link/],
+      ["it's at example.org/page", /link/],
+      ["see you <t:1700000000:R>", /Discord markup/],
+      ["ask @you", /Discord markup/],
+      ["@everyone look", /mass mention/],
+      ["a ||secret|| here", /hiding or link/],
+      ["[click](here)", /hiding or link/],
+      ["x".repeat(501), /too long/],
+      ["one\ntwo\nthree", /line break/],
+      ["id 12345678901234567", /identifier/],
+      ["Jughfer says hi", /names a member/],
+    ];
+    for (const [line, why] of refused) {
+      const { chat } = fixtureChat(JSON.stringify({ intent: "chat", line }));
+      await expect(mentionBoundary(chat).replyToMention(mention()), line).rejects.toThrow(why);
+    }
+    const ok = "Deep Rock Galactic, a solid 9.5/10. Rock and stone!\nTry /find too.";
+    const { chat } = fixtureChat(JSON.stringify({ intent: "chat", line: ok }));
+    await expect(mentionBoundary(chat).replyToMention(mention())).resolves.toEqual({ intent: "chat", line: ok });
+  });
+
+  it("drops other bots and opted-out authors, keeps Sherpa's own, and labels speakers without names", async () => {
+    const { chat, calls } = fixtureChat('{"intent":"chat","line":"Sounds fun."}');
+    const say = (authorId: string, content: string, authorIsBot = false) => ({ authorId, authorIsBot, content, origin: general.id });
+
+    await mentionBoundary(chat, { hasOptedOut: (id) => id === "602" }).replyToMention(
+      mention({
+        context: [
+          say("601", "Schwagle here, anyone up for Helldivers"),
+          say("602", "opted out words"),
+          say("700", "webhook words", true),
+          say(SHERPA, "earlier sherpa words", true),
+          say(ASKER, "me again, Jughfer"),
+        ],
+        otherNames: ["Schwagle"],
+      }),
+    );
+
+    const user = calls[0]!.user;
+    expect(user).toContain("member A: @member here, anyone up for Helldivers");
+    expect(user).toContain("Sherpa: earlier sherpa words");
+    expect(user).toContain("the asker: me again, @member");
+    expect(user).not.toMatch(/opted out|webhook|Schwagle|Jughfer/);
+  });
+
+  it("refuses a monitored place, a Thread under one outside the Catalog, a withheld place, and a foreign source", async () => {
+    const { chat, calls } = fixtureChat('{"intent":"chat","line":"Hi."}');
+    const at = (id: string, parentId: string | null = null) => ({
+      place: { id, parentId },
+      question: { authorId: ASKER, authorIsBot: false, content: "hi", origin: id },
+    });
+
+    for (const request of [at(intro.id), at("77", intro.id), at(hidden.id), at("78", hidden.id)])
+      await expect(mentionBoundary(chat).replyToMention(mention(request))).rejects.toThrow(/monitored or withheld/);
+    await expect(
+      mentionBoundary(chat).replyToMention(
+        mention({ context: [{ authorId: "601", authorIsBot: false, content: "x", origin: intro.id }] }),
+      ),
+    ).rejects.toThrow(/not from the place/);
+    expect(calls).toHaveLength(0);
+  });
+});

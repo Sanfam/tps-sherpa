@@ -1,7 +1,11 @@
 # Evaluation: a themed reply to @mentions (#49)
 
-**Status:** Decided by the owner, 2026-10-18 (*Owner decisions*, at the end).
-The containment decision is recorded as ADR-0004 before any code. **Where the owner's decisions at the end differ from the body, the decisions win**; the body is updated when this is built.
+**Status:** Built 2026-10-20 (`sherpa/mentions.ts`, `replyToMention` in
+`llm/boundary.ts`). **ADR-0004 records the design as built and wins over this
+body** wherever they differ: the owner's decisions at the end, a 500-character
+`line`, no `places` intent (the model never sees the Catalog; `/find` names
+places), and mentions in monitored places, `#introductions` among them, left to
+the responder's invited path.
 
 Source read: `Sanfam/discord-pakled-helmetbot` at its default branch on
 2026-10-18, through the GitHub API, read only: `README.md`, `src/llm.ts`,

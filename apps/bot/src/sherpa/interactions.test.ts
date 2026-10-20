@@ -864,7 +864,7 @@ describe("the Staff gate, for /monitored and /sherpa", () => {
 
 describe("/sherpa introductions", () => {
   const SETTINGS =
-    "Mode: **off**\nAlerts: **off**\nClock: **wall**\nGreet: **10** minutes\nRecommend: **20** minutes\nCeiling: **6** active hours";
+    "Mode: **off**\nAlerts: **off**\nMentions: **off**\nClock: **wall**\nGreet: **10** minutes\nRecommend: **20** minutes\nCeiling: **6** active hours";
 
   it("is off with no mode row, and shows the default thresholds, then the tally", async () => {
     const { run } = harness({ tally: async () => "TALLY" });

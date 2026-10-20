@@ -23,6 +23,7 @@ export const contentPath = (rel: string): string =>
   resolve(import.meta.dirname, "../../../../content", rel);
 
 export const VOCABULARY_PATH = contentPath("config/topics.json");
+export const PERSONA_PATH = contentPath("config/persona.json");
 export const VOCABULARY_PROPOSAL_PATH = contentPath("config/topics.proposed.json");
 
 /** The bot's volume: never committed, never in the Catalog's snapshot. */
