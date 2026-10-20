@@ -99,15 +99,19 @@ are made against that.
 A name the redaction never heard of: a member called by a name that is none of
 their username, global name or nickname. And tone. A crafted message in the context can make Sherpa say something rude,
 false or embarrassing, in up to 500 characters, with no link, no ping and no
-name. Shadow mode is where that is measured, and the switch turns it off.
+name it knows. Shadow mode is where that is measured, and the switch turns it off.
 
-## Open, for the owner before the switch leaves `off`
+## Decided after review (owner, 2026-10-20)
 
 - **Child data.** A dad's question or the context may name a child's age, and
   the reply could repeat it in public. The prompt forbids repeating anything
-  about anyone's children; nothing in code refuses it. Child data is a stop
-  condition, so the owner decides whether the prompt rule is enough.
-- **The privacy-policy line**, worded by the owner.
+  about anyone's children; nothing in code refuses it. The owner accepted the
+  prompt rule, to be measured in shadow before `live`.
+- **The privacy-policy line** is published, in the owner's wording (policy
+  effective 2026-10-20).
+
+## Open, for the owner
+
 - **Staff places.** `#ambassador-chamber` (Staff talk about new members, and
   the alerts) and `#bot-tests` (the responder's shadow posts) are answered
   today. Whether to refuse them as the User Monitoring Forum is refused.
@@ -116,7 +120,6 @@ name. Shadow mode is where that is measured, and the switch turns it off.
 
 - The persona file (`content/config/persona.json`) is reviewed like the
   vocabulary: its voice and fixed lines are what members read.
-- The privacy policy gains a line for what a mention sends, worded by the owner
-  before the switch leaves `off`.
+- The privacy policy carries a line for what a mention sends.
 - Any later path that wants model text in Discord needs its own ADR. This one
   does not generalise.
