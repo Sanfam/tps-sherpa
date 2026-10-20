@@ -22,7 +22,9 @@
  * member's id, roles and `joined_at` are read; the alerts keep the id and
  * `joined_at` of those they alert about, and drop the rest unstored and
  * unlogged. User Monitoring (watch.ts) reads the same gateway: a watched
- * member's own messages, buffered in memory, and their departure.
+ * member's own messages, buffered in memory, and their departure. So do the
+ * mention replies (mentions.ts): a message that mentions Sherpa, and the ten
+ * before it, read once and dropped.
  */
 import { resolve } from "node:path";
 import { API, Client } from "@discordjs/core";
@@ -33,6 +35,7 @@ import { WATCHED_CHANNEL } from "../llm/boundary.ts";
 import {
   ACTIVITY_PATH,
   DATA_DIR,
+  PERSONA_PATH,
   PRIVACY_POLICY_PATH,
   VOCABULARY_PATH,
   loadCatalog,
@@ -69,7 +72,9 @@ import {
 import { openMonitored } from "./monitored.ts";
 import { openPrivacy } from "./privacy.ts";
 import { withResponderStore } from "./responder-store.ts";
-import { alertsSwitch } from "./sherpa-command.ts";
+import { alertsSwitch, mentionsMode } from "./sherpa-command.ts";
+import { createMentions } from "./mentions.ts";
+import { parsePersona } from "../llm/persona.ts";
 import { type TallyDeps, computeTally, describeTally, runTally } from "./responder-tally.ts";
 import { type ChannelAccess, type Responder, SHADOW_CHANNEL, createResponder } from "./responder.ts";
 
@@ -91,6 +96,10 @@ const alertsCap = findDailyCap(process.env["SHERPA_ALERTS_DAILY_CAP"], "SHERPA_A
 const analyseCap = findDailyCap(process.env["SHERPA_ANALYSE_DAILY_CAP"], "SHERPA_ANALYSE_DAILY_CAP", 10);
 /** Observation calls a day across every watch (#52 §6). */
 const watchCap = findDailyCap(process.env["SHERPA_WATCH_DAILY_CAP"], "SHERPA_WATCH_DAILY_CAP", 200);
+/** Mention replies a day (#49, ADR-0004): the runaway guard, apart from the responder's 60. */
+const mentionCap = findDailyCap(process.env["SHERPA_MENTION_DAILY_CAP"], "SHERPA_MENTION_DAILY_CAP", 100);
+/** One short answer: a slow route falls back to the fixed line rather than keeping the asker waiting. */
+const MENTION_TIMEOUT_MS = 30_000;
 /** A chunk is up to 200 messages: longer than `/find`'s calls, well inside a run's 12 minutes. */
 const ANALYSE_TIMEOUT_MS = 120_000;
 const HOUR = 60 * 60 * 1000;
@@ -295,6 +304,56 @@ const watch = introductions
     })
   : null;
 
+let botRole: Promise<string | null> | undefined;
+const mentions = introductions
+  ? createMentions({
+      guildId,
+      discord: {
+        botId: async () => (botId ??= (await api.users.getCurrent()).id),
+        // The promise is kept, so one lookup serves every message; a failed one is dropped and retried.
+        botRoleId: () =>
+          (botRole ??= (async () => {
+            const id = (botId ??= (await api.users.getCurrent()).id);
+            return (await api.guilds.getRoles(guildId)).find((r) => r.tags?.bot_id === id)?.id ?? null;
+          })().catch((error: unknown) => {
+            botRole = undefined;
+            throw error;
+          })),
+        nickOf: async (userId) => {
+          try {
+            return (await api.guilds.getMember(guildId, userId)).nick ?? null;
+          } catch (error) {
+            if (notFound(error)) return null;
+            throw error;
+          }
+        },
+        parentOf: async (id) => {
+          try {
+            return ((await api.channels.get(id)) as { parent_id?: string | null }).parent_id ?? null;
+          } catch (error) {
+            if (notFound(error)) return undefined;
+            throw error;
+          }
+        },
+        history: (channelId, before, limit) => api.channels.getMessages(channelId, { before, limit }),
+        createMessage: (channelId, body) => api.channels.createMessage(channelId, body),
+      },
+      mode: () => withResponderStore(mentionsMode, DURABLE_STORE_PATH),
+      // Read once: a malformed persona stops the bot at startup, not at the first mention.
+      persona: parsePersona(readIfPresent(PERSONA_PATH) ?? ""),
+      processing: (memberId) => withDurableStore((s) => s.preferences(memberId)).processing,
+      roles: loadRoleManifest,
+      session: () => {
+        const catalog = loadCatalog();
+        const { boundary, monitored } = openBoundary(catalog, {}, MENTION_TIMEOUT_MS);
+        return { catalog, monitored, boundary };
+      },
+      cap: dailyCap(resolve(DATA_DIR, "mention-usage.json"), mentionCap, log),
+      now: () => Date.now(),
+      log,
+    })
+  : null;
+
 /**
  * The shadow tally's reads and its one notice (§8), only where the responder
  * runs. Built per run: the Staff roles are read from the manifest once, and
@@ -430,6 +489,8 @@ if (watch) {
   client.on(GatewayDispatchEvents.MessageDeleteBulk, ({ data }) => watch.onDelete(data.ids));
   client.on(GatewayDispatchEvents.GuildMemberRemove, ({ data }) => void watch.onLeave(data.user.id).catch(logged));
 }
+
+if (mentions) client.on(GatewayDispatchEvents.MessageCreate, ({ data }) => void mentions.onMessage(data));
 
 if (alerts) {
   const logged = (error: unknown) => log(`[alerts] failed: ${failure(error)}`);

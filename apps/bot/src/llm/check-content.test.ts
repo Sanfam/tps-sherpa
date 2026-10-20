@@ -14,7 +14,7 @@ const frozen = readFileSync(join(repo, "content/config/topics.json"), "utf8");
 let root: string;
 const check = (vocabulary: string | null) => {
   root = mkdtempSync(join(tmpdir(), "check-content-"));
-  for (const path of ["scripts/check-content.mjs", "apps/bot/src/llm/vocabulary.ts"])
+  for (const path of ["scripts/check-content.mjs", "apps/bot/src/llm/vocabulary.ts", "apps/bot/src/llm/persona.ts"])
     cpSync(join(repo, path), join(root, path));
   cpSync(join(repo, "content/config"), join(root, "content/config"), { recursive: true });
   const topics = join(root, "content/config/topics.json");

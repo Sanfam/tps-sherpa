@@ -148,6 +148,20 @@ export const SHERPA_COMMAND: RESTPostAPIChatInputApplicationCommandsJSONBody = {
       ],
     },
     {
+      name: "mentions",
+      type: ApplicationCommandOptionType.Subcommand,
+      description: "Sherpa's replies to @mentions: off, shadow (to #bot-tests), or live (where asked).",
+      options: [
+        {
+          name: "mode",
+          type: ApplicationCommandOptionType.String,
+          description: "Which mode.",
+          required: true,
+          choices: MODES.map((m) => ({ name: m, value: m })),
+        },
+      ],
+    },
+    {
       name: "alerts",
       type: ApplicationCommandOptionType.Subcommand,
       description: "Switch the alerts to Ambassadors and Staff in #ambassador-chamber on or off.",
@@ -172,6 +186,10 @@ export const alertsSwitch = (settings: Pick<Settings, "setting">): { on: boolean
   on: settings.setting("alerts") === "on",
   since: settings.setting("alerts_on_since"),
 });
+
+/** Staff's switch for the mention replies (#49): `off` with no row, or one it cannot read. */
+export const mentionsMode = (settings: Pick<Settings, "setting">): Mode =>
+  MODES.find((m) => m === settings.setting("mentions_mode")) ?? "off";
 
 /** What `/sherpa` reads and changes, on one connection per command. A real store on a temp path in tests. */
 export type Settings = Pick<ResponderStore, "mode" | "setMode" | "setting" | "setSetting">;
@@ -199,6 +217,7 @@ const status = (settings: Settings): string => {
   return [
     `Mode: **${settings.mode()}**`,
     `Alerts: **${alertsSwitch(settings).on ? "on" : "off"}**`,
+    `Mentions: **${mentionsMode(settings)}**`,
     `Clock: **${clockOf(settings)}**`,
     ...TIMING_NAMES.map((n) => `${n[0]!.toUpperCase()}${n.slice(1)}: **${timing(settings, n)}** ${TIMING[n].unit}`),
   ].join("\n");
@@ -220,6 +239,14 @@ export const answerSherpa = async (
 ): Promise<string | null> => {
   const by = interaction.member?.user.id;
   const group = interaction.data.options?.[0];
+  if (by && group?.type === ApplicationCommandOptionType.Subcommand && group.name === "mentions") {
+    const mode = MODES.find((m) => m === group.options?.find((o) => o.name === "mode")?.value);
+    if (!mode) return null;
+    withSettings((s) => s.setSetting("mentions_mode", mode, by));
+    if (mode === "live") log(`${tag} MENTIONS MODE SET TO LIVE by ${by}: Sherpa now replies to @mentions where asked.`);
+    else log(`${tag} mentions mode ${mode} by ${by}`);
+    return `Done. Mentions mode is **${mode}**.` + (mode === "live" ? " Sherpa now replies to @mentions where asked." : "");
+  }
   if (by && group?.type === ApplicationCommandOptionType.Subcommand && group.name === "alerts") {
     const state = group.options?.find((o) => o.name === "state")?.value;
     if (state !== "on" && state !== "off") return null;

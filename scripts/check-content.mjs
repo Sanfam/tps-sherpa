@@ -7,6 +7,7 @@
  */
 import { readFileSync } from "node:fs";
 import { parseVocabulary } from "../apps/bot/src/llm/vocabulary.ts";
+import { parsePersona } from "../apps/bot/src/llm/persona.ts";
 
 const problems = [];
 // `undefined` means unreadable (already reported) or optional and absent, so
@@ -110,6 +111,13 @@ if (Array.isArray(roles)) {
   }
 } else if (roles !== undefined) {
   problems.push("content/config/roles.json is not an array");
+}
+
+// Committed and required: the bot refuses to start without a valid one.
+try {
+  parsePersona(readFileSync(new URL("../content/config/persona.json", import.meta.url), "utf8"));
+} catch (error) {
+  problems.push(`content/config/persona.json: ${error.message}`);
 }
 
 if (problems.length) {
