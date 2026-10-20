@@ -414,6 +414,8 @@ const sherpa: Sherpa = {
   settings: (work) => withResponderStore(work, DURABLE_STORE_PATH),
   analyse: createAnalyse({
     guildId,
+    // Reviews post where the watch posts; without the watch there is nowhere, so none run.
+    forum: watch?.reviews ?? { writable: () => false, last: async () => null, post: async () => "" },
     discord: {
       search: (query) => api.guilds.searchForMessages(guildId, query),
       member: async (userId) => {
