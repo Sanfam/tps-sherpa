@@ -139,3 +139,49 @@ export const parseReport = (value: unknown, events: ReadonlySet<number>, months:
     actions: list(r["actions"] ?? [], MAX_ACTIONS, "actions").map((a) => text(a, MAX_NOTE, "an action")),
   };
 };
+
+// --- User Monitoring's observation (#52) ------------------------------------
+
+export const LEVELS = ["none", "note", "alert"] as const;
+const MAX_OBSERVATION = 400;
+const MAX_CITES = 5;
+const MAX_TAGS = 2;
+
+export interface Observation {
+  level: (typeof LEVELS)[number];
+  /** Positions in Staff's triggers. */
+  matched: number[];
+  observation: string;
+  /** Numbers of the new messages. */
+  cites: number[];
+  /** Names from the Forum's own tag set. */
+  tags: string[];
+}
+
+export const OBSERVE_PROMPT = [
+  ...RULES,
+  "Staff are watching the member under triggers they wrote, numbered from 0.",
+  "You are given the triggers, the member's Post in Staff's Forum (Staff's earlier notes and your own earlier observations), and the member's new messages, numbered [n].",
+  'Reply with JSON: {"level": level, "matched": [trigger number], "observation": string, "cites": [n], "tags": [tag]}.',
+  `"level" is one of: ${LEVELS.join(", ")}: "none" when nothing new is worth Staff's attention, "alert" only when a trigger is clearly met.`,
+  `"observation": at most ${MAX_OBSERVATION} characters. "cites": at most ${MAX_CITES} message numbers. "tags": at most ${MAX_TAGS}, only from the tags given, or none.`,
+].join("\n");
+
+/** Every number and tag must be one that was offered. */
+export const parseObservation = (
+  value: unknown,
+  offered: { triggers: number; sent: ReadonlySet<number>; tags: readonly string[] },
+): Observation => {
+  const r = record(value);
+  return {
+    level: oneOf(r["level"], LEVELS, "level"),
+    matched: list(r["matched"] ?? [], 5, "matched").map((n) =>
+      Number.isInteger(n) && (n as number) >= 0 && (n as number) < offered.triggers ? (n as number) : fail("an unknown trigger"),
+    ),
+    observation: text(r["observation"], MAX_OBSERVATION, "observation"),
+    cites: list(r["cites"] ?? [], MAX_CITES, "cites").map((n) =>
+      typeof n === "number" && offered.sent.has(n) ? n : fail("a citation of a message it was not sent"),
+    ),
+    tags: list(r["tags"] ?? [], MAX_TAGS, "tags").map((t) => oneOf(t, offered.tags, "a tag")),
+  };
+};

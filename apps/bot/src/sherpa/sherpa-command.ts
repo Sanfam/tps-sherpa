@@ -90,6 +90,49 @@ export const SHERPA_COMMAND: RESTPostAPIChatInputApplicationCommandsJSONBody = {
       ],
     },
     {
+      name: "watch",
+      type: ApplicationCommandOptionType.SubcommandGroup,
+      description: "Staff role only: watch a member's new messages under your triggers, for up to 90 days.",
+      options: [
+        {
+          name: "start",
+          type: ApplicationCommandOptionType.Subcommand,
+          description: "Start, or replace, a watch on a member.",
+          options: [
+            { name: "member", type: ApplicationCommandOptionType.User, description: "Who to watch.", required: true },
+            {
+              name: "days",
+              type: ApplicationCommandOptionType.Integer,
+              description: "How long, 1–90 days.",
+              required: true,
+              min_value: 1,
+              max_value: 90,
+            },
+            {
+              name: "triggers",
+              type: ApplicationCommandOptionType.String,
+              description: "Up to 5 things to watch for, separated by ;",
+              required: true,
+              max_length: 1_004,
+            },
+            {
+              name: "post",
+              type: ApplicationCommandOptionType.String,
+              description: "A link to the member's existing Post in #user-monitoring.",
+              required: false,
+            },
+          ],
+        },
+        {
+          name: "stop",
+          type: ApplicationCommandOptionType.Subcommand,
+          description: "End a watch now.",
+          options: [{ name: "member", type: ApplicationCommandOptionType.User, description: "Whose watch.", required: true }],
+        },
+        { name: "list", type: ApplicationCommandOptionType.Subcommand, description: "Show the watches running." },
+      ],
+    },
+    {
       name: "analyse",
       type: ApplicationCommandOptionType.Subcommand,
       description: "Staff role only: a model's review of one member's messages since they joined.",

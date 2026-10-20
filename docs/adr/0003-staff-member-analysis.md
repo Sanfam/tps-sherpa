@@ -187,3 +187,6 @@ early notice under triggers they set, in the Forum they already use.
 - **O7:** **holders of the role named `Staff` alone**, not the glossary's
   Staff (`Staff` or `Event Managers`). `CONTEXT.md` needs an entry for this
   narrower group when the tools are built.
+- **D52-6 quotes (2026-10-19):** the departure note quotes the member's own
+  messages, clipped to 200 characters. O5 governs model output; quoted words
+  are the member's, and the owner accepted that they live in the Forum.
