@@ -255,7 +255,7 @@ export interface Sherpa {
   /** `/sherpa analyse` (#51). Without it, the subcommand says it is unavailable. */
   analyse?: (
     subject: { id: string; bot?: boolean },
-    since: string | null,
+    request: { since: string | null; fresh: boolean; by: string },
     progress: (text: string) => Promise<unknown>,
     tag: string,
   ) => Promise<Answer>;
@@ -331,12 +331,13 @@ const answer = async (
       }
       const id = sub.options?.find((o) => o.name === "member")?.value;
       const since = sub.options?.find((o) => o.name === "since")?.value;
+      const fresh = sub.options?.find((o) => o.name === "fresh")?.value === true;
       if (typeof id !== "string") return UNKNOWN;
       if (!sherpa.analyse) return "Reviews are unavailable right now.";
       sherpa.log(`${tag} analyse subject ${id} by ${interaction.member!.user.id}`);
       return sherpa.analyse(
         { id, bot: interaction.data.resolved?.users?.[id]?.bot },
-        typeof since === "string" ? since : null,
+        { since: typeof since === "string" ? since : null, fresh, by: interaction.member!.user.id },
         progress,
         tag,
       );

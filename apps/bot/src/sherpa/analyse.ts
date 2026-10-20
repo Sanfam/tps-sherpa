@@ -6,7 +6,10 @@
  * Reads the member's messages since they joined (D51-3) through Discord's
  * message search, keeps only those from places a Member can see, and has the
  * model note events in chunks, then write the review from those notes and the
- * newest messages. The report is an ephemeral reply, never stored (D51-2):
+ * newest messages. The report posts to the member's Post in
+ * `📊︱user-monitoring`, in Staff's full view (owner, 2026-10-20), and a review
+ * there from the last 14 days is linked instead of run again, unless Staff ask
+ * for a fresh one. Sherpa stores nothing of it: the Post is the record, and
  * the messages and the notes live in memory for the run.
  *
  * Bounded by time, not count: reading stops at `READ_MS`, and the whole run
@@ -31,6 +34,7 @@ import type { Entity } from "../sync/catalog.ts";
 import { plainName } from "./find.ts";
 import type { DailyCap } from "./interactions.ts";
 import type { Answer } from "./privacy.ts";
+import { REVIEW_TITLE, WATCH_FORUM as FORUM } from "./watch.ts";
 
 const SECOND = 1000;
 const READ_MS = 6 * 60 * SECOND;
@@ -45,6 +49,8 @@ const PARALLEL = 4;
 /** Replied-to messages fetched per run, for context (O6). Search does not carry them (verified 2026-10-19). */
 const MAX_CONTEXT = 200;
 const HOUR = 60 * 60 * SECOND;
+/** A review newer than this is linked rather than run again (owner, 2026-10-20). */
+export const REUSE_MS = 14 * 24 * HOUR;
 
 const DISCORD_EPOCH = 1_420_070_400_000;
 const snowflakeAt = (ms: number): string => ((BigInt(ms) - BigInt(DISCORD_EPOCH)) << 22n).toString();
@@ -65,6 +71,13 @@ export interface AnalyseDeps {
     /** The durable exclusions: an excluded Thread is not in the Catalog, and must not pass as its parent's. */
     excluded: ReadonlySet<string>;
     boundary: Pick<Boundary, "analyseChunk" | "analyseReduce">;
+  };
+  /** The member's Post in `📊︱user-monitoring` (watch.ts `reviews`). */
+  forum: {
+    /** False while the watch's checks fail: then nothing can be posted, so nothing is run. */
+    writable: () => boolean;
+    last: (memberId: string, withinMs: number) => Promise<string | null>;
+    post: (memberId: string, by: string, content: string, embeds: APIEmbed[]) => Promise<string>;
   };
   retrying: <T>(work: () => Promise<T>) => Promise<T>;
   /** Runs a day across all Staff (D51-4). */
@@ -100,15 +113,23 @@ export const createAnalyse = (deps: AnalyseDeps) => {
 
   return async (
     subject: { id: string; bot?: boolean },
-    since: string | null,
+    request: { since: string | null; fresh: boolean; by: string },
     progress: (text: string) => Promise<unknown>,
     tag: string,
   ): Promise<Answer> => {
+    const { since } = request;
     if (subject.bot) return "Sherpa doesn't review bots.";
     // Round-tripped, so 2026-02-30 is refused rather than read as 2 March, and 2026-99-99 rather than as no date at all.
     const sinceMs = since === null ? null : Date.parse(since);
     if (since !== null && (Number.isNaN(sinceMs) || new Date(sinceMs!).toISOString().slice(0, 10) !== since))
       return "Give `since` as a date, like 2026-01-31.";
+    if (!deps.forum.writable())
+      return `Reviews post to <#${FORUM}>, and Sherpa can't post there right now. Staff can check its access to the forum.`;
+    // A recent review is linked, not run again, unless Staff ask for a fresh one or a narrower one.
+    if (!request.fresh && since === null) {
+      const recent = await deps.forum.last(subject.id, REUSE_MS);
+      if (recent) return `<@${subject.id}> was reviewed in the last 14 days: ${recent}\nUse \`fresh: True\` for a new review.`;
+    }
     const start = deps.now();
     if (running) return "Another review is running. Try again when it has finished.";
     const previous = last.get(subject.id);
@@ -118,7 +139,16 @@ export const createAnalyse = (deps: AnalyseDeps) => {
     running = true;
     last.set(subject.id, start);
     try {
-      return await review(subject.id, since, progress, tag, start);
+      const answer = await review(subject.id, since, progress, tag, start);
+      if (typeof answer === "string") return answer;
+      // The review posts in full view; one that cannot post is shown here rather than lost.
+      try {
+        const posted = await deps.forum.post(subject.id, request.by, `Review of <@${subject.id}>, requested by <@${request.by}>.`, answer.embeds ?? []);
+        return `Done. The review of <@${subject.id}> is posted: ${posted}`;
+      } catch (error) {
+        deps.log(`${tag} subject ${subject.id}: review not posted: ${(error as Error).message.slice(0, 160)}`);
+        return { ...answer, content: "**The review couldn't be posted to the member's Post**, so it is shown only to you." };
+      }
     } finally {
       void inFlight.then(() => {
         running = false;
@@ -245,8 +275,9 @@ export const createAnalyse = (deps: AnalyseDeps) => {
       timer = setTimeout(() => reject(new Error("out of time")), Math.max(0, start + RUN_MS - deps.now()));
     });
     /** Each call is tracked on its own: a sibling that failed fast must not free the gate while others run. */
+    // Settled to nothing: kept as the results themselves, each run's would hold every earlier run's for good.
     const tracked = <T>(work: Promise<T>): Promise<T> => {
-      inFlight = Promise.allSettled([inFlight, work]);
+      inFlight = Promise.allSettled([inFlight, work]).then(() => undefined);
       return work;
     };
     const inTime = <T>(work: Promise<T>): Promise<T> => Promise.race([work, outOfTime]);
@@ -275,7 +306,7 @@ export const createAnalyse = (deps: AnalyseDeps) => {
         tracked(deps.retrying(whileInTime(() => boundary.analyseReduce(who, { events, tone }, messages.slice(-RECENT))))),
       );
       deps.log(`${tag} subject ${memberId}: reviewed ${messages.length}, left out ${withheld}, calls ${chunks.length + 1}`);
-      return render(memberId, messages, refs, report, events, { withheld, stoppedEarly, stillIndexing, floorMs });
+      return render(memberId, messages, refs, report, events, { withheld, stoppedEarly, stillIndexing, floorMs, since });
     } catch (error) {
       deps.log(`${tag} subject ${memberId}: review failed: ${(error as Error).message.slice(0, 160)}`);
       return "The review failed. Nothing partial is shown. Try again in an hour.";
@@ -291,14 +322,15 @@ export const createAnalyse = (deps: AnalyseDeps) => {
     refs: Array<{ channelId: string; id: string }>,
     report: Report,
     events: Array<ChunkEvent & { date: string }>,
-    left: { withheld: number; stoppedEarly: boolean; stillIndexing: boolean; floorMs: number },
+    left: { withheld: number; stoppedEarly: boolean; stillIndexing: boolean; floorMs: number; since: string | null },
   ): Answer {
     const link = (n: number) => `https://discord.com/channels/${deps.guildId}/${refs[n]!.channelId}/${refs[n]!.id}`;
     const byAt = new Map(events.map((e) => [e.at, e]));
     const first = messages[0]!.date;
     const lastDate = messages.at(-1)!.date;
     const summary: APIEmbed = {
-      title: "Member review",
+      // A narrowed review is titled apart, so it is never linked as a whole one.
+      title: left.since ? `${REVIEW_TITLE} since ${left.since}` : REVIEW_TITLE,
       description: [
         `<@${memberId}> · ${messages.length} messages, ${first} to ${lastDate}`,
         "",

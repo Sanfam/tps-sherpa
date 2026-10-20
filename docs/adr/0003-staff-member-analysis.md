@@ -51,10 +51,11 @@ Staff tools.** It is a separate function in `boundary.ts`, as
    snowflake, no mass mention, no member name. Citations are **indexes into
    the sources sent**, which code maps to message ids and renders as jump
    links. A model cannot cite a message it was not shown.
-3. **Output reaches only Staff,** and only in two places: an ephemeral reply
-   to the Staff member who asked (#51), and the member's Post in the
-   `📊︱user-monitoring` Forum (#52). No other write path takes `moderation`
-   output.
+3. **Output reaches only Staff,** in the member's Post in the
+   `📊︱user-monitoring` Forum, for both tools since 2026-10-20 (*Reviews in
+   full view*, at the end). A review that cannot post goes, as a fallback, to
+   the Staff member who asked, ephemerally. No other write path takes
+   `moderation` output.
 4. **Nothing member-authored is stored by the tools themselves.** Sources live
    in memory for the call. What persists is what Sherpa posts to Discord
    (#52), plus the watch row (#52).
@@ -190,3 +191,16 @@ early notice under triggers they set, in the Forum they already use.
 - **D52-6 quotes (2026-10-19):** the departure note quotes the member's own
   messages, clipped to 200 characters. O5 governs model output; quoted words
   are the member's, and the owner accepted that they live in the Forum.
+- **Reviews in full view (2026-10-20).** Transparency over privacy between
+  Staff: a `/sherpa analyse` review posts to the member's Post in the Forum,
+  naming who asked, instead of an ephemeral reply, and Staff's watch starts,
+  replacements and stops post there too. The Post is the record: a review
+  from the last 14 days is linked instead of run again, unless Staff ask for
+  a fresh one or a narrower date. Sherpa stores no review; the Post holds it,
+  and the Forum's checks (never visible to Members) gate every run. A review
+  that cannot post is shown to the one who asked, rather than lost. This
+  amends item 3 above. Limits: only a whole review is linked (one narrowed
+  by date is titled apart); the lookup reads the Post's newest 50 messages,
+  so a busy watch can hide a recent review, which then runs again; and while
+  the Forum's checks fail, no review runs and a watch's start or stop is
+  not noted in the Post, which the Staff member is told.

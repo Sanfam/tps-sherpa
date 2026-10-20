@@ -20,6 +20,7 @@
  */
 import {
   type APIChatInputApplicationCommandInteraction,
+  type APIEmbed,
   type APIMessage,
   ApplicationCommandOptionType,
   ChannelType,
@@ -38,6 +39,8 @@ import type { ChannelAccess } from "./responder.ts";
 
 /** `📊︱user-monitoring` (owner, 2026-10-18). */
 export const WATCH_FORUM = "1534214620976254977";
+/** How Sherpa finds its own reviews (`/sherpa analyse`) in a member's Post. */
+export const REVIEW_TITLE = "Member review";
 export const MAX_WATCH_DAYS = 90;
 export const MAX_TRIGGERS = 5;
 export const MAX_TRIGGER_CHARS = 200;
@@ -142,7 +145,7 @@ export interface WatchDeps {
     access: () => Promise<(ChannelAccess & { threads: boolean; memberVisible: boolean }) | null>;
     /** The raw writes. The write port sends; `setTags` only adds tags to a Post the port just wrote to. */
     createPost: (forumId: string, body: { name: string; message: RESTPostAPIChannelMessageJSONBody; applied_tags: string[] }) => Promise<{ id: string }>;
-    send: (postId: string, body: RESTPostAPIChannelMessageJSONBody) => Promise<unknown>;
+    send: (postId: string, body: RESTPostAPIChannelMessageJSONBody) => Promise<{ id: string }>;
     setTags: (postId: string, tagIds: string[]) => Promise<unknown>;
     /** The Post's newest 50 messages, in any order. */
     postMessages: (postId: string) => Promise<APIMessage[]>;
@@ -180,13 +183,17 @@ export const forumPort = (deps: Pick<WatchDeps, "store"> & Pick<WatchDeps["disco
     if (!deps.store((s) => s.linkPost(memberId, id, by))) throw new Error("The member already has a Post. The new one is left unused.");
     return id;
   },
-  write: async (memberId: string, content: string, ping: string | null): Promise<string> => {
+  write: async (memberId: string, content: string, ping: string | null, embeds?: APIEmbed[]): Promise<{ postId: string; id: string }> => {
     const postId = deps.store((s) => s.post(memberId));
     if (!postId) throw new Error("The member has no Post. Nothing is written.");
     // The mapping is checked against Discord, so no stored id can point a write anywhere but the Forum.
     if ((await deps.channel(postId))?.parent_id !== WATCH_FORUM) throw new Error("The member's Post is not in the Forum. Nothing is written.");
-    await deps.send(postId, { content, allowed_mentions: { parse: [], users: ping ? [ping] : [] } });
-    return postId;
+    const sent = await deps.send(postId, {
+      content,
+      ...(embeds ? { embeds } : {}),
+      allowed_mentions: { parse: [], users: ping ? [ping] : [] },
+    });
+    return { postId, id: (sent as { id: string }).id };
   },
 });
 
@@ -231,8 +238,12 @@ export const createWatch = (deps: WatchDeps) => {
     return moderationPlace(thread.parent_id, byId, session.memberRoles) ? thread.parent_id : null;
   };
 
-  /** The member's Post, made if they have none: titled with their server name and username (D52-4). */
-  const ensurePost = async (watch: Pick<Watch, "memberId" | "setBy" | "expiresAt" | "triggers">): Promise<string> => {
+  /**
+   * The member's Post, made if they have none: titled with their server name
+   * and username (D52-4). It holds Staff's reviews of them as well as the
+   * watch (owner, 2026-10-20), so its opening names neither.
+   */
+  const ensurePost = async (watch: Pick<Watch, "memberId" | "setBy">, byWatch = true): Promise<string> => {
     const existing = deps.store((s) => s.post(watch.memberId));
     if (existing) {
       // A Post Staff deleted, or moved out of the Forum, is let go and replaced, so the watch is never wedged on it.
@@ -245,19 +256,16 @@ export const createWatch = (deps: WatchDeps) => {
     }
     const inProgress = making.get(watch.memberId);
     if (inProgress) return inProgress;
-    const made = makePost(watch).finally(() => making.delete(watch.memberId));
+    const made = makePost(watch, byWatch).finally(() => making.delete(watch.memberId));
     making.set(watch.memberId, made);
     return made;
   };
-  const makePost = async (watch: Pick<Watch, "memberId" | "setBy" | "expiresAt" | "triggers">): Promise<string> => {
+  const makePost = async (watch: Pick<Watch, "memberId" | "setBy">, byWatch: boolean): Promise<string> => {
     const member = await deps.discord.member(watch.memberId);
     const name = clip(member ? `${member.serverName} (${member.username})` : watch.memberId, 100);
-    const opening = [
-      `Sherpa's watch on <@${watch.memberId}>, set by <@${watch.setBy}>, ends ${at(watch.expiresAt, "F")}.`,
-      "Triggers:",
-      ...watch.triggers.map((t, i) => `${i + 1}. ${inert(t)}`),
-    ].join("\n");
-    const tag = (await deps.discord.forumTags()).find((t) => t.name === OPENING_TAG);
+    const opening = `Sherpa's Post on <@${watch.memberId}>: Staff's reviews and watches of this member.`;
+    // Tagged as monitored only when a watch makes it: a review alone is not monitoring.
+    const tag = byWatch ? (await deps.discord.forumTags()).find((t) => t.name === OPENING_TAG) : undefined;
     return port.create(watch.memberId, name, opening, tag ? [tag.id] : [], watch.setBy);
   };
 
@@ -488,6 +496,32 @@ export const createWatch = (deps: WatchDeps) => {
       return ready;
     },
 
+    /**
+     * `/sherpa analyse`'s home (owner, 2026-10-20): reviews post to the
+     * member's Post, in the Forum's full view, and a recent one is linked
+     * instead of run again.
+     */
+    reviews: {
+      writable: (): boolean => ready,
+      /** A link to Sherpa's newest review in the member's Post within `withinMs`, from its newest 50 messages. */
+      last: async (memberId: string, withinMs: number): Promise<string | null> => {
+        const postId = deps.store((s) => s.post(memberId));
+        if (!postId || (await deps.discord.channel(postId))?.parent_id !== WATCH_FORUM) return null;
+        const botId = await deps.discord.botId();
+        const review = (await deps.discord.postMessages(postId))
+          .filter((m) => m.author.id === botId && m.embeds[0]?.title === REVIEW_TITLE && deps.now() - Date.parse(m.timestamp) < withinMs)
+          .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))[0];
+        return review ? link(postId, review.id) : null;
+      },
+      /** Posts a review to the member's Post, made if they have none. Returns its link. */
+      post: async (memberId: string, by: string, content: string, embeds: APIEmbed[]): Promise<string> => {
+        const postId = await ensurePost({ memberId, setBy: by }, false);
+        if ((await deps.discord.channel(postId))?.locked) throw new Error("their Post is locked");
+        const { id } = await port.write(memberId, content, null, embeds);
+        return link(postId, id);
+      },
+    },
+
     /** The `/sherpa watch` subcommands, for a holder of the `Staff` role the dispatcher already checked. */
     answer: async (interaction: APIChatInputApplicationCommandInteraction, tag: string): Promise<string | null> => {
       const by = interaction.member?.user.id;
@@ -516,7 +550,18 @@ export const createWatch = (deps: WatchDeps) => {
           buffers.delete(memberId);
           reload();
           log(`${tag} watch stop ${memberId} by ${by}${ended ? "" : " (none)"}`);
-          return ended ? `Done. The watch on <@${memberId}> has stopped.` : `<@${memberId}> isn't being watched.`;
+          // In the Post's full view, as every watch change is (owner, 2026-10-20).
+          const noted =
+            !ended ||
+            !deps.store((s) => s.post(memberId)) ||
+            (ready &&
+              (await port.write(memberId, `Sherpa: the watch on <@${memberId}> was stopped by <@${by}>.`, null).then(
+                () => true,
+                (error: Error) => (log(`${tag} watch stop notice not posted: ${error.message.slice(0, 160)}`), false),
+              )));
+          return ended
+            ? `Done. The watch on <@${memberId}> has stopped.` + (noted ? "" : " **The stop couldn't be noted in the Post.**")
+            : `<@${memberId}> isn't being watched.`;
         }
         case "start": {
           const memberId = value("member");
@@ -556,11 +601,29 @@ export const createWatch = (deps: WatchDeps) => {
           log(`${tag} watch ${replacing ? "replaced" : "start"} ${memberId} by ${by} for ${days} days, ${triggers.length} triggers`);
           // The Post now, so Staff have it from the start; a failure here leaves it to the first observation.
           paused.delete(memberId);
-          const postId = ready ? await ensurePost(watch).catch((error: Error) => (log(`${tag} watch post not made: ${error.message.slice(0, 160)}`), null)) : null;
+          // Escaping can double a trigger, so five long ones are clipped to one message.
+          const notice = clip(
+            [
+              `Sherpa: a watch on <@${memberId}> was ${replacing ? "replaced" : "started"} by <@${by}>. It ends ${at(watch.expiresAt, "F")}.`,
+              "Triggers:",
+              ...triggers.map((t, i) => `${i + 1}. ${inert(t)}`),
+            ].join("\n"),
+            2000,
+          );
+          const postId = ready
+            ? await ensurePost(watch).catch((error: Error) => (log(`${tag} watch post not made: ${error.message.slice(0, 160)}`), null))
+            : null;
+          const noted =
+            postId !== null &&
+            (await port.write(memberId, notice, null).then(
+              () => true,
+              (error: Error) => (log(`${tag} watch notice not posted: ${error.message.slice(0, 160)}`), false),
+            ));
           return (
             `Done. <@${memberId}> is watched until ${at(watch.expiresAt, "F")}, under ${triggers.length} trigger${triggers.length === 1 ? "" : "s"}.` +
             (replacing ? " This replaces the earlier watch." : "") +
             (postId ? ` Observations go to <#${postId}>.` : " Its Post couldn't be made yet: Sherpa makes it with the first observation.") +
+            (noted ? "" : " **The start couldn't be noted in the Post.**") +
             (ready ? "" : " **Watches are paused: Sherpa's checks are failing.**")
           );
         }

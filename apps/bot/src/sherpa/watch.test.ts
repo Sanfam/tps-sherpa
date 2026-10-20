@@ -43,7 +43,10 @@ const harness = (
   } = {},
 ) => {
   const writes: Array<{ postId: string; body: RESTPostAPIChannelMessageJSONBody }> = [];
+  /** Watch start and stop notices, apart from the observations and notes the tests below count. */
+  const notices: Array<{ postId: string; body: RESTPostAPIChannelMessageJSONBody }> = [];
   const created: string[] = [];
+  const createdTags: string[][] = [];
   const calls: string[][] = [];
   const histories: string[][] = [];
   let clock = Date.parse("2026-10-19T00:00:00.000Z");
@@ -64,8 +67,11 @@ const harness = (
       forumTags: async () => [{ id: "t1", name: "Monitor Activity" }, { id: "t2", name: "Wellness Concern" }],
       access: async () =>
         over.access === false ? null : { view: true, history: true, send: true, threads: true, memberVisible: over.memberVisible === true },
-      createPost: async (_, body) => (created.push(body.name), { id: `70000000000000000${created.length}` }),
-      send: async (postId, body) => void writes.push({ postId, body }),
+      createPost: async (_, body) => (created.push(body.name), createdTags.push(body.applied_tags), { id: `70000000000000000${created.length}` }),
+      send: async (postId, body) => {
+        (/^Sherpa: the watch on .* was stopped|^Sherpa: a watch on .* was (started|replaced)/.test(body.content ?? "") ? notices : writes).push({ postId, body });
+        return { id: `80000000000000000${writes.length + notices.length}` };
+      },
       setTags: async () => {},
       postMessages: over.postMessages ?? (async () => []),
       postTags: async () => [],
@@ -91,7 +97,7 @@ const harness = (
     now: () => clock,
     log: () => {},
   };
-  return { watch: createWatch(deps), writes, created, calls, histories, advance: (ms: number) => (clock += ms), deps };
+  return { watch: createWatch(deps), writes, notices, created, createdTags, calls, histories, advance: (ms: number) => (clock += ms), deps };
 };
 
 const start = (days = 30, triggers = "hostile to newcomers; selling") =>
@@ -175,7 +181,7 @@ describe("User Monitoring", () => {
     const port = forumPort({
       store: (work) => withWatchStore(work, path),
       createPost: async () => ({ id: "1" }),
-      send: async (id) => void writes.push(id),
+      send: async (id) => (writes.push(id), { id: "1" }),
       channel: async (id) => ({ type: ChannelType.PublicThread, parent_id: id === "800000000000000001" ? general.id : WATCH_FORUM }),
     });
     await expect(port.write(WATCHED, "x", null)).rejects.toThrow(/no Post/);
@@ -369,5 +375,63 @@ describe("User Monitoring, after the second review", () => {
     await w.tick();
     expect(withWatchStore((s) => s.watches().length, path)).toBe(0);
     failing = false;
+  });
+});
+
+describe("User Monitoring, in full view (owner, 2026-10-20)", () => {
+  const stopping = () =>
+    ({
+      id: "2",
+      member: { user: { id: SETTER } },
+      data: {
+        name: "sherpa",
+        options: [
+          {
+            name: "watch",
+            type: ApplicationCommandOptionType.SubcommandGroup,
+            options: [{ name: "stop", type: ApplicationCommandOptionType.Subcommand, options: [{ name: "member", value: WATCHED }] }],
+          },
+        ],
+      },
+    }) as never;
+
+  it("posts the start, with its triggers, and the stop to the member's Post, pinging nobody", async () => {
+    const h = harness();
+    await h.watch.check();
+    await h.watch.answer(start(30, Array.from({ length: 5 }, () => "*".repeat(200)).join(";")), "t");
+    await h.watch.answer(stopping(), "t");
+    expect(h.notices.map((n) => [n.postId, n.body.allowed_mentions])).toEqual([
+      ["700000000000000001", { parse: [], users: [] }],
+      ["700000000000000001", { parse: [], users: [] }],
+    ]);
+    expect(h.notices[0]!.body.content).toMatch(/started by <@\d+>[\s\S]*Triggers:/);
+    expect(h.notices[0]!.body.content!.length).toBeLessThanOrEqual(2000);
+    expect(h.notices[1]!.body.content).toContain("stopped by");
+  });
+
+  it("tags a Post as monitored only when a watch makes it, not a review", async () => {
+    const h = harness();
+    await h.watch.check();
+    await h.watch.reviews.post(WATCHED, SETTER, "Review", []);
+    expect(h.createdTags).toEqual([[]]);
+  });
+
+  it("finds only Sherpa's own review from the last 14 days in the member's Post", async () => {
+    const day = 24 * 60 * 60 * 1000;
+    const review = (id: string, author: string, ageDays: number, title = "Member review") => ({
+      id,
+      author: { id: author },
+      embeds: [{ title }],
+      timestamp: new Date(Date.parse("2026-10-19T00:00:00.000Z") - ageDays * day).toISOString(),
+    });
+    const messages = [review("81", "999", 15), review("82", "123", 1), review("83", "999", 2, "Something else")];
+    const h = harness({ postMessages: async () => messages as never });
+    await h.watch.check();
+    expect(await h.watch.reviews.last(WATCHED, 14 * day)).toBeNull();
+    await h.watch.answer(start(), "t");
+    // Too old, someone else's, or not a review: none counts.
+    expect(await h.watch.reviews.last(WATCHED, 14 * day)).toBeNull();
+    messages.push(review("84", "999", 3));
+    expect(await h.watch.reviews.last(WATCHED, 14 * day)).toBe("https://discord.com/channels/1/700000000000000001/84");
   });
 });

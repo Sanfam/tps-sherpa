@@ -145,6 +145,12 @@ export const SHERPA_COMMAND: RESTPostAPIChatInputApplicationCommandsJSONBody = {
           required: false,
           max_length: 10,
         },
+        {
+          name: "fresh",
+          type: ApplicationCommandOptionType.Boolean,
+          description: "Run a new review even if one from the last 14 days is in the member's Post.",
+          required: false,
+        },
       ],
     },
     {
