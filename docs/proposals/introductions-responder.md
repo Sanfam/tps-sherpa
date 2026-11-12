@@ -354,8 +354,9 @@ laboratory science. So:
   Retention *(verified 2026-11-12 against `openrouter.ai/api/v1/models` and
   `/endpoints/zdr`; the measurements are in
   `docs/research/2026-11-12-vision-and-text-model-eval.md`)*. Text work
-  stays on `deepseek-v4-flash-0731` until GLM passes the `/find` golden set
-  (that note, §6).
+  stays on `deepseek-v4-flash-0731` until `LLM_MODEL_CHEAP` is switched. GLM
+  passed the `/find` golden set on 2026-11-12, which was the owner's
+  condition for switching (that note, §6).
   - **Measured 2026-10-17** *(verified: a paid run under the bot's forced
     routing)*. 14 images and GIFs were taken from `#introductions` (13
     GIFs/memes, 1 image link), fetched into memory and sent inline, and

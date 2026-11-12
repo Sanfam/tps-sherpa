@@ -33,12 +33,13 @@ config.
 - **A single still frame loses a GIF's words.** For captions that resolve in
   later frames, every model got the meaning right on 1 of 3 from the first
   frame, and 3 of 3 from four frames. That holds for GLM, DeepSeek and both
-  Gemmas. Sending several frames needs a code change and goes against D14 (§3).
+  Gemmas. Sending several frames needed a code change against D14, now built (§3).
 - **GLM-5.3-flash also beat `deepseek-v4-flash-0731` at intro extraction**:
   30/30 against 26/30, with a median of 1.6 s against 4.4 s, at about a
   quarter of DeepSeek's output price. That is the cheap role's extraction
-  step only. `/find` matching, the strong role, moderation and mention
-  replies are unmeasured (§6).
+  step only. GLM also passed the `/find` golden set, stable across four
+  orderings, as DeepSeek did (§6). The strong role, moderation and mention
+  replies are unmeasured (§6a).
 - **The production text model follows two injection forms every time**: a
   fake system tag and a smuggled JSON answer. A fenced prompt stopped all
   nine attack forms on both models, with no loss on genuine intros (§4a).
@@ -227,13 +228,24 @@ detect, investigate, and prevent abuse" (openrouter.ai/docs/features/zdr).
 
 ---
 
-## 6. Not measured
+## 6. The `/find` golden set *(verified 2026-11-12, in the deployed container)*
 
-- **The `/find` golden set** (`src/sherpa/eval.ts`) needs the Catalog, which
-  is only in the deployed container. To compare, run this in the container
-  (`railway ssh -s bot`, `cd /app/apps/bot`):
-  `node src/sherpa/eval.ts --model z-ai/glm-5.3-flash`. Then run it again
-  without `--model` for the current model.
+`node src/sherpa/eval.ts`, run against the live Catalog (1,278 Entities,
+1,065 candidates) in four orderings: the stored order and seeds 1–3.
+
+| Model | Cases passed, every ordering | Slowest call | Whole run |
+|---|---|---|---|
+| `z-ai/glm-5.3-flash` | 6/6, stable | 30.6 s (`long-tail`) | 33 s |
+| `deepseek/deepseek-v4-flash-0731` | 6/6, stable | 17.4 s (`rich-signal`) | 20 s |
+
+Both surfaced every must-surface interest in every ordering. GLM's
+`long-tail` gave one identical match set across all four orderings. Its
+`rich-signal` gave three distinct sets and DeepSeek's four, all passing. On
+this prompt, which carries the whole candidate list, GLM's slowest call was
+slower than DeepSeek's. It is still well inside `FIND_TIMEOUT_MS` (90 s).
+
+## 6a. Not measured
+
 - **The strong role** (summaries, the vocabulary bootstrap), **moderation**
   (`moderation.ts`), and **mention replies**. Mention replies are the
   ADR-0004 path whose words reach members, so a model change there needs
@@ -257,7 +269,8 @@ detect, investigate, and prevent abuse" (openrouter.ai/docs/features/zdr).
 3. **GIFs are sent as up to four frames** (§3). The design and its first
    packet are in the proposal, §4 *Animated GIFs*.
 4. **`LLM_MODEL_CHEAP` moves to GLM once the `/find` golden set passes** in
-   the container (§6). `LLM_MODEL_STRONG` stays on DeepSeek until summaries
-   are compared.
+   the container. It passed on 2026-11-12 (§6). `LLM_MODEL_STRONG` stays on
+   DeepSeek until summaries are compared. Moderation and mention replies
+   also run on the cheap model and were not compared (§6a).
 
 Open, not decided: shipping the fenced extraction prompt (§4a).
