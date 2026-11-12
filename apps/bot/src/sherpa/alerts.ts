@@ -70,7 +70,8 @@ export const openAlertsStore = (path: string = DURABLE_STORE_PATH) => {
      * The once-only claim: true for the first event for this member at this
      * `joined_at`, false for any repeat. A rejoin has a new `joined_at` and may
      * alert again; an earlier join's row stays, so a late event for it cannot. An intro is also refused while a tombstone says they posted
-     * there before (F2): a seeded one always, the responder's for this join.
+     * there before (F2): a seeded one always, the responder's for this join. An `intro` row is the
+     * introduction seen, whether an alert went about it or not (#58).
      */
     claim: (memberId: string, event: AlertEvent, joinedAt: string, at: Date = new Date()): boolean =>
       db
@@ -83,7 +84,7 @@ export const openAlertsStore = (path: string = DURABLE_STORE_PATH) => {
         )
         .run({ member: memberId, event, joined: joinedAt, at: at.toISOString() }).changes === 1,
 
-    /** `/privacy delete-my-data`: their subscriptions go. `alert_sent` stays (D50-5). */
+    /** `/privacy delete-my-data`: their subscriptions go. `alert_sent`, an unalerted intro's row too, stays (D50-5, #58). */
     forget: (memberId: string) => {
       db.prepare("DELETE FROM alert_subscription WHERE member_id = ?").run(memberId);
     },
@@ -218,6 +219,10 @@ export const createAlerts = (deps: AlertsDeps) => {
   const post = alertPort({ switch: deps.switch, createMessage: deps.discord.createMessage }).post;
   /** The checks passed. Nothing is posted before they do. */
   let ready = false;
+  /** Settles when the first checks end: until then an intro is undecided, not refused. */
+  let checked = false;
+  let firstChecked = () => {};
+  const firstCheck = new Promise<void>((done) => (firstChecked = done));
   let capLoggedOn: string | null = null;
   const queues = new Map<string, Promise<void>>();
 
@@ -288,22 +293,35 @@ export const createAlerts = (deps: AlertsDeps) => {
   const link = (messageId: string) => `https://discord.com/channels/${deps.guildId}/${WATCHED_CHANNEL}/${messageId}`;
 
   return {
-    /** `MESSAGE_CREATE` in `#introductions`, in any responder mode (the responder's own mode is not read). */
+    /**
+     * `MESSAGE_CREATE` in `#introductions`, in any responder mode (the responder's own mode is not read).
+     * An introduction no alert may go about (switch off, checks failing, seed incomplete, `approach` off) is claimed
+     * all the same and nothing is posted, so no later message is taken for it (#58).
+     */
     onMessage: async (message: WatchedMessage): Promise<void> => {
-      if (message.channel_id !== WATCHED_CHANNEL || !ready || !deps.switch().on) return;
+      if (message.channel_id !== WATCHED_CHANNEL) return;
       // Nothing about the message is kept: the claim holds the author's id and `joined_at` only.
-      if (!deps.seeded() || !countsAsIntroduction(message, false)) return;
+      if (!countsAsIntroduction(message, false)) return;
+      // Refused on arrival stays refused, whatever turns on during the waits; the checks not yet run is no refusal.
+      const refused =
+        (checked && !ready) || !deps.seeded() || !deps.switch().on || !deps.preferences(message.author.id).approach;
       await serial(message.author.id, async () => {
+        await firstCheck;
         const member = await deps.discord.member(message.author.id);
-        if (!member?.joinedAt) return;
+        const joinedAt = member?.joinedAt;
+        if (!joinedAt) return;
         // The responder saw an earlier first post this join: this one is a follow-up.
-        const seen = deps.introOf(message.author.id, member.joinedAt);
+        const seen = deps.introOf(message.author.id, joinedAt);
         if (seen !== null && seen !== message.id) return;
+        // Before the seed completes, tombstones do not yet cover the Channel's history, so no
+        // alert goes; a claim then that the seed would have refused only suppresses an alert.
+        if (refused || !deps.seeded() || !allowed(message.author.id, joinedAt, "intro"))
+          return void deps.store((s) => s.claim(message.author.id, "intro", joinedAt, new Date(deps.now())));
         await send(
           "intro",
           message.author.id,
-          member.joinedAt,
-          `${header("New introduction", message.author.id, member.joinedAt)}\n${link(message.id)}`,
+          joinedAt,
+          `${header("New introduction", message.author.id, joinedAt)}\n${link(message.id)}`,
         );
       });
     },
@@ -341,6 +359,8 @@ export const createAlerts = (deps: AlertsDeps) => {
         failures.push(`the checks could not be made: ${(error instanceof Error ? error.message : String(error)).slice(0, 160)}`);
       }
       ready = failures.length === 0;
+      checked = true;
+      firstChecked();
       if (!ready) log(`[alerts] CHECKS FAILED, ALERTS PAUSED: ${failures.join("; ")}.`);
       return ready;
     },

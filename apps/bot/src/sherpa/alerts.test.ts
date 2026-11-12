@@ -33,6 +33,7 @@ const harness = (
     catalog?: () => Entity[];
     access?: () => Promise<ChannelAccess>;
     introOf?: AlertsDeps["introOf"];
+    seeded?: () => boolean;
     members?: Record<string, AlertMember | null>;
     /** Runs inside each member lookup, as something that happens meanwhile. */
     during?: (id: string) => void | Promise<void>;
@@ -57,7 +58,7 @@ const harness = (
     },
     store: (work) => withAlertsStore(work, path),
     switch: () => ({ on: over.on ?? true, since: SINCE }),
-    seeded: () => true,
+    seeded: over.seeded ?? (() => true),
     introOf: over.introOf ?? (() => null),
     preferences: (id) => withDurableStore((s) => s.preferences(id), path),
     loadCatalog: over.catalog ?? (() => []),
@@ -214,6 +215,72 @@ describe("alerts", () => {
     await alerts.onMessage(intro({ mentions: [{ id: HOLDER, username: "h", discriminator: "0", global_name: null, avatar: null }] }));
     withResponderStore((s) => s.seedTombstones([NEWCOMER]), path);
     await alerts.onMessage(intro());
+    expect(posts).toHaveLength(0);
+  });
+
+  it("remember an introduction posted while the switch and the responder are off, and alert on no later message (#58)", async () => {
+    const off = harness({ on: false });
+    await off.alerts.check();
+    await off.alerts.onMessage(intro());
+    const on = harness();
+    await on.alerts.check();
+    await on.alerts.onMessage(intro({ id: "400000000000000002" }));
+    expect([...off.posts, ...on.posts]).toHaveLength(0);
+  });
+
+  it("remember an introduction posted before the seed completes, and alert on no later message (#58)", async () => {
+    const unseeded = harness({ seeded: () => false });
+    await unseeded.alerts.check();
+    await unseeded.alerts.onMessage(intro());
+    const seeded = harness();
+    await seeded.alerts.check();
+    await seeded.alerts.onMessage(intro({ id: "400000000000000002" }));
+    expect([...unseeded.posts, ...seeded.posts]).toHaveLength(0);
+  });
+
+  it("alert on an introduction that arrives while the first checks are still running", async () => {
+    let answer = () => {};
+    const { alerts, posts } = harness({
+      access: () => new Promise((done) => (answer = () => done({ view: true, history: true, send: true }))),
+    });
+    const sending = alerts.onMessage(intro());
+    const checking = alerts.check();
+    await new Promise((done) => setTimeout(done, 10));
+    answer();
+    await Promise.all([sending, checking]);
+    expect(posts).toHaveLength(1);
+  });
+
+  it("keep silent an introduction that arrives while the checks have failed, though they pass during its lookup", async () => {
+    let catalog: Entity[] = [{ id: ALERTS_CHANNEL } as Entity];
+    let alerts: ReturnType<typeof harness>["alerts"];
+    const h = harness({
+      catalog: () => catalog,
+      during: async (id) => {
+        if (id !== NEWCOMER) return;
+        catalog = [];
+        await alerts.check();
+      },
+    });
+    alerts = h.alerts;
+    expect(await alerts.check()).toBe(false);
+    await alerts.onMessage(intro());
+    expect(h.posts).toHaveLength(0);
+  });
+
+  it("keep silent, and claim, an introduction refused on arrival though the seed completes while the checks run", async () => {
+    let seeded = false;
+    let answer = () => {};
+    const { alerts, posts } = harness({
+      seeded: () => seeded,
+      access: () => new Promise((done) => (answer = () => done({ view: true, history: true, send: true }))),
+    });
+    const sending = alerts.onMessage(intro());
+    const checking = alerts.check();
+    seeded = true;
+    answer();
+    await Promise.all([sending, checking]);
+    await alerts.onMessage(intro({ id: "400000000000000002" }));
     expect(posts).toHaveLength(0);
   });
 
