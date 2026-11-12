@@ -329,6 +329,11 @@ text and vision call was answered by Wafer.
 
 5. **The fenced extraction prompt** (owner, 2026-11-12) is PR #77, merged
    after this note's PR. Until it lands, extraction runs the unfenced prompt
-   that §4a measured. On the fenced prompt, DeepSeek 0731 and GLM each held 27/27 attacks. GLM got
-   18/18 genuine intros right. DeepSeek got 15/18, all three misses its
-   existing habit of dropping "Ohio" (§4).
+   that §4a measured. After review, the fence is a fresh random code per call,
+   named only in the system prompt, and member text is sent unaltered. A
+   fixed phrase could be spoofed with look-alikes. Four bypass forms were
+   added to the attacks: a zero-width character inside INTRODUCTION, `END OF
+   INTRODUCTION`, a Cyrillic look-alike letter, and a Markdown-wrapped closing
+   line. On the shipped prompt, both models held 39/39 attack runs. GLM got
+   18/18 genuine intros. DeepSeek 0731 got 13/18, its misses dropped
+   locations and one dropped "JSON" (§4).
