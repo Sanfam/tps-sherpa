@@ -94,7 +94,7 @@ Two spikes ran (`docs/research/2026-10-16-emdash-spike.md`), on EmDash 1.1.0 ins
    - **To do.** Decide which routes Members, editors and Viewers may reach. Design how the gate tells an editor from a Member before EmDash runs. Test it signed in against every route, on each upgrade.
 3. **OAuth hygiene.**
    - PKCE, browser-bound state, and no state written to the database: done in the spike's site sign-in.
-   - Still unverified against the real Discord and Better Auth.
+   - Still unverified against the real Discord. Against Better Auth 1.7.14 (the Phase 4 auth spike, 2026-11-12, mock Discord): state is signed and single-use, and Better Auth keeps it in the database, a `verification` row per sign-in start, swept by the site's daily cleanup; but the Discord provider sends no PKCE verifier, so PKCE in the decision above holds only for a hand-rolled flow.
 4. **Erasure gaps.**
    - **The FTS5 search index.** EmDash's search tables are contentful FTS5 tables with their own copy of the text. `secure_delete` does not scrub their segments, so deleted text stays in the live `%_data` rows until a merge. Candidates are FTS5's `secure-delete` option or a rebuild after deletions; untested.
    - **Migrations.** CLI and deploy migrations bypass our dialect, and some copy whole content tables (`INSERT … SELECT`).

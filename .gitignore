@@ -1,6 +1,7 @@
 node_modules/
 .env
 dist/
+.astro/
 .data/
 .DS_Store
 .claude/settings.local.json

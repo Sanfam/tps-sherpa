@@ -162,7 +162,7 @@ docs/              This document, its companions, and docs/adr/
 ### Flow
 
 1. `GET /auth/discord/start` → redirect with `client_id`, `redirect_uri`, `response_type=code`, `scope=identify`, signed single-use `state`.
-2. `GET /auth/discord/callback` → verify state, exchange code, `GET /users/@me` for the snowflake, **discard the user's access token**.
+2. `GET /auth/callback/discord` (Better Auth's path; the redirect URI to register with Discord is `https://sherpa.omgod.com/auth/callback/discord`) → verify state, exchange code, `GET /users/@me` for the snowflake, **discard the user's access token**.
 3. `GET /guilds/{GUILD_ID}/members/{user_id}` with `Authorization: Bot <token>`. 404 → not in the guild → reject. 200 → membership plus a `roles` array.
 4. **Check the `roles` array for the `Member` role.** A 404 answers "is this person in the guild"; it does not answer "is this person a Member." Someone who has joined but not yet been granted the role must not receive gated content.
 5. Map role ids → group slugs from the role manifest carried in the Catalog snapshot (ADR-0001).
@@ -180,7 +180,7 @@ Three things were open in the previous revision and are now answered from source
 
 - **Rejecting a non-member before a user row exists:** override the Discord provider's **`getUserInfo`**. It receives the access token and is awaited in the OAuth callback well before `handleOAuthUserInfo` creates any row; returning `null` rejects the sign-in with nothing persisted. Do the guild lookup there. `databaseHooks.user.create.before` also exists and can abort, but it receives no token and therefore cannot perform the lookup itself.
 - **Scope:** `discord: { disableDefaultScope: true, scope: ["identify"] }`. The `scope` option *appends*; `disableDefaultScope` is what removes the default `identify email`.
-- **⚠️ A defect the previous revision missed:** the OAuth callback hard-fails with `EMAIL_NOT_FOUND` when the profile carries no email. Scope `identify` returns no email, so **the locked scope decision breaks sign-in unless `mapProfileToUser` synthesises one** — use `<discord_id>@discord.local`. This is the same synthesis trick an earlier Instatic-era design arrived at independently, which is mild evidence it is the right shape.
+- **⚠️ A defect the previous revision missed:** the OAuth callback hard-fails with `EMAIL_NOT_FOUND` when the profile carries no email. Scope `identify` returns no email, so **the locked scope decision breaks sign-in unless the profile carries a synthesised one** — use `<discord_id>@discord.local`. *(Corrected by the Phase 4 auth spike, 2026-11-12, Better Auth 1.7.14: an overridden `getUserInfo` skips `mapProfileToUser`, so the address is built inside `getUserInfo`. The Discord provider also sends no PKCE verifier; state is signed and single-use, which the spike's tests prove.)* This is the same synthesis trick an earlier Instatic-era design arrived at independently, which is mild evidence it is the right shape.
 
 ### Role staleness
 
