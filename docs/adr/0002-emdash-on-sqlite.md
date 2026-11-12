@@ -99,6 +99,39 @@ Two spikes ran (`docs/research/2026-10-16-emdash-spike.md`), on EmDash 1.1.0 ins
    - **The FTS5 search index.** EmDash's search tables are contentful FTS5 tables with their own copy of the text. `secure_delete` does not scrub their segments, so deleted text stays in the live `%_data` rows until a merge. Candidates are FTS5's `secure-delete` option or a rebuild after deletions; untested.
    - **Migrations.** CLI and deploy migrations bypass our dialect, and some copy whole content tables (`INSERT … SELECT`).
 
+### Refreshed against EmDash 1.5.0 (2026-11-11)
+
+The spike ran on 1.1.0. Since then, 1.2.0, 1.3.0, 1.3.1, 1.4.0 and 1.5.0 (2026-11-11) have shipped. The published tarballs were diffed. None of the open items is resolved, the work for items 1, 2 and 4 and for the prune and anonymise steps has grown, and some areas were not checked (listed below).
+
+- **Item 1, unchanged.**
+  - Public search still uses EmDash's own session (`astro/middleware/auth.ts:223`). `snapshot` is still on the public exact-match list (`:122`).
+  - `syncRoles` still runs only in the external-auth path, so a removed Staff member keeps their last role on these routes.
+  - The first authenticated user still becomes Admin whenever `users` is empty (`:575-581`).
+  - External auth has no cache option (`auth/types.ts`), so we still build the cache and its refusals.
+- **`preview-url`, unchanged.** It needs only `content:read_drafts`, checks no ownership, and takes an uncapped `expiresIn`.
+- **New routes.**
+  - `auth/handover` mints a 5-minute magic-link sign-in. It is injected only with built-in auth, so external auth leaves it out.
+  - `site/domain-proof` is new and public.
+  - `content/[collection]/[id]/room`, `content/[id]/revisions/editors` and `settings/domain` are new private routes.
+  - The allow-list (item 2) has to place each of them.
+- **The `middleware.outer` key is still there** (`integration/runtime.ts:547`). Whether its contract changed is not yet checked.
+- **Revisions.**
+  - The count is still a hard-coded 50 (`cleanup.ts:46`), with no age option.
+  - Migration 059 adds `_emdash_revision_prune_queue`, which keys on revision ids. The age-based prune job has to keep it consistent.
+  - Migration 096 adds `revisions.edited_by`, a JSON array of user ids. The anonymise step has to rewrite it as well as `author_id`.
+- **Scoping.**
+  - There is a new `content:edit_own_drafts` grant, which applies only while an entry is a draft.
+  - No new seam for scoping by club was found. The hook list and RBAC were not diffed in full.
+- **Storage.** `emdash/db/sqlite` is still exported, and `secure_delete` is still off. The descriptor `entrypoint` contract was not re-verified.
+- **Not re-verified:**
+  - an FTS5 secure-delete option or rebuild;
+  - `INSERT … SELECT` copies in the new migrations;
+  - support for the Node adapter.
+- **Advisories.** No GitHub security advisories are published for `emdash` or `@emdash-cms/auth`.
+- **Requirements and pin.**
+  - The peer requirement is still `astro >=6`, and the package now needs Node `>=22.16`.
+  - Under the two-week pin, 1.4.0 becomes eligible on 2026-11-12, and 1.5.0 on 2026-11-25.
+
 Also required, as before:
 
 - **Uploads go to S3-compatible storage**, or a directory with its own backup, because Litestream does not cover them.

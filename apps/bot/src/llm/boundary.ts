@@ -163,13 +163,25 @@ export interface ModerationMessage {
   repliesTo?: PlacedSource;
 }
 
-/** Who a review is about, and whose names it must keep out. */
+/**
+ * A member's name, with whose it is. The boundary labels a name by its member,
+ * so the same person reads the same wherever they appear in one call.
+ */
+export interface MemberName {
+  id: string;
+  name: string;
+}
+
+/**
+ * Who a review is about, and whose names it must keep out. Pass the same
+ * object to every call of one review: members keep their labels across it.
+ */
 export interface ModerationSubject {
   memberId: string;
   /** Their username, global name and nickname. */
   memberNames: Iterable<string>;
   /** The names of the authors of the context messages. */
-  otherNames: Iterable<string>;
+  otherNames: Iterable<MemberName>;
   /** The `Member` role's ids: only places a Member can see are sources. */
   memberRoles: readonly string[];
 }
@@ -215,12 +227,12 @@ export interface BoundaryDeps {
   /** For resolving `<#id>` and `<@&id>` to names before the call. */
   names: NameLookup;
   /**
-   * Member names: replaced on the way out, refused on the way back.
-   * `openBoundary` passes the member-name cache (`tier0-store.ts`). When it is
-   * empty the boundary says so once, rather than letting an empty set read as
-   * a passing check.
+   * Member names, each with its member: replaced on the way out, refused on
+   * the way back. `openBoundary` passes the member-name cache
+   * (`tier0-store.ts`). When it is empty the boundary says so once, rather
+   * than letting an empty set read as a passing check.
    */
-  memberNames?: Iterable<string>;
+  memberNames?: Iterable<MemberName>;
   /**
    * Whether a member has turned processing off (`/privacy`). `openBoundary`
    * wires it to the durable store for every boundary the bot builds; the
@@ -248,11 +260,18 @@ const SNOWFLAKE = /\d{17,20}/;
  * that exists to catch it. Compiled once at construction so a name that
  * cannot form a pattern fails loudly then, not on the first model call.
  */
-export const namePattern = (name: string): RegExp =>
+export const namePattern = (name: string): RegExp => namesPattern([name], "iu");
+
+/** Any one of `names`, bounded as `namePattern` bounds one, tried in the order given. */
+const namesPattern = (names: string[], flags: string): RegExp =>
   new RegExp(
-    `(?<![\\p{L}\\p{N}])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}])`,
-    "iu",
+    `(?<![\\p{L}\\p{N}])(?:${names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})(?![\\p{L}\\p{N}])`,
+    flags,
   );
+
+/** `A` to `Z`, then `AA`, `AB`, and on: the letters of a member label. */
+const letters = (n: number): string =>
+  (n < 26 ? "" : letters(Math.floor(n / 26) - 1)) + String.fromCharCode(65 + (n % 26));
 
 /** Shorter than this, a name is a word fragment, and refusing it would refuse half of English. */
 export const MIN_MEMBER_NAME_LENGTH = 3;
@@ -491,31 +510,89 @@ const mentionPrompt = (voice: string): string =>
 export const createBoundary = (deps: BoundaryDeps) => {
   const { monitored } = deps;
   const hasOptedOut = deps.hasOptedOut ?? (() => false);
-  // Longest first, so "Dave Smith" is replaced whole before "Dave" can leave
-  // "@member Smith" behind.
+  /** The names output is refused for. */
   const patternsFor = (names: Iterable<string>): RegExp[] =>
-    [...names]
-      .filter((n) => n.trim().length > 0)
-      .sort((a, b) => b.length - a.length)
-      .map(namePattern);
-  const namePatterns = patternsFor(deps.memberNames ?? []);
+    [...names].filter((n) => n.trim().length > 0).map(namePattern);
+  const cache = [...(deps.memberNames ?? [])];
+  const cacheNames = cache.map((n) => n.name);
+  const namePatterns = patternsFor(cacheNames);
   const byId = new Map(deps.catalog.map((e) => [e.id, e]));
   let warnedAboutNames = false;
 
+  /** Who has which label, and the next letters to try. In memory only. */
+  type Labels = { byId: Map<string, string>; next: number };
+  const freshLabels = (fixed: Array<[id: string, label: string]> = []): Labels => ({ byId: new Map(fixed), next: 0 });
+  /**
+   * One review's labels, shared by every call made with the same subject
+   * object, its chunks and the reduce, so a note's "member A" means the same
+   * person when the reduce reads it. Held only while the subject is.
+   */
+  const reviews = new WeakMap<ModerationSubject, Labels>();
+  const reviewLabels = (subject: ModerationSubject): Labels => {
+    if (!reviews.has(subject)) reviews.set(subject, freshLabels([[subject.memberId, "the member"]]));
+    return reviews.get(subject)!;
+  };
+
   /**
    * Everything that leaves, leaves through here: Discord markup resolved, bare
-   * snowflakes stripped, known member names replaced.
+   * snowflakes stripped, and every member reference, `<@id>` markup or a
+   * known name, replaced by that member's label.
+   *
+   * `labels` are fresh for each model call (`freshLabels`), or for each
+   * review (`reviewLabels`), and dropped with it: nothing maps one back to a
+   * member. Fixed labels come first ("the asker", "Sherpa", "the member");
+   * everyone else is `member A`, `member B`, in the order `label` first meets
+   * them, skipping any a known name would match, since that label would be
+   * the name. A name more than one member holds becomes `a member`, never
+   * one of their labels, which would put words in the other's mouth; so does
+   * a match not found as its name, which only case-folding oddities produce.
    *
    * Names are redacted on the way OUT as well as validated on the way BACK.
    * Validating only the response would mean a name the model never repeated
    * was still handed to the provider, which is the disclosure the redaction
    * boundary exists to prevent.
    */
-  const redactOutbound = (text: string, patterns = namePatterns): string =>
-    patterns.reduce(
-      (acc, pattern) => acc.replace(new RegExp(pattern.source, "giu"), "@member"),
-      redact(text, deps.names),
-    );
+  const redactor = (names: Iterable<MemberName>, labels: Labels) => {
+    const label = (id: string): string => {
+      if (!labels.byId.has(id)) {
+        let candidate = `member ${letters(labels.next++)}`;
+        // ponytail: a name every label contains ("member") matches every
+        // candidate, so after 100 the last is used as it is. A label scheme
+        // that avoids the word, if a member is ever called that.
+        for (let tries = 0; pattern && candidate.search(pattern) >= 0 && tries < 100; tries++)
+          candidate = `member ${letters(labels.next++)}`;
+        labels.byId.set(id, candidate);
+      }
+      return labels.byId.get(id)!;
+    };
+    const owner = new Map<string, string | null>();
+    for (const { id, name } of names) {
+      const key = name.trim().toLowerCase();
+      if (key) owner.set(key, owner.has(key) && owner.get(key) !== id ? null : id);
+    }
+    // One pass, longest first: "Dave Smith" is replaced whole before "Dave"
+    // can leave "member A Smith" behind, and no label written is read again
+    // as a name ("A" in "member A").
+    const spelt = [...new Set([...names].map((n) => n.name.trim()).filter((n) => n))];
+    const pattern = spelt.length ? namesPattern(spelt.sort((a, b) => b.length - a.length), "giu") : null;
+    const byName = (text: string) =>
+      pattern
+        ? text.replace(pattern, (m) => {
+            const id = owner.get(m.toLowerCase());
+            return id ? label(id) : "a member";
+          })
+        : text;
+    return {
+      label,
+      // Member markup is labelled by its id before `redact` would make it a
+      // bare `@member`; the text between is redacted as it always was.
+      redacted: (text: string): string =>
+        text
+          .split(/(<@!?\d+>)/)
+          .map((part, i) => (i % 2 ? label(part.replace(/\D/g, "")) : byName(redact(part, deps.names))))
+          .join(""),
+    };
+  };
 
   /**
    * Throws on anything the model should never have been able to say. Loud on
@@ -645,25 +722,29 @@ export const createBoundary = (deps: BoundaryDeps) => {
     // reply to someone called "Dad" does not fail every review that says the word.
     // A one-character name is replaced too, but not refused on return, or a member called "I" would
     // fail every review.
+    // The subject is "the member", as the prompt calls them, and everyone else keeps one label
+    // across the review (`reviewLabels`).
     const atLeast = (names: Iterable<string>, length: number) => [...names].filter((n) => [...n.trim()].length >= length);
-    const outbound = patternsFor(
-      new Set([...(deps.memberNames ?? []), ...atLeast(subject.memberNames, 1), ...atLeast(subject.otherNames, 1)]),
+    const others = [...subject.otherNames];
+    const { redacted } = redactor(
+      [...cache, ...atLeast(subject.memberNames, 1).map((name) => ({ id: subject.memberId, name })), ...others],
+      reviewLabels(subject),
     );
     const patterns = patternsFor(
       new Set([
-        ...(deps.memberNames ?? []),
+        ...cacheNames,
         ...atLeast(subject.memberNames, 2),
-        ...usableMemberNames(subject.otherNames, deps.catalog, []),
+        ...usableMemberNames(others.map((n) => n.name), deps.catalog, []),
       ]),
     );
-    const out = (t: string, max: number) => cutText(redactOutbound(t, outbound).replace(/\s+/g, " ").trim(), max) || "(no text)";
+    const out = (t: string, max: number) => cutText(redacted(t).replace(/\s+/g, " ").trim(), max) || "(no text)";
     const lines = messages.map((m) => {
       const context = m.repliesTo;
       const shown = context && context.authorId !== subject.memberId && !context.authorIsBot && !hasOptedOut(context.authorId);
       return `[${m.n}] ${m.date} ${out(m.place, 100)}: ${out(m.source.content, 500)}` +
         (shown ? `\n  ↳ replying to another member: ${out(context.content, 300)}` : "");
     });
-    return { lines, patterns, redacted: (t: string) => redactOutbound(t, outbound) };
+    return { lines, patterns, redacted };
   };
 
   return {
@@ -776,9 +857,11 @@ export const createBoundary = (deps: BoundaryDeps) => {
         );
       }
 
-      const usable = fromMembers(request.sources ?? []);
-      const sourceParts = usable.map((s) => redactOutbound(s.content)).filter((p) => p.trim());
-      const parts = [request.context ? redactOutbound(request.context) : "", ...sourceParts].filter(
+      const { redacted } = redactor(cache, freshLabels());
+      // Context first, as it is sent, so labels run A, B… in reading order.
+      const context = request.context ? redacted(request.context) : "";
+      const sourceParts = fromMembers(request.sources ?? []).map((s) => redacted(s.content)).filter((p) => p.trim());
+      const parts = [context, ...sourceParts].filter(
         (p) => p.trim().length > 0,
       );
 
@@ -822,15 +905,12 @@ export const createBoundary = (deps: BoundaryDeps) => {
     }): Promise<Extraction> => {
       refuseForeign(request.memberId, request.sources);
       const topicText = request.vocabulary.topics.flatMap((t) => [t.label, t.slug]);
-      const patterns = patternsFor(
-        new Set([
-          ...(deps.memberNames ?? []),
-          ...usableMemberNames(request.memberNames, deps.catalog, topicText),
-        ]),
-      );
+      const own = usableMemberNames(request.memberNames, deps.catalog, topicText);
+      const patterns = patternsFor(new Set([...cacheNames, ...own]));
+      const { redacted } = redactor([...cache, ...own.map((name) => ({ id: request.memberId, name }))], freshLabels());
       const text = cutText(
         fromMembers(request.sources)
-          .map((s) => redactOutbound(s.content, patterns))
+          .map((s) => redacted(s.content))
           .filter((p) => p.trim())
           .join("\n"),
       );
@@ -873,9 +953,9 @@ export const createBoundary = (deps: BoundaryDeps) => {
      * A reply to an @mention, in the persona's voice (ADR-0004): the one path
      * whose words reach members. The asker's message and up to ten before it,
      * from the place itself, which must be neither monitored nor withheld.
-     * Bots other than Sherpa and opted-out authors are dropped; speakers are
-     * labelled, never named. An opted-out asker is the caller's to answer and
-     * a bug here.
+     * Bots other than Sherpa and opted-out authors are dropped; speakers, and
+     * anyone named or mentioned, are labelled, never named. An opted-out asker
+     * is the caller's to answer and a bug here.
      */
     replyToMention: async (request: {
       place: MentionPlace;
@@ -886,7 +966,7 @@ export const createBoundary = (deps: BoundaryDeps) => {
       /** The asker's username, global name and nickname. */
       askerNames: Iterable<string>;
       /** Every context author's names, and every mentioned user's. */
-      otherNames: Iterable<string>;
+      otherNames: Iterable<MemberName>;
       voice: string;
     }): Promise<MentionReply> => {
       if (mentionRefused(request.place, byId, monitored))
@@ -897,17 +977,13 @@ export const createBoundary = (deps: BoundaryDeps) => {
       if (request.question.authorIsBot || hasOptedOut(asker))
         throw new Error("The asker is a bot or has processing off. Refusing the mention.");
 
-      const names = [...request.askerNames, ...request.otherNames];
-      const atLeastOne = names.filter((n) => n.trim());
-      const outbound = patternsFor(new Set([...(deps.memberNames ?? []), ...atLeastOne]));
-      const patterns = patternsFor(new Set([...(deps.memberNames ?? []), ...usableMemberNames(names, deps.catalog, [])]));
-      const out = (t: string, max: number) => cutText(redactOutbound(t, outbound).replace(/\s+/g, " ").trim(), max);
+      const names = [...[...request.askerNames].map((name) => ({ id: asker, name })), ...request.otherNames];
+      const patterns = patternsFor(
+        new Set([...cacheNames, ...usableMemberNames(names.map((n) => n.name), deps.catalog, [])]),
+      );
+      const { redacted, label } = redactor([...cache, ...names], freshLabels([[asker, "the asker"], [request.sherpaId, "Sherpa"]]));
+      const out = (t: string, max: number) => cutText(redacted(t).replace(/\s+/g, " ").trim(), max);
 
-      const labels = new Map([[asker, "the asker"], [request.sherpaId, "Sherpa"]]);
-      const label = (id: string) => {
-        if (!labels.has(id)) labels.set(id, `member ${String.fromCharCode(63 + labels.size)}`);
-        return labels.get(id)!;
-      };
       const lines = request.context
         .filter((s) => s.authorId === request.sherpaId || (!s.authorIsBot && !hasOptedOut(s.authorId)))
         .slice(-MAX_MENTION_CONTEXT)

@@ -232,9 +232,9 @@ export const openTier0 = (path: string) => {
       });
     },
 
-    /** Every cached member name, for the boundary. */
-    memberNames: (): string[] =>
-      (db.prepare("SELECT DISTINCT name FROM member_name").all() as Array<{ name: string }>).map((r) => r.name),
+    /** Every cached member name with whose it is, for the boundary. */
+    memberNames: (): Array<{ id: string; name: string }> =>
+      db.prepare("SELECT author_id AS id, name FROM member_name").all() as Array<{ id: string; name: string }>,
 
     /**
      * Moves the write-ahead log into the file and empties it. Secure delete

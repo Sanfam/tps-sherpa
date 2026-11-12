@@ -28,7 +28,7 @@ import {
   type RESTGetAPIGuildMessagesSearchQuery,
   type RESTGetAPIGuildMessagesSearchResult,
 } from "discord-api-types/v10";
-import type { Boundary, ModerationMessage, ModerationSubject, PlacedSource } from "../llm/boundary.ts";
+import type { Boundary, MemberName, ModerationMessage, ModerationSubject, PlacedSource } from "../llm/boundary.ts";
 import { type ChunkEvent, type ChunkResult, type Report, moderationPlace } from "../llm/moderation.ts";
 import type { Entity } from "../sync/catalog.ts";
 import { plainName } from "./find.ts";
@@ -241,7 +241,7 @@ export const createAnalyse = (deps: AnalyseDeps) => {
 
     // --- context (O6) ---------------------------------------------------------
     const ordered = [...read.values()].sort((a, b) => (BigInt(a.message.id) < BigInt(b.message.id) ? -1 : 1));
-    const otherNames = new Set<string>();
+    const otherNames: MemberName[] = [];
     const replies = new Map<string, PlacedSource>();
     const newestReplies = ordered.filter(({ message }) => message.message_reference?.message_id).slice(-MAX_CONTEXT);
     for (const { message, origin } of newestReplies.reverse()) {
@@ -249,7 +249,7 @@ export const createAnalyse = (deps: AnalyseDeps) => {
       if (deps.now() - start > READ_MS) break;
       const replied = await deps.discord.message(message.channel_id, to);
       if (!replied || replied.author.id === memberId) continue;
-      for (const n of namesOf(replied.author)) otherNames.add(n);
+      for (const name of namesOf(replied.author)) otherNames.push({ id: replied.author.id, name });
       replies.set(message.id, { authorId: replied.author.id, authorIsBot: replied.author.bot === true, content: replied.content, origin });
     }
 

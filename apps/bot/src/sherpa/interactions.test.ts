@@ -672,7 +672,7 @@ describe("names kept for an opted-out member", () => {
       member: { ...base.member, nick: "Papa G", user: { ...base.member.user, username: "gonzo", global_name: "Gonzo Rex" } },
     } as unknown as APIInteraction;
   };
-  const kept = (durable: string) => withDurableStore((s) => s.optedOutNames().sort(), durable);
+  const kept = (durable: string) => withDurableStore((s) => s.optedOutNames().map((n) => n.name).sort(), durable);
 
   it("are kept only for a Member — anyone else's opt-out still works, but keeps no names", async () => {
     const { run, privacy, paths } = harness();

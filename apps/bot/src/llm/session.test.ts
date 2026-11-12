@@ -113,7 +113,7 @@ describe("openBoundary", () => {
       sources: [{ authorId: "in", authorIsBot: false, content: "thanks jughfer for the carry", origin: subject.id }],
       parse: (v) => v,
     });
-    expect(sent).toEqual(["thanks @member for the carry"]);
+    expect(sent).toEqual(["thanks member A for the carry"]);
   });
 
   it("redacts an opted-out member's kept names from another member's words, until they opt back in", async () => {
@@ -129,7 +129,7 @@ describe("openBoundary", () => {
       return sent[0];
     };
     withDurableStore((s) => s.setPreference("quiet", "processing", false, ["gonzo", "Gonzo Rex"]));
-    expect(await ask()).toBe("@member said hi");
+    expect(await ask()).toBe("member A said hi");
     withDurableStore((s) => s.setPreference("quiet", "processing", true));
     expect(await ask()).toBe("Gonzo Rex said hi");
   });

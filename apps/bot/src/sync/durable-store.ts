@@ -437,9 +437,9 @@ export const openDurableStore = (path: string = DURABLE_STORE_PATH) => {
       });
     },
 
-    /** Names kept for members with processing off, for the boundary. */
-    optedOutNames: (): string[] =>
-      (db.prepare("SELECT DISTINCT name FROM opted_out_name").all() as Array<{ name: string }>).map((r) => r.name),
+    /** Names kept for members with processing off, with whose each is, for the boundary. */
+    optedOutNames: (): Array<{ id: string; name: string }> =>
+      db.prepare("SELECT member_id AS id, name FROM opted_out_name").all() as Array<{ id: string; name: string }>,
 
     /** Every member who has turned processing off. */
     processingOptOuts: (): Set<string> =>

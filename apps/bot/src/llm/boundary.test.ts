@@ -71,7 +71,7 @@ describe("the redaction boundary", () => {
       sources: [{ authorId: "1", authorIsBot: false, content: "<@732682426853359667> is in", origin: post.id }],
     });
 
-    expect(calls[0]?.user).toBe("@member is in");
+    expect(calls[0]?.user).toBe("member A is in");
   });
 
   it("strips a bare snowflake nobody wrapped in mention syntax", async () => {
@@ -112,7 +112,7 @@ describe("output validation", () => {
     const { chat } = fixtureChat('{"summary":"Schwagle runs this one"}');
 
     await expect(
-      boundary(chat, { memberNames: ["Schwagle"] }).ask(ask),
+      boundary(chat, { memberNames: [{ id: "8", name: "Schwagle" }] }).ask(ask),
     ).rejects.toThrow(/names a member/i);
   });
 
@@ -121,7 +121,7 @@ describe("output validation", () => {
     const { chat } = fixtureChat('{"ok":true}');
     const wordy = { ...ask, system: "Suggest games and places. Answer in JSON." };
 
-    await expect(boundary(chat, { memberNames: ["games"] }).ask(wordy)).resolves.toEqual({ ok: true });
+    await expect(boundary(chat, { memberNames: [{ id: "8", name: "games" }] }).ask(wordy)).resolves.toEqual({ ok: true });
   });
 
   it("looks inside nested output, not just the top level", async () => {
@@ -153,7 +153,7 @@ describe("output validation", () => {
     const { chat } = fixtureChat('{"summary":"run by 👦Schwagle👧 most nights"}');
 
     await expect(
-      boundary(chat, { memberNames: ["Schwagle"] }).ask(ask),
+      boundary(chat, { memberNames: [{ id: "8", name: "Schwagle" }] }).ask(ask),
     ).rejects.toThrow(/names a member/i);
   });
 
@@ -172,7 +172,7 @@ describe("output validation", () => {
       '{"summary":"Dave is hosting raids"}',
     ]) {
       const { chat } = fixtureChat(reply);
-      const error = await boundary(chat, { memberNames: ["Dave"] }).ask(ask).catch((e: Error) => e);
+      const error = await boundary(chat, { memberNames: [{ id: "8", name: "Dave" }] }).ask(ask).catch((e: Error) => e);
 
       expect(String(error)).toMatch(/identifier|mass mention|names a member/);
       expect(String(error)).not.toMatch(/Dave|732682426853359667|@everyone|raids/);
@@ -276,23 +276,33 @@ describe("what never reaches a model", () => {
     // provider. Redaction is outbound as well as inbound.
     const { chat, calls } = fixtureChat('{"ok":true}');
 
-    await boundary(chat, { memberNames: ["Schwagle"] }).ask({
+    await boundary(chat, { memberNames: [{ id: "8", name: "Schwagle" }] }).ask({
       ...ask,
       context: "Schwagle runs this one",
       sources: [{ authorId: "1", authorIsBot: false, content: "ask Schwagle about it", origin: post.id }],
     });
 
     expect(calls[0]?.user).not.toMatch(/Schwagle/i);
-    expect(calls[0]?.user).toBe("@member runs this one\nask @member about it");
+    expect(calls[0]?.user).toBe("member A runs this one\nask member A about it");
   });
 
   it("replaces a longer name whole, whatever order the cache gives it in", async () => {
     const { chat, calls } = fixtureChat('{"ok":true}');
-    await boundary(chat, { memberNames: ["Dave", "Dave Smith"] }).ask({
+    await boundary(chat, { memberNames: [{ id: "8", name: "Dave" }, { id: "9", name: "Dave Smith" }] }).ask({
       ...ask,
       sources: [{ authorId: "1", authorIsBot: false, content: "thanks Dave Smith", origin: post.id }],
     });
-    expect(calls[0]?.user).toBe("thanks @member");
+    expect(calls[0]?.user).toBe("thanks member A");
+  });
+
+  it("never hands out a label that is itself a member's name", async () => {
+    const { chat, calls } = fixtureChat('{"ok":true}');
+    const memberNames = [{ id: "7", name: "member A" }, { id: "8", name: "B" }, { id: "9", name: "Bob" }];
+    await boundary(chat, { memberNames }).ask({
+      ...ask,
+      sources: [{ authorId: "1", authorIsBot: false, content: "Bob joined", origin: post.id }],
+    });
+    expect(calls[0]?.user).toBe("member C joined");
   });
 
   it("refuses a system prompt carrying member-shaped text", async () => {
@@ -622,15 +632,40 @@ describe("replyToMention (ADR-0004)", () => {
           say(SHERPA, "earlier sherpa words", true),
           say(ASKER, "me again, Jughfer"),
         ],
-        otherNames: ["Schwagle"],
+        otherNames: [{ id: "601", name: "Schwagle" }],
       }),
     );
 
     const user = calls[0]!.user;
-    expect(user).toContain("member A: @member here, anyone up for Helldivers");
+    expect(user).toContain("member A: member A here, anyone up for Helldivers");
     expect(user).toContain("Sherpa: earlier sherpa words");
-    expect(user).toContain("the asker: me again, @member");
+    expect(user).toContain("the asker: me again, the asker");
     expect(user).not.toMatch(/opted out|webhook|Schwagle|Jughfer/);
+  });
+
+  it("labels each member one way within a call, as speaker, by mention and by name, and a shared name as no one", async () => {
+    // Short ids on purpose: the bare-snowflake strip would hide an id that leaked through a label.
+    const { chat, calls } = fixtureChat('{"intent":"chat","line":"Sounds fun."}');
+    const say = (authorId: string, content: string) => ({ authorId, authorIsBot: false, content, origin: general.id });
+    const memberNames = [
+      { id: "601", name: "Schwagle" },
+      { id: "602", name: "Dave" },
+      { id: "603", name: "dave" },
+    ];
+
+    await mentionBoundary(chat, { memberNames }).replyToMention(
+      mention({
+        context: [say("601", "Schwagle here, ask <@602> or Wilbur"), say("604", "agreed with <@!601>, Schwagle is right")],
+        question: { authorId: ASKER, authorIsBot: false, content: "Dave, <@604> and Jughfer?", origin: general.id },
+        otherNames: [{ id: "604", name: "Wilbur" }],
+      }),
+    );
+
+    const user = calls[0]!.user;
+    expect(user).toContain("member A: member A here, ask member B or member C");
+    expect(user).toContain("member C: agreed with member A, member A is right");
+    expect(user).toContain("a member, member C and the asker?");
+    expect(user).not.toMatch(/Schwagle|Dave|Wilbur|Jughfer|60\d|<@/i);
   });
 
   it("refuses a monitored place, a Thread under one outside the Catalog, a withheld place, and a foreign source", async () => {

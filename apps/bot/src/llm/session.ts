@@ -15,7 +15,7 @@ import type { NameLookup } from "../sync/normalise.ts";
 import type { RoleManifestEntry } from "../sync/ports.ts";
 import { TIER0_PATH, openTier0 } from "../sync/tier0-store.ts";
 import type { ActivityStore } from "./activity.ts";
-import { createBoundary, usableMemberNames, type Boundary } from "./boundary.ts";
+import { createBoundary, usableMemberNames, type Boundary, type MemberName } from "./boundary.ts";
 import { openAiWire, wireFromEnv } from "./openai-wire.ts";
 import { parseVocabulary } from "./vocabulary.ts";
 
@@ -84,13 +84,13 @@ export { MIN_MEMBER_NAME_LENGTH, usableMemberNames } from "./boundary.ts";
 
 /**
  * The member-name cache (`tier0-store.ts`) and the names kept for members
- * with processing off (`opted_out_name` in the durable store), less the names
- * `usableMemberNames` leaves out. Read fresh for each boundary: both change
- * while the bot runs.
+ * with processing off (`opted_out_name` in the durable store), each with its
+ * member, less the names `usableMemberNames` leaves out. Read fresh for each
+ * boundary: both change while the bot runs.
  */
-export const readMemberNames = (catalog: Entity[], tier0Path: string = TIER0_PATH): string[] => {
+export const readMemberNames = (catalog: Entity[], tier0Path: string = TIER0_PATH): MemberName[] => {
   const tier0 = openTier0(tier0Path);
-  let names: string[];
+  let names: MemberName[];
   try {
     names = tier0.memberNames();
   } finally {
@@ -100,7 +100,8 @@ export const readMemberNames = (catalog: Entity[], tier0Path: string = TIER0_PAT
   // No frozen vocabulary is no Topics to collide with; a broken one throws.
   const frozen = readIfPresent(VOCABULARY_PATH);
   const topics = frozen ? parseVocabulary(frozen).topics.flatMap((t) => [t.label, t.slug]) : [];
-  return usableMemberNames(names, catalog, topics);
+  const usable = new Set(usableMemberNames(names.map((n) => n.name), catalog, topics));
+  return names.map((n) => ({ id: n.id, name: n.name.trim() })).filter((n) => usable.has(n.name));
 };
 
 /**

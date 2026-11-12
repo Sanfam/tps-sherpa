@@ -21,11 +21,12 @@ describe("the member-name cache", () => {
       msg({ entityId: "e1", messageId: "m2", authorId: "a2", authorNames: ["bravo"], createdAt: "2026-02-01T00:00:00.000Z" }),
       msg({ entityId: "e1", messageId: "m3", authorId: "a3", authorNames: ["charlie"], createdAt: "2026-02-01T00:00:00.000Z" }),
     ]);
-    expect(store.memberNames().sort()).toEqual(["Alpha A", "alpha", "bravo", "charlie"]);
+    const names = () => store.memberNames().map((n) => `${n.id}:${n.name}`).sort();
+    expect(names()).toEqual(["a1:Alpha A", "a1:alpha", "a2:bravo", "a3:charlie"]);
     store.dropWrittenBefore("2026-01-15T00:00:00.000Z"); // a1's only message ages out
-    expect(store.memberNames().sort()).toEqual(["bravo", "charlie"]);
+    expect(names()).toEqual(["a2:bravo", "a3:charlie"]);
     store.deleteAuthor("a2");
-    expect(store.memberNames()).toEqual(["charlie"]);
+    expect(names()).toEqual(["a3:charlie"]);
     store.record("e1", "2", []); // recaptured: a3's message is gone from Discord
     expect(store.memberNames()).toEqual([]);
     store.close();

@@ -16,7 +16,7 @@ import {
   MessageType,
   type RESTPostAPIChannelMessageJSONBody,
 } from "discord-api-types/v10";
-import { type Boundary, type MentionPlace, type Source, mentionRefused } from "../llm/boundary.ts";
+import { type Boundary, type MemberName, type MentionPlace, type Source, mentionRefused } from "../llm/boundary.ts";
 import type { Persona } from "../llm/persona.ts";
 import type { Entity } from "../sync/catalog.ts";
 import type { RoleManifestEntry } from "../sync/ports.ts";
@@ -182,7 +182,7 @@ export const createMentions = (deps: MentionsDeps) => {
       // History it cannot read is withheld in all but name: nothing goes to the model.
       return log(`[mentions] ${message.id}: history unreadable, refused: ${reason(error)}`);
     }
-    // Sherpa by its name, never "@member": an `@` the model copies back is refused.
+    // Sherpa by its name, never its role's "@name": an `@` the model copies back is refused.
     const ownMention = new RegExp(`<@!?${botId}>${botRole ? `|<@&${botRole}>` : ""}`, "g");
     const source = (m: HistoryMessage): Source => ({
       authorId: m.author.id,
@@ -196,13 +196,14 @@ export const createMentions = (deps: MentionsDeps) => {
     // sends the nickname unredacted.
     const authors = [...new Set(history.filter((m) => !isBot(m)).map((m) => m.author.id))];
     const nicks = await Promise.all(authors.map((id) => deps.discord.nickOf(id)));
-    const otherNames = [
-      ...nicks.filter((n): n is string => n !== null),
+    const of = (id: string, names: string[]) => names.map((name) => ({ id, name }));
+    const otherNames: MemberName[] = [
+      ...nicks.flatMap((nick, i) => of(authors[i]!, nick === null ? [] : [nick])),
       ...[...history, message].flatMap((m) => [
-        ...(m === message || isBot(m) ? [] : namesOf(m.author)),
+        ...(m === message || isBot(m) ? [] : of(m.author.id, namesOf(m.author))),
         ...m.mentions
           .filter((u) => u.id !== botId)
-          .flatMap((u) => namesOf(u, (u as { member?: { nick?: string | null } }).member?.nick)),
+          .flatMap((u) => of(u.id, namesOf(u, (u as { member?: { nick?: string | null } }).member?.nick))),
       ]),
     ];
 
