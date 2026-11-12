@@ -272,6 +272,32 @@ intro. Vision used one public meme still.
 - The `/find` golden set's 30.6 s GLM call (§6) did not record its
   provider. Each provider had only three calls, at one time of day.
 
+### 6c. Routing without Morph *(owner, 2026-11-12; verified the same day)*
+
+The owner ruled Morph out as unreliable. Each model's 10 cheapest
+strict-ZDR JSON endpoints without Morph were each pinned for 5 calls
+through the real boundary. Cost is OpenRouter's billed `usage.cost`, which
+does not follow list price: PrimeIntellect lists low but billed about 4×
+Wafer per call.
+
+| Model, job | Keep: billed per call, p50 | Drop, and why |
+|---|---|---|
+| GLM, vision | Wafer/us $0.000024, 2.1 s · Wafer/nvfp4 $0.000030, 1.4 s · Reka $0.000048, 1.8 s · Makora $0.000053, 0.7 s | Open-Inference: 2 of 5 answers not the reading shape · Tenstorrent, Novita, Inference-Net 4.5–6.9 s · PrimeIntellect 3.7 s, about 4× the cost |
+| GLM, text | Wafer/us $0.000044, 2.3 s · Wafer/nvfp4 $0.000060, 1.7 s · Reka $0.000075, 2.1 s · Makora $0.000083, 0.7 s | Tenstorrent: 3 of 5 `429` · Novita 11.7 s · Inference-Net 4.8–6.0 s · PrimeIntellect 5.4 s, about 4× the cost |
+| DeepSeek 0731, text | CoreWeave $0.000200, 3.0 s · DigitalOcean $0.000185, 4.6 s · DeepInfra $0.000120, 5.2 s (p90 12.3 s) · Relace $0.000109, 7.8 s | Wafer 10.9–13.5 s · Venice 12.8 s · Sail Research p90 51 s |
+
+**Chosen:**
+`LLM_PROVIDER={"sort":"price","ignore":["morph","novita","tenstorrent","open-inference","inference-net","primeintellect","venice","sail-research"]}`.
+`openai-wire.ts` still adds `data_collection: "deny"` and `zdr: true` on
+top; the request body was checked. Unpinned under this setting, every GLM
+text and vision call was answered by Wafer.
+
+- **Caveat:** under it, DeepSeek 0731 also routes to Wafer, its lowest input
+  price, and that is its slowest endpoint on real prompts. Set this routing
+  together with `LLM_MODEL_CHEAP=z-ai/glm-5.3-flash`. DeepSeek is then left
+  only with the strong role's batch jobs.
+- **Excluding Wafer would not help:** it is GLM's best endpoint.
+
 ## 6a. Not measured
 
 - **The strong role** (summaries, the vocabulary bootstrap), **moderation**
