@@ -96,7 +96,9 @@ describe("fetchStill", () => {
   it("refuses redirects, so an allowed URL cannot lead to another host", async () => {
     const f = fake(() => respond("x", "image/jpeg"));
     await fetchStill({ proxyUrl: proxy("a") }, f.fetch);
-    expect(f.inits).toEqual([{ redirect: "error" }]);
+    expect(f.inits.map((i) => i.redirect)).toEqual(["error"]);
+    // Bounded in time too: a stalled proxy cannot hold the member's work.
+    expect(f.inits[0]!.signal).toBeInstanceOf(AbortSignal);
   });
 
   it("skips a failed download instead of failing the caller", async () => {
@@ -140,7 +142,9 @@ describe("fetchStills", () => {
     ]);
     // The animation itself, unscaled, with redirects refused like a still.
     expect(f.urls).toEqual([proxy("a.gif")]);
-    expect(f.inits).toEqual([{ redirect: "error" }]);
+    expect(f.inits.map((i) => i.redirect)).toEqual(["error"]);
+    // Bounded in time too: a stalled proxy cannot hold the member's work.
+    expect(f.inits[0]!.signal).toBeInstanceOf(AbortSignal);
   });
 
   it("never fetches an animation off the proxy, and falls back to the still", async () => {
@@ -187,9 +191,21 @@ describe("takeFrames (ffmpeg)", () => {
       expect((await takeFrames(fixture(name), type)).map(colour)).toEqual(["red", "green", "blue", "yellow"]);
   });
 
-  it("yields nothing for bytes that are not the declared type, including a playlist naming a local file", async () => {
-    // The demuxer is forced and the protocols are the pipe only: a playlist
-    // cannot make ffmpeg open a file, and an MP4 is not read as a GIF.
+  it("keeps the last frame, where a caption usually ends", async () => {
+    // Five frames, only the last yellow: spacing that stops short of the end
+    // (0, 1, 2, 3) never sees it.
+    expect((await takeFrames(fixture("ends-on-yellow.gif"), "image/gif")).map(colour)).toEqual(["red", "red", "red", "yellow"]);
+  });
+
+  it("refuses a canvas over 2048 × 2048 before decoding it", async () => {
+    // 68 KB on disk, 16.8 million pixels decoded: the 4 MB cap does not bound
+    // what a decoder must hold, so the canvas is checked first.
+    expect(await takeFrames(fixture("huge-canvas.gif"), "image/gif")).toEqual([]);
+  });
+
+  it("reads bytes only as the declared type", async () => {
+    // The demuxer is forced, never probed: an MP4 is not read as a GIF, and a
+    // playlist cannot pick a format that opens a file.
     expect(await takeFrames(Buffer.from("#EXTM3U\n#EXTINF:1,\nfile:///etc/passwd\n"), "image/gif")).toEqual([]);
     expect(await takeFrames(fixture("four-colours.mp4"), "image/gif")).toEqual([]);
   });

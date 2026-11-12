@@ -852,7 +852,7 @@ docs.
 | Per introduction | Calls | Cost |
 |---|---|---|
 | Extraction, text | ≤ 5, plus ≤ 2 reads before the post, plus ≤ 3 rebuilds after restarts | well under 1¢ |
-| Image reading (separate `vision` call; ≤ 3 per message, ≤ 6 per member) | 1 per image-carrying message | ~$0.00017 per image, measured |
+| Image reading (separate `vision` call; ≤ 3 per message, ≤ 6 per member) | 1 per image; a GIF is one call with up to 4 frames | ~$0.00004 per still, ~$0.00015 per GIF, measured 2026-11-12 |
 | Match (`findPlaces`, ~50k tokens) | ≤ 1, plus a retry | ~$0.003 each (`f6e7d9d`) |
 | Invited path | ≤ 3 exchanges × (extraction + match) | ≤ ~$0.01 |
 

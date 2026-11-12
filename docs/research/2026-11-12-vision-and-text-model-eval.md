@@ -327,7 +327,8 @@ text and vision call was answered by Wafer.
    DeepSeek until summaries are compared. Moderation and mention replies
    also run on the cheap model and were not compared (§6a).
 
-5. **The fenced extraction prompt ships** (owner, 2026-11-12; PR #77). On the
-   shipped prompt, DeepSeek 0731 and GLM each held 27/27 attacks. GLM got
+5. **The fenced extraction prompt** (owner, 2026-11-12) is PR #77, merged
+   after this note's PR. Until it lands, extraction runs the unfenced prompt
+   that §4a measured. On the fenced prompt, DeepSeek 0731 and GLM each held 27/27 attacks. GLM got
    18/18 genuine intros right. DeepSeek got 15/18, all three misses its
    existing habit of dropping "Ohio" (§4).

@@ -20,6 +20,14 @@ const LONG_EDGE = 1024;
 const MAX_BYTES = 4 * 1024 * 1024;
 /** A decoder that has not finished by now is killed, and the image falls back to its still. */
 const DECODE_TIMEOUT_MS = 10_000;
+/** A download, body included, that has not finished by now is abandoned: a stalled proxy costs one image. */
+const DOWNLOAD_TIMEOUT_MS = 15_000;
+/**
+ * The largest canvas decoded: 4 MB bounds the compressed file, not the frame a
+ * decoder must hold, and a small GIF can declare a huge one. 2048 × 2048 keeps
+ * one RGBA frame at 16 MB and admits 1080p.
+ */
+const MAX_PIXELS = 2048 * 2048;
 
 const ATTACHMENT_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 /**
@@ -108,7 +116,7 @@ type Fetch = (url: string, init: RequestInit) => Promise<Response>;
  */
 async function download(url: URL, type: string, fetchImpl: Fetch): Promise<Buffer | null> {
   try {
-    const response = await fetchImpl(url.toString(), { redirect: "error" });
+    const response = await fetchImpl(url.toString(), { redirect: "error", signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
     const got = (response.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase();
     const length = Number(response.headers.get("content-length"));
     if (!response.ok || got !== type || length > MAX_BYTES || !response.body) {
@@ -164,48 +172,73 @@ const run = (command: string, args: string[], input: Buffer): Promise<Buffer | n
 const SOI = Buffer.from([0xff, 0xd8, 0xff]);
 
 /**
- * Up to four evenly spaced frames of an animation, in order, as JPEG bytes, or
- * none. `ffmpeg` reads from a pipe and writes to one: nothing touches disk. Its
- * demuxer is forced from the type already checked, never probed, and its
- * protocols are limited to the pipe, so the bytes cannot make it open a file
- * or a URL. A file whose index sits at its end (an MP4 not built for
- * streaming) cannot be read from a pipe and yields none.
+ * One decode at a time, process-wide, so members posting together cannot
+ * stack decoders' memory. A decode is bounded by its timeout, so the queue
+ * always drains.
  */
-export async function takeFrames(bytes: Buffer, type: AnimationType): Promise<Buffer[]> {
-  const input = ["-v", "error", "-protocol_whitelist", "pipe", "-f", DEMUXERS[type], "-i", "pipe:0"];
-  const counted = await run(
-    "ffprobe",
-    [...input, "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0"],
-    bytes,
-  );
-  const total = Number(counted?.toString().trim());
-  if (!Number.isSafeInteger(total) || total < 1) return [];
-  const picks = [...new Set(Array.from({ length: FRAMES_PER_ANIMATION }, (_, i) => Math.floor((i * total) / FRAMES_PER_ANIMATION)))];
-  const out = await run(
-    "ffmpeg",
-    [
-      ...input,
-      "-an",
-      "-vf",
-      `select=${picks.map((n) => `eq(n\\,${n})`).join("+")},` +
-        `scale='min(${LONG_EDGE},iw)':'min(${LONG_EDGE},ih)':force_original_aspect_ratio=decrease`,
-      "-fps_mode", "vfr",
-      "-frames:v", String(picks.length),
-      "-f", "image2pipe", "-c:v", "mjpeg", "-q:v", "3", "pipe:1",
-    ],
-    bytes,
-  );
-  if (!out?.length) return [];
-  // An MJPEG stream is JPEGs back to back. FF D8 FF cannot occur inside one:
-  // its entropy-coded data stuffs every FF with 00.
-  const frames: Buffer[] = [];
-  for (let at = out.indexOf(SOI); at !== -1; ) {
-    const next = out.indexOf(SOI, at + SOI.length);
-    frames.push(out.subarray(at, next === -1 ? undefined : next));
-    at = next;
-  }
-  return frames.slice(0, FRAMES_PER_ANIMATION);
-}
+let decoding: Promise<unknown> = Promise.resolve();
+const oneAtATime = <T>(job: () => Promise<T>): Promise<T> => {
+  const turn = decoding.then(job, job);
+  decoding = turn.catch(() => {});
+  return turn;
+};
+
+/** `count` frame indices out of `total`, evenly spaced from the first frame to the last, in order. */
+export const spread = (total: number, count: number): number[] => {
+  const n = Math.min(count, total);
+  return Array.from({ length: n }, (_, i) => (n === 1 ? 0 : Math.round((i * (total - 1)) / (n - 1))));
+};
+
+/**
+ * Up to four frames of an animation, evenly spaced from first to last, in
+ * order, as JPEG bytes, or none. `ffmpeg` reads from a pipe and writes to one:
+ * nothing touches disk. Its demuxer is forced from the type already checked,
+ * never probed, so the bytes cannot pick a format that opens a file or a URL.
+ * `-protocol_whitelist pipe` is a second wall behind that, untested on its
+ * own: with the demuxer forced, no input reaches it. A canvas over
+ * `MAX_PIXELS` is refused before anything is decoded, decoding is
+ * single-threaded, and one decode runs at a time. A file whose index sits at
+ * its end (an MP4 not built for streaming) cannot be read from a pipe and
+ * yields none.
+ */
+export const takeFrames = (bytes: Buffer, type: AnimationType): Promise<Buffer[]> =>
+  oneAtATime(async () => {
+    const input = ["-v", "error", "-threads", "1", "-protocol_whitelist", "pipe", "-f", DEMUXERS[type], "-i", "pipe:0"];
+    // Packets are counted, not decoded: nothing is decoded until the canvas is known.
+    const probed = await run(
+      "ffprobe",
+      [...input, "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=width,height,nb_read_packets", "-of", "csv=p=0"],
+      bytes,
+    );
+    const [width, height, total] = (probed?.toString().trim().split(",") ?? []).map(Number);
+    if (![width, height, total].every((n) => Number.isSafeInteger(n) && n! > 0)) return [];
+    if (width! * height! > MAX_PIXELS) return [];
+    const picks = spread(total!, FRAMES_PER_ANIMATION);
+    const out = await run(
+      "ffmpeg",
+      [
+        ...input,
+        "-an",
+        "-vf",
+        `select=${picks.map((n) => `eq(n\\,${n})`).join("+")},` +
+          `scale='min(${LONG_EDGE},iw)':'min(${LONG_EDGE},ih)':force_original_aspect_ratio=decrease`,
+        "-fps_mode", "vfr",
+        "-frames:v", String(picks.length),
+        "-f", "image2pipe", "-c:v", "mjpeg", "-q:v", "3", "pipe:1",
+      ],
+      bytes,
+    );
+    if (!out?.length) return [];
+    // An MJPEG stream is JPEGs back to back. FF D8 FF cannot occur inside one:
+    // its entropy-coded data stuffs every FF with 00.
+    const frames: Buffer[] = [];
+    for (let at = out.indexOf(SOI); at !== -1; ) {
+      const next = out.indexOf(SOI, at + SOI.length);
+      frames.push(out.subarray(at, next === -1 ? undefined : next));
+      at = next;
+    }
+    return frames.slice(0, FRAMES_PER_ANIMATION);
+  });
 
 /**
  * The image as stills for `readImage`: up to four frames, in order, when it is
