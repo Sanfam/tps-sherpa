@@ -1,0 +1,22 @@
+{
+  "name": "@tps/site",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "26" },
+  "scripts": {
+    "build": "astro build",
+    "start": "node ./dist/server/entry.mjs",
+    "test": "vitest run",
+    "typecheck": "astro sync && tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.0",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  },
+  "dependencies": {
+    "@astrojs/node": "11.1.9",
+    "astro": "7.4.4",
+    "better-auth": "1.7.14"
+  }
+}
