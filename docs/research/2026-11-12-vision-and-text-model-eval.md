@@ -244,6 +244,34 @@ Both surfaced every must-surface interest in every ordering. GLM's
 this prompt, which carries the whole candidate list, GLM's slowest call was
 slower than DeepSeek's. It is still well inside `FIND_TIMEOUT_MS` (90 s).
 
+## 6b. Latency by provider *(verified 2026-11-12)*
+
+Each model was pinned to one endpoint at a time (`provider.only`, no
+fallbacks, ZDR forced as in production), with 3 calls each through the real
+boundary. Text used the extraction prompt on the golden set's late-signal
+intro. Vision used one public meme still.
+
+| Model, job | Fast (median) | Slow (median) |
+|---|---|---|
+| `deepseek-v4-flash-0731`, text | CoreWeave 5.5 s, Relace 5.5 s | DeepInfra 9.1 s, Wafer 12.9–15.4 s |
+| `glm-5.3-flash`, text | Wafer 1.6 s, Morph 1.7 s | PrimeIntellect 3.5 s, Tenstorrent 4.6 s (one 429), Novita 11.4 s |
+| `deepseek-v4.1-flash-1017`, vision | Particle 1.7 s, Wafer 2.4 s, DeepInfra 3.5 s | Morph 28.2 s; Sail Research returned 404 |
+| `glm-5.3-flash`, vision | Morph 0.8 s, Wafer 0.8 s | PrimeIntellect 4.6 s, Novita 9.2 s |
+
+- **Latency belongs to an endpoint, not to a provider.** Morph is the
+  slowest for DeepSeek vision, and that is where the 18 s median in §2
+  came from. For GLM it is joint fastest. Wafer is the slowest for
+  DeepSeek text and the fastest for GLM. `LLM_PROVIDER` is one routing
+  object for every model, so excluding a provider with `ignore` would
+  slow one model to speed up another.
+- **Only Novita was slow in every GLM test.** It is also never GLM's
+  cheapest endpoint, so the default price-first routing rarely picks it.
+- **Nothing needs to change for GLM.** Its cheapest ZDR endpoint is Wafer,
+  and every unpinned GLM call in §2 and §3 landed there. The routing that
+  slowed DeepSeek vision is gone now that vision is on GLM.
+- The `/find` golden set's 30.6 s GLM call (§6) did not record its
+  provider. Each provider had only three calls, at one time of day.
+
 ## 6a. Not measured
 
 - **The strong role** (summaries, the vocabulary bootstrap), **moderation**
