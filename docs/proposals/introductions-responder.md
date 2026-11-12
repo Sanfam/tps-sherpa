@@ -322,12 +322,12 @@ laboratory science. So:
   13 of the 14 sampled. The owner asked for exactly those to be read
   (2026-10-17), so they are in scope:
   - **attachments** of type `image/png`, `image/jpeg`, `image/webp` or
-    `image/gif`. A GIF is sent as one still frame, taken from the media
-    proxy with `format=jpeg`;
+    `image/gif`. A GIF is sent as up to four frames (*Animated GIFs*, below);
   - **GIF and image links**, meaning a message's `gifv` or `image` embeds
     (Tenor, Giphy, a pasted image URL). The URL is `image.proxy_url` if
     present, otherwise `thumbnail.proxy_url`, since Discord sets either or
-    both. It is sent as a still frame.
+    both. It is sent as a still frame. A `gifv` is sent as up to four frames
+    instead, once *Animated GIFs* is built.
   - At most **3 per message** and **6 per member**, across both paths: the
     `introduction` row's `images_read` and the `invitation` row's together
     (§5).
@@ -336,19 +336,26 @@ laboratory science. So:
     does the downscaling and the GIF frame. Attachment GIFs came back as
     `image/jpeg` *(verified 2026-10-17 in the paid run)*. Link thumbnails
     were fetched without `format` in that run and came back as `image/webp`
-    or `image/gif`; whether `format=jpeg` flattens them is *unverified*.
+    or `image/gif`. With `format=jpeg`, a Klipy link's thumbnail came back as
+    `image/jpeg` *(verified 2026-11-12)*. Tenor and Giphy are unchecked.
     **Only a JPEG response is accepted**: one that is still `image/gif`, or
     PNG or WebP (both can be animated), is skipped, not sent, so an animation
     never goes out whole. Redirects are refused, so the media-proxy allow-list
-    cannot be led off. Any file over 4 MB is skipped too. No
-    image library is added.
+    cannot be led off. Any file over 4 MB is skipped too. This is the
+    still path. GIFs take the frame path in *Animated GIFs* below, which
+    adds a decoder (owner, 2026-11-12).
   - Each is sent as a base64 data URL, so the provider never fetches from
     Discord. It is held in memory for the call only.
-- **The model:** a new `vision` role, `LLM_MODEL_VISION`, set to
-  `deepseek/deepseek-v4.1-flash-1017` (owner, 2026-10-17). Text work stays on
-  `deepseek-v4-flash-0731`, for cost. The vision build has text and image
-  input and more than 9 zero-data-retention endpoints *(verified 2026-10-17
-  against `openrouter.ai/api/v1/models` and `/endpoints/zdr`)*.
+- **The model:** a `vision` role, `LLM_MODEL_VISION`, set to
+  `z-ai/glm-5.3-flash` (owner, 2026-11-12; set on Railway by the owner). It
+  replaced `deepseek/deepseek-v4.1-flash-1017` (owner, 2026-10-17), which
+  had slowed to a median of 18 s. GLM has text, image and video input, and
+  35 zero-data-retention endpoints with JSON mode, none of them Safety
+  Retention *(verified 2026-11-12 against `openrouter.ai/api/v1/models` and
+  `/endpoints/zdr`; the measurements are in
+  `docs/research/2026-11-12-vision-and-text-model-eval.md`)*. Text work
+  stays on `deepseek-v4-flash-0731` until GLM passes the `/find` golden set
+  (that note, §6).
   - **Measured 2026-10-17** *(verified: a paid run under the bot's forced
     routing)*. 14 images and GIFs were taken from `#introductions` (13
     GIFs/memes, 1 image link), fetched into memory and sent inline, and
@@ -364,29 +371,83 @@ laboratory science. So:
     already read memes by their source and as humour (it named the films,
     games and shows they came from). Nemotron read them more literally, and
     once gave identical output for two different GIFs.
-  - **Fallback:** paid `nvidia/nemotron-3.5-super-vl`, which has 5 ZDR
-    endpoints.
+  - **Fallback:** `google/gemma-4-31b-it`: valid JSON 11/11, memes named
+    8/11, median 0.7 s *(verified 2026-11-12)*. Before that it was paid
+    `nvidia/nemotron-3.5-super-vl`.
   - **Not eligible:** `nemotron-3.5-super-vl:free`. Its only endpoint is
     NVIDIA's own, which is not on the ZDR list, so the forced routing refuses
     it. Sending member images to it would also break the privacy policy's
     "only providers that keep no data".
   - **`max_tokens`:** both vision models reason before they answer, so a cap
     of a few hundred tokens returns an empty answer. Use about 2,500.
-  - **GIFs** are sent as one still frame, taken through Discord’s media proxy
-    with `format=jpeg` on every URL, attachment or embed, as above. A still
-    frame was enough to recognise them in the measured run.
+  - **GIFs** are sent as up to four frames (*Animated GIFs*, below). The
+    2026-10-17 run sent one still, which was enough to recognise a meme. It
+    is not enough to read a caption that runs across frames.
   - Routing is unchanged: `data_collection: "deny"` and `zdr: true` are
-    forced by `openai-wire.ts` *(verified: `main`)*.
+    forced by `openai-wire.ts` *(verified: `main`)*. `zdr: true` still admits
+    Safety Retention endpoints, which may keep prompts for abuse monitoring,
+    unless the OpenRouter account is set to **ZDR only** for both Google and
+    all other models. No request field can exclude them. The owner sets this
+    at openrouter.ai/settings/privacy (owner, 2026-11-12).
   - The run above should be repeated with the reading schema before
     `shadow`, against the same kind of images, held in memory only.
+  - **Re-measured 2026-11-12** with the reading schema, on public images
+    only (`docs/research/2026-11-12-vision-and-text-model-eval.md`).
+    `z-ai/glm-5.3-flash` named 11 of 11 memes, at a median of 0.8 s and
+    about $0.00004 an image. This model named 10 of 11, at a median of 18 s
+    and about $0.0002. A single still frame misses a GIF's caption when the
+    words run across frames: 1 of 3 right from one frame, 3 of 3 from four.
+    The owner moved to GLM the same day.
+- **Animated GIFs (owner, 2026-11-12).** A GIF is sent as **up to four
+  evenly spaced JPEG frames, in order, in one vision call**, so the model
+  reads its motion and any words that run across frames. This replaces the
+  one-still rule of 2026-10-17.
+  - **Measured** *(2026-11-12, public and generated GIFs)*. Sent as one
+    image, a GIF reaches the model as its first frame only. Sent as video,
+    the result is unreliable. Sent as four stills, every candidate read the
+    frames in order. For captions spread across frames, the meaning was
+    right 1 of 3 times from one frame and 3 of 3 from four. No model obeyed
+    an instruction written into a frame.
+  - **What still holds.** The animation itself never goes out whole: only
+    stills are sent. They are sent inline and held in memory, never stored,
+    shown or logged. A reading is still a gesture, never interests. The
+    output schema is unchanged.
+  - **Counting.** A GIF counts as one image against the 3-per-message and
+    6-per-member caps, whatever its frame count. At about $0.00004 a frame,
+    a GIF costs about $0.00015.
+  - **Where the frames come from.** Discord's media proxy returns only the
+    first frame when asked for `format=jpeg`, so the bot downloads the
+    animation and takes the frames itself. A GIF attachment is downloaded
+    through the proxy at its own type. A `gifv` link carries an MP4 at
+    `video.proxy_url`, on the same proxy host. *Verified 2026-11-12 on one
+    Klipy `gifv`, Discord's GIF picker:*
+    - its `video` was a 640×640 MP4 at `images-ext-1.discordapp.net`, and
+      the download returned `200 video/mp4` with no redirect, 369 KB, 18
+      frames;
+    - its `thumbnail` was a still WebP, with no animation chunks;
+    - the thumbnail with `format=jpeg` came back as `image/jpeg`, so the
+      still path works for a link too.
+    Downloads keep the existing rules: the allow-listed proxy hosts, no
+    redirects, and a 4 MB cap. A GIF over the cap, or one whose frames
+    cannot be taken, falls back to today's single still.
+  - **Decoding** reverses "no image library is added". Frames are taken
+    with `ffmpeg` in the image, since `gifv` is MP4. It reads from a pipe
+    with the demuxer forced (`gif` or `mp4`, from the type already checked)
+    and the protocols limited to the pipe, under a time limit. Frames go
+    back over a pipe as MJPEG and never touch disk. *Verified 2026-11-12 on
+    that MP4*: 4 evenly spaced JPEG frames came out, and
+    `z-ai/glm-5.3-flash` read them in 0.7 s for $0.0001.
+  - **Still to check in the build:** a GIF attachment, including whether
+    the proxy downscales an animated GIF, and a pasted Tenor or Giphy link,
+    whose `gifv` shape may differ from Klipy's.
 - **Wire change.** `openai-wire.ts` sends `content` as a string today. For
   vision calls it sends the OpenAI multipart form (`text` and `image_url`
   parts). The OpenRouter host check and the forced routing are unchanged.
 - **Containment.** An image cannot be redacted: a name written in a photo
   leaves as it is. Output validation still applies, and nothing the model
   writes reaches Discord.
-- **Cost:** about $0.00017 per image measured, so under $0.001 per intro at
-  the 6-image cap.
+- **Cost:** about $0.00004 per still with GLM and about $0.00015 per GIF
+  *(measured 2026-11-12)*, so under $0.001 per intro at the 6-image cap.
 
 ### Matching
 

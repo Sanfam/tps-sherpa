@@ -42,7 +42,7 @@ import {
   shadowPost,
   widestDoors,
 } from "./responder-decide.ts";
-import { fetchStill, imagesOf } from "./responder-images.ts";
+import { fetchStills, imagesOf } from "./responder-images.ts";
 import { type Introduction, MAX_EXCHANGES, type Outcome, type Reason, type ResponderStore } from "./responder-store.ts";
 import { timingSettings } from "./sherpa-command.ts";
 
@@ -483,12 +483,12 @@ export const createResponder = (deps: ResponderDeps) => {
     if (!deps.store((s) => s.claimImages(watch.memberId, message.id, images.length))) return;
     for (const image of images) {
       if (!current(watch)) return;
-      const dataUrl = await fetchStill(image, deps.fetchImage);
-      if (!dataUrl) continue;
+      const stills = await fetchStills(image, deps.fetchImage);
+      if (!stills.length) continue;
       const reading = await paid(watchGuard(watch), (s) =>
         s.boundary.readImage({
           memberId: watch.memberId,
-          image: { authorId: message.author.id, origin: message.channel_id, dataUrl },
+          image: { authorId: message.author.id, origin: message.channel_id, stills },
         }),
       );
       if (reading) watch.imageMeaning = reading.meaning;
@@ -716,10 +716,10 @@ export const createResponder = (deps: ResponderDeps) => {
       let meaning: ImageMeaning | null = null;
       for (const image of images.slice(0, granted)) {
         if (!guard.current()) return;
-        const dataUrl = await fetchStill(image, deps.fetchImage);
-        if (!dataUrl) continue;
+        const stills = await fetchStills(image, deps.fetchImage);
+        if (!stills.length) continue;
         const reading = await paid(guard, (s) =>
-          s.boundary.readImage({ memberId, image: { authorId: memberId, origin: message.channel_id, dataUrl } }),
+          s.boundary.readImage({ memberId, image: { authorId: memberId, origin: message.channel_id, stills } }),
         );
         if (reading) {
           read++;

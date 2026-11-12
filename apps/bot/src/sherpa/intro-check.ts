@@ -97,7 +97,7 @@ for (const url of images) {
   const dataUrl = `data:${type};base64,${body.toString("base64")}`;
   const reading = await boundary.readImage({
     memberId: MEMBER,
-    image: { authorId: MEMBER, origin: WATCHED_CHANNEL, dataUrl },
+    image: { authorId: MEMBER, origin: WATCHED_CHANNEL, stills: [dataUrl] },
   });
   console.log("reading:", JSON.stringify(reading));
 }

@@ -50,8 +50,8 @@ export interface ChatPort {
     model: string;
     system: string;
     user: string;
-    /** A base64 data URL. Present on a vision call only. */
-    image?: string;
+    /** Base64 data URLs, in order. Present on a vision call only. */
+    images?: string[];
   }) => Promise<string>;
 }
 
@@ -142,10 +142,10 @@ export interface IntroductionImage {
   origin: Origin;
   /**
    * `data:image/jpeg;base64,…`, inline, so the provider never fetches from
-   * Discord. A still: a GIF is a frame taken by Discord's media proxy, and
-   * an animation never goes out whole.
+   * Discord. Stills only: one for a still image; for an animation, up to
+   * four of its frames, in order. An animation never goes out whole.
    */
-  dataUrl: string;
+  stills: string[];
 }
 
 /** A `moderation` source's text: written in a Catalog Entity, by id. */
@@ -413,6 +413,8 @@ const IMAGE_PROMPT = [
 
 /** Inline, and a still: never a link the provider would fetch, never an animation. */
 const INLINE_STILL = /^data:image\/(jpeg|png|webp);base64,/;
+/** An animation's frames per call, at most: the reading's cost bound (§4, Animated GIFs). */
+const MAX_STILLS = 4;
 
 const parseReading = (value: unknown): ImageReading => {
   const answer = value as Record<string, unknown> | null;
@@ -656,7 +658,7 @@ export const createBoundary = (deps: BoundaryDeps) => {
     model: string;
     system: string;
     user: string;
-    image?: string;
+    images?: string[];
     patterns: RegExp[];
   }): Promise<unknown> => {
     // The system prompt is our own text, so it is validated rather than
@@ -670,7 +672,7 @@ export const createBoundary = (deps: BoundaryDeps) => {
       model: request.model,
       system: request.system,
       user: request.user,
-      ...(request.image === undefined ? {} : { image: request.image }),
+      ...(request.images === undefined ? {} : { images: request.images }),
     });
 
     let parsed: unknown;
@@ -933,8 +935,9 @@ export const createBoundary = (deps: BoundaryDeps) => {
      */
     readImage: async (request: { memberId: string; image: IntroductionImage }): Promise<ImageReading | null> => {
       refuseForeign(request.memberId, [request.image]);
-      if (!INLINE_STILL.test(request.image.dataUrl))
-        throw new Error("readImage sends an inline still only: a base64 JPEG, PNG or WebP data URL.");
+      const { stills } = request.image;
+      if (!stills.length || stills.length > MAX_STILLS || !stills.every((s) => INLINE_STILL.test(s)))
+        throw new Error(`readImage sends 1 to ${MAX_STILLS} inline stills only: base64 JPEG, PNG or WebP data URLs.`);
       if (hasOptedOut(request.memberId)) return null;
       const model = deps.models.vision;
       if (!model) throw new Error("LLM_MODEL_VISION must be set to read an image.");
@@ -942,8 +945,9 @@ export const createBoundary = (deps: BoundaryDeps) => {
         await call({
           model,
           system: IMAGE_PROMPT,
-          user: "The member's image:",
-          image: request.image.dataUrl,
+          // The framing the 2026-11-12 measurements used, word for word.
+          user: stills.length > 1 ? `The member's GIF, as ${stills.length} frames in order:` : "The member's image:",
+          images: stills,
           patterns: namePatterns,
         }),
       );
