@@ -327,4 +327,7 @@ text and vision call was answered by Wafer.
    DeepSeek until summaries are compared. Moderation and mention replies
    also run on the cheap model and were not compared (§6a).
 
-Open, not decided: shipping the fenced extraction prompt (§4a).
+5. **The fenced extraction prompt ships** (owner, 2026-11-12; PR #77). On the
+   shipped prompt, DeepSeek 0731 and GLM each held 27/27 attacks. GLM got
+   18/18 genuine intros right. DeepSeek got 15/18, all three misses its
+   existing habit of dropping "Ohio" (§4).
