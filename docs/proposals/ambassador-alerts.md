@@ -152,7 +152,7 @@ view and send there.
 | Data | Where | How long |
 |---|---|---|
 | `alert_subscription` | `bot.db` | Until the holder turns it off, or runs `delete-my-data` |
-| `alert_sent` | `bot.db` | Indefinite, as tombstones are (D50-5). Ids and times only |
+| `alert_sent` | `bot.db` | Indefinite, as tombstones are (D50-5). Ids and times only. Since #58, an `intro` row for every first introduction seen, alerted on or not |
 | The posted alerts | `#ambassador-chamber` | Staff's to delete. Sherpa never deletes its posts (as F6) |
 
 No member text is read beyond what the responder already reads, and nothing
@@ -260,3 +260,14 @@ D50-1 to D50-7 are accepted as recommended.
   Since 2026-10-19, everything under the `👮 Staff` category, this Channel
   included, is excluded by the sync itself (owner), so no manual exclusion is
   needed.
+
+## As built: #58 (2026-11-12)
+
+- **A first introduction is recorded even when no alert may go** about it:
+  the switch off, the checks failing, the responder's seed not yet complete,
+  or the member's `approach` off,
+  whatever the responder's mode (owner, 2026-11-11). It is the same `intro`
+  claim in `alert_sent`, taken without a post, so the member's next top-level
+  message is not announced as a "New introduction" once alerts could go. No
+  schema change. Ids and times only, kept as D50-5 keeps every `alert_sent`
+  row, through `delete-my-data` too.

@@ -92,7 +92,10 @@ export interface Generation {
  * which Ambassadors and Staff are opted in to which alert, until they turn it
  * off or delete their data; and `alert_sent`, one alert per member, per event,
  * per `joined_at`, kept indefinitely and through erasure, as tombstones are
- * (D50-5). Ids and times only.
+ * (D50-5). Ids and times only. An `intro` row is written for every first
+ * introduction seen, alerted on or not: while the alerts are off or paused,
+ * or the member has `approach` off, it is the only record that they posted
+ * one (#58).
  *
  * User Monitoring's two (#52; through `sherpa/watch.ts` only): `watch`, one
  * per member, Staff's triggers and who set it, deleted when it ends (at most

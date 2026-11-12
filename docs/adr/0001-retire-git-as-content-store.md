@@ -95,7 +95,7 @@ Reader gating is still not a criterion. The CMS selection will be ADR-0002.
 - **Phases:**
   - The git destination in Phase 1, "Sync engine → git"
   - Phase 6 migrating Wiki.js content "to markdown, commit". It now migrates into the CMS.
-  - The bot's CI build-failure alarm now covers code only.
+  - The bot's CI build-failure alarm now covers code only. *(Later dropped altogether, owner, 2026-11-11: GitHub reports CI failures on the reviewed PRs.)*
 - **"A content database" as an anti-goal, and "What would force a content database later".** A database is now the content store, and Postgres is an open option for the site rather than an anti-goal (see Decision).
 - **Bot backup timing.** Durable bot backup now begins with the Catalog's first deployed write, not Phase 3.
 

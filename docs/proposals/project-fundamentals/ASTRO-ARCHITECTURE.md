@@ -110,7 +110,6 @@ So reader gating is ours, and **that is precisely what makes the CMS swappable.*
 │  • Tier 0 capture            │
 │  • LLM tagging + summaries   │
 │  • Papa Sherpa               │
-│  • build-failure alarm       │
 │  • private snapshot endpoint │
 └──────┬───────────────────────┘
        │  bot.db   — Catalog, overrides, exclusions,
@@ -632,7 +631,7 @@ Flip shadow mode off after ≥2 weeks of reviewed output. Full spec in `PROJECT-
 
 ### Cross-cutting
 
-**Build-failure alarm.** The bot watches CI and posts to a dedicated mod channel on failure — another reason the bot comes early. CI covers code only since ADR-0001. A rejected Catalog snapshot raises its own alert from the site.
+**Build-failure alarm: dropped** (owner, 2026-11-11). Since ADR-0001 every change lands through a reviewed PR with CI, and GitHub reports failures; a rejected Catalog snapshot still raises its own alert from the site.
 
 ---
 

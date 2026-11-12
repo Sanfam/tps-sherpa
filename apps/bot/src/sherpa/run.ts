@@ -20,7 +20,8 @@
  * through the same gateway, and adds `GuildMembers` (owner, 2026-10-18): every
  * join, member update and departure in the guild then arrives. Only a
  * member's id, roles and `joined_at` are read; the alerts keep the id and
- * `joined_at` of those they alert about, and drop the rest unstored and
+ * `joined_at` of those they alert about, and of those whose introduction they
+ * see while no alert may go (#58), and drop the rest unstored and
  * unlogged. User Monitoring (watch.ts) reads the same gateway: a watched
  * member's own messages, buffered in memory, and their departure. So do the
  * mention replies (mentions.ts): a message that mentions Sherpa, and the ten
