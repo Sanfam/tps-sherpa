@@ -34,7 +34,7 @@ const staffOnly = entity({ id: "12", name: "staff-chat", view_roles: [STAFF_ROLE
 const withheld = entity({ id: "13", name: "quiet", description_status: "withheld" });
 const underStaff = entity({ id: "14", name: "a thread", type: "thread", parent_id: staffOnly.id });
 
-const fixture = (reply: string, optedOut: string[] = []) => {
+const fixture = (reply: string, optedOut: string[] = [], memberNames: Array<{ id: string; name: string }> = []) => {
   const calls: string[] = [];
   const chat: ChatPort = {
     complete: async ({ user }) => {
@@ -50,6 +50,7 @@ const fixture = (reply: string, optedOut: string[] = []) => {
     monitored: new Set([intros.id]),
     names: { channels: new Map(), roles: new Map() },
     hasOptedOut: (id) => optedOut.includes(id),
+    memberNames,
   });
   return { boundary, calls };
 };
@@ -57,7 +58,7 @@ const fixture = (reply: string, optedOut: string[] = []) => {
 const subject: ModerationSubject = {
   memberId: SUBJECT,
   memberNames: ["Jughfer"],
-  otherNames: ["Wilbur"],
+  otherNames: [{ id: OTHER, name: "Wilbur" }],
   memberRoles: [MEMBER_ROLE],
 };
 
@@ -82,15 +83,24 @@ describe("the moderation origin", () => {
   it("replaces a subject's short name, which the usual rule would leave", async () => {
     const { boundary, calls } = fixture(CHUNK);
     await boundary.analyseChunk({ ...subject, memberNames: ["Al", "Q"] }, [message(0, { content: "Al here, back again, Q too" })]);
-    expect(calls[0]).toContain("@member here, back again, @member too");
+    expect(calls[0]).toContain("the member here, back again, the member too");
   });
 
   it("replaces a context author's name that collides with a place, yet lets the review say the word", async () => {
     const reply = { authorId: OTHER, authorIsBot: false, content: "general says hi", origin: general.id };
     const { boundary, calls } = fixture(CHUNK.replace("Organised a raid", "Posts in general"));
-    const result = await boundary.analyseChunk({ ...subject, otherNames: ["general"] }, [message(0, {}, reply)]);
-    expect(calls[0]).toContain("replying to another member: @member says hi");
+    const result = await boundary.analyseChunk({ ...subject, otherNames: [{ id: OTHER, name: "general" }] }, [message(0, {}, reply)]);
+    expect(calls[0]).toContain("replying to another member: member A says hi");
     expect(result.events[0]!.note).toBe("Posts in general");
+  });
+
+  it("gives a member one label across every call of one review", async () => {
+    // The reduce reads every chunk's notes together: a label that meant someone else in another chunk would merge two people.
+    const { boundary, calls } = fixture(CHUNK, [], [{ id: "601", name: "Alice" }, { id: "602", name: "Bob" }]);
+    await boundary.analyseChunk(subject, [message(0, { content: "Alice met Bob" })]);
+    await boundary.analyseChunk(subject, [message(0, { content: "Bob left" })]);
+    expect(calls[0]).toContain("member A met member B");
+    expect(calls[1]).toContain("member B left");
   });
 
   it("refuses another author's message, and any from a place a Member cannot see or a withheld one", async () => {
@@ -110,7 +120,7 @@ describe("the moderation origin", () => {
     const reply = { authorId: OTHER, authorIsBot: false, content: "Wilbur says hi to the newcomer", origin: general.id };
     const { boundary, calls } = fixture(CHUNK, [SUBJECT]);
     await boundary.analyseChunk(subject, [message(0, {}, reply)]);
-    expect(calls[0]).toContain("replying to another member: @member says hi");
+    expect(calls[0]).toContain("replying to another member: member A says hi");
     const optedOut = fixture(CHUNK, [OTHER]);
     await optedOut.boundary.analyseChunk(subject, [message(0, {}, reply)]);
     expect(optedOut.calls[0]).not.toContain("says hi");

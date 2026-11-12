@@ -114,7 +114,7 @@ describe("recentSources", () => {
   });
 
   it("drops messages with no words in them, including a bare mention", () => {
-    // A lone mention would reach the model as "@member" and invite it to
+    // A lone mention would reach the model as "member A" and invite it to
     // invent a subject.
     expect(
       recentSources([msg("1", "🎉🎉"), msg("2", ""), msg("3", "<@732682426853359667>"), msg("4", "<:pog:123> https://x.y/z"), msg("5", "10/10"), msg("6", "HTTPS://Example.com/x"), msg("7", "www.example.com"), msg("8", "discord.gg/raid"), msg("9", "example.com"), msg("10", "example.com?invite=raid"), msg("11", "mailto:dave@example.com")]),
@@ -225,6 +225,8 @@ describe("checkActivity", () => {
   });
 
   it("rejects a line that talks about a mentioned member", () => {
-    expect(checkActivity("@member is asking about co-op")).toEqual({ reason: "names-a-member" });
+    for (const line of ["member A is asking about co-op", "MEMBER A is asking about co-op", "@MEMBER is asking about co-op", "member  A is asking about co-op", "member\nA is asking about co-op", "member\u00a0A is asking about co-op"])
+      expect(checkActivity(line), line).toEqual({ reason: "names-a-member" });
+    expect(checkActivity("Members compare raid tips; a new member asks about co-op.")).toBeNull();
   });
 });

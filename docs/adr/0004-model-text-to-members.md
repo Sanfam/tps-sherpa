@@ -74,7 +74,10 @@ are made against that.
   dropped. An asker with processing off gets the fixed opt-out text, and no
   call is made.
 - Speakers are labelled "the asker", "member A", "member B" and "Sherpa", and
-  a mention of Sherpa reads as "Sherpa". Every author's username, global name
+  a mention of Sherpa reads as "Sherpa". A member mentioned or named in the
+  text gets the same label they would have as a speaker, and a name more than
+  one member holds reads "a member" (#71). Labels are made fresh for each call
+  and never mapped back to anyone. Every author's username, global name
   and server nickname (looked up per author, since a message read over REST
   carries none) and every mentioned user's names are redacted on the way out
   and refused on the way back, with the member-name cache. Sherpa's own names
@@ -112,12 +115,11 @@ name it knows. Shadow mode is where that is measured, and the switch turns it of
 
 - **`#bot-tests`** is answered: a valid place for Staff to test (owner,
   2026-10-20).
-
-## Open, for the owner
-
-- **`#ambassador-chamber`** (Staff talk about new members, and the alerts)
-  is answered today. Whether to refuse it as the User Monitoring Forum is
-  refused.
+- **`#ambassador-chamber`** is answered (owner, 2026-11-11). The channel is meant for Staff and Ambassadors, who find Sherpa
+  useful there. Discord's permissions on the channel decide who sees a reply,
+  not this path. Its context
+  is frank talk about new members, which redaction de-identifies only as far as
+  names go. The owner accepted that.
 
 ## Consequences
 

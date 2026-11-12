@@ -105,7 +105,7 @@ export const newestId = (messages: StoredMessage[]): string | undefined =>
  * then everything but letters and digits — spacing included, so "co-op
  * tonight" and "co op tonight" are one message. A message that is only a
  * mention or an emoji comes out empty and is dropped, rather than reaching the
- * model as "@member" and inviting it to invent a subject.
+ * model as a bare "member A" and inviting it to invent a subject.
  */
 const normalised = (text: string): string =>
   text
@@ -289,12 +289,16 @@ export type ActivityRejection =
 /**
  * Checked on the way back, after the boundary's own validation.
  *
- * `@member` is what the boundary turns a mention into; a summary that repeats
- * it is describing a person, which the prompt forbids and this enforces.
+ * `member A`, `member B`… is what the boundary turns a mention or a known
+ * name into, and `@member` what a published description holds; a summary
+ * that repeats either is describing a person, which the prompt forbids and
+ * this enforces.
  */
 export const checkActivity = (summary: string): ActivityRejection | null => {
   const words = wordCount(summary);
   if (words > MAX_ACTIVITY_WORDS) return { reason: "too-long", words };
-  if (/@member/i.test(summary)) return { reason: "names-a-member" };
+  // "member" in any case, its letters capitals only: "a member of" is prose, not a label.
+  if (/@member/i.test(summary) || /\b[Mm][Ee][Mm][Bb][Ee][Rr]\s+[A-Z]{1,3}\b/u.test(summary))
+    return { reason: "names-a-member" };
   return null;
 };
