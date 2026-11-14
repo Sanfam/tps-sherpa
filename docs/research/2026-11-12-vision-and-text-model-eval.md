@@ -362,7 +362,12 @@ the owner rejected it as too small a sample, rightly.
 3. **GIFs are sent as up to four frames** (§3). The design and its first
    packet are in the proposal, §4 *Animated GIFs*.
 4. **`LLM_MODEL_CHEAP` moves to GLM once the `/find` golden set passes** in
-   the container. It passed on 2026-11-12 (§6). `LLM_MODEL_STRONG` stays on
+   the container. It passed on 2026-11-12 (§6). **Since 2026-11-14 (owner),
+   `LLM_MODEL_STRONG` is GLM too: every role runs on it, under the
+   price-sorted routing.** The vocabulary bootstrap, which GLM never finished
+   on 2026-09-03, completed on it on 2026-11-14. It was run on the live
+   Catalog from an isolated copy that wrote nothing to the bot's volume: 3
+   runs, 25 tags, 6 min 20 s. Before that, `LLM_MODEL_STRONG` stayed on
    DeepSeek until summaries are compared. Moderation and mention replies
    also run on the cheap model. They were compared on 2026-11-13 and fixed
    for both models (§6d).
