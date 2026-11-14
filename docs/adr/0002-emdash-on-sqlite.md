@@ -1,7 +1,6 @@
 # ADR-0002: EmDash, inside the Astro site, on SQLite
 
-**Status:** Proposed, 2026-10-16; revised 2026-10-17. Awaiting the owner's acceptance.
-**Not ready for acceptance until the open items below are resolved.**
+**Status:** Proposed, 2026-10-16; revised 2026-10-17. **The owner chose EmDash for a trial build, 2026-11-14.** The trial builds the open items below; the ADR is accepted once they are met, and the fallback still applies if one cannot be.
 **Builds on:** [ADR-0001](0001-retire-git-as-content-store.md), which opened database-backed CMSs and left the site's datastore open.
 
 ## Context
@@ -43,7 +42,7 @@ Two spikes ran (`docs/research/2026-10-16-emdash-spike.md`), on EmDash 1.1.0 ins
 
 - scope `identify` only, with PKCE and state bound to the browser;
 - membership and roles read with the bot token on each private CMS request, behind a short cache that also holds refusals: "each request" becomes "within the TTL";
-- Staff map to Admin, and Club Leads to Author;
+- Staff map to Admin, and Club Leads and Events Managers to Author *(Events Managers added 2026-11-14, so the book club's voting page can be owned by an Events Manager who runs it. Every Events Manager can then write and own pages, and read drafts, as Club Leads can. This is the simplest grant that meets the owner's "give Ben edit powers over it"; a narrower one would need a per-user grant EmDash does not offer through external auth)*;
 - a Member with no editor role is refused, and gets no row;
 - a gate in `middleware.outer`, built as an **allow-list**, decides which `/_emdash` routes Members, editors and Viewers may reach. EmDash's own credential routes (OAuth server, device flow, API tokens, OAuth clients, MCP, `setup/admin`, `preview-url`) are not on it. The spike built a deny-list instead; see open item 2.
 
@@ -69,7 +68,7 @@ Two spikes ran (`docs/research/2026-10-16-emdash-spike.md`), on EmDash 1.1.0 ins
     - the FTS5 index (open item 4).
   - Both are re-checked on every upgrade, like the prune job.
   - **Both mechanisms rest on things EmDash does not document.** The prune job writes to an internal table. A custom descriptor `entrypoint` is a public type used in an undocumented way. Both are re-checked on every EmDash upgrade, with the pin.
-- **Club scoping is EmDash's per-author ownership.** It was chosen because no plugin can enforce per-club scoping through a documented, supported seam (note §7).
+- **Club scoping is EmDash's per-author ownership** *(confirmed 2026-11-14 as the barrier to use: no code of ours; Staff as Admin edit everything)*. It was chosen because no plugin can enforce per-club scoping through a documented, supported seam (note §7).
   - An Author edits and publishes only their own entries.
   - Staff reassign each migrated club page to its Club Lead, and again at every handover.
   - Co-leads cannot share a page.

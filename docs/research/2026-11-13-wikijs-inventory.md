@@ -35,8 +35,9 @@ name members.
 **`papasquad/threads-and-channels` is the script-generated channel index**
 that PROJECT-STATUS.md calls stale, and the hub site's Catalog replaces it.
 It is kept in the export like every other page, since the handoff says all
-content migrates and none is lost. Whether it is published again is the
-owner's call. Without it, the rest is 22 short pages.
+content migrates and none is lost. **The owner decided on 2026-11-14 to
+replace it with the Catalog** rather than publish it again. Without it, the
+rest is 22 short pages.
 
 ## Images and assets
 
