@@ -293,9 +293,9 @@ top; the request body was checked. Unpinned under this setting, every GLM
 text and vision call was answered by Wafer.
 
 - **Caveat:** under it, DeepSeek 0731 also routes to Wafer, its lowest input
-  price, and that is its slowest endpoint on real prompts. Set this routing
-  together with `LLM_MODEL_CHEAP=z-ai/glm-5.3-flash`. DeepSeek is then left
-  only with the strong role's batch jobs.
+  price, and that is its slowest endpoint on real prompts. Since 2026-11-14
+  every role is GLM (§7), so nothing runs on DeepSeek. Switching a role back
+  to it means revisiting this routing.
 - **Excluding Wafer would not help:** it is GLM's best endpoint.
 
 ### 6d. Mention replies and moderation on the cheap model *(verified 2026-11-13)*
@@ -341,7 +341,8 @@ the owner rejected it as too small a sample, rightly.
 
 ## 6a. Not measured
 
-- **The strong role** (summaries, the vocabulary bootstrap). Moderation and
+- **The strong role's identity summaries on GLM.** None were due when it
+  switched (2026-11-14). The vocabulary bootstrap was run (§7). Moderation and
   mention replies were compared later, in §6d.
 - **Real `#introductions` images**, which the 2026-10-17 run used.
 

@@ -15,7 +15,9 @@ name members.
   as the owner authorised.
 - **Guests can list pages and assets and read rendered pages, but not
   the Markdown source:** `pages.single` answers "You are not authorized".
-  The migration itself needs a Wiki.js API key, or a signed-in session.
+  Every published page's content was rebuilt from what guests can read.
+  Only the exact Markdown source and the one unpublished draft need a
+  signed-in session or an API key.
 
 ## The corpus *(verified 2026-11-13)*
 
@@ -30,9 +32,11 @@ name members.
 | Tags | on 10 pages |
 | Markup in use | lists, `h2`/`h3`, blockquotes, one table, one code block. No diagrams or embeds |
 
-**`papasquad/threads-and-channels` should not migrate.** It is the
-script-generated channel index that PROJECT-STATUS.md calls stale. The hub
-site's Catalog replaces it. Without it, the migration is 22 short pages.
+**`papasquad/threads-and-channels` is the script-generated channel index**
+that PROJECT-STATUS.md calls stale, and the hub site's Catalog replaces it.
+It is kept in the export like every other page, since the handoff says all
+content migrates and none is lost. Whether it is published again is the
+owner's call. Without it, the rest is 22 short pages.
 
 ## Images and assets
 
@@ -48,13 +52,14 @@ site's Catalog replaces it. Without it, the migration is 22 short pages.
 
 ## Reconstituted *(2026-11-14, owner: "what matters is the content")*
 
-The 22 published pages were rebuilt as Markdown from the rendered pages,
+All 23 published pages, the stale index included, were rebuilt as Markdown
+from the rendered pages,
 with front matter: title, path, tags, dates, and the source URL. All 66
 downloadable assets were saved, and image links point at the local copies.
 The export is kept **out of git** in `.wiki-export/` (excluded locally,
 ADR-0001), with a README listing what was left out and the rough edges:
 
-- the unpublished draft and the stale index were left out;
+- the unpublished draft is not in it: it needs a signed-in read;
 - one asset with no extension would not download;
 - one dead Discord-CDN image;
 - the book club's cover grid came out flattened.
