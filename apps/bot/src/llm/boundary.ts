@@ -482,7 +482,7 @@ const MAX_MENTION_CONTEXT = 10;
 const MAX_CONTEXT_TEXT = 300;
 
 /** A scheme, `www.`, an invite, or a domain with a path: anything Discord could turn into a link. */
-const URLISH = /[a-z][a-z0-9+.-]*:\/\/|www\.|discord\.gg|\b[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z][a-z0-9-]*\/\S/i;
+export const URLISH = /[a-z][a-z0-9+.-]*:\/\/|www\.|discord\.gg|\b[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z][a-z0-9-]*\/\S/i;
 
 /**
  * ADR-0004's refusals, beyond `validate`'s: a refused line is dropped, never
