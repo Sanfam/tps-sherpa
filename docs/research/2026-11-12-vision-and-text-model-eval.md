@@ -293,9 +293,9 @@ top; the request body was checked. Unpinned under this setting, every GLM
 text and vision call was answered by Wafer.
 
 - **Caveat:** under it, DeepSeek 0731 also routes to Wafer, its lowest input
-  price, and that is its slowest endpoint on real prompts. Set this routing
-  together with `LLM_MODEL_CHEAP=z-ai/glm-5.3-flash`. DeepSeek is then left
-  only with the strong role's batch jobs.
+  price, and that is its slowest endpoint on real prompts. Since 2026-11-14
+  every role is GLM (§7), so nothing runs on DeepSeek. Switching a role back
+  to it means revisiting this routing.
 - **Excluding Wafer would not help:** it is GLM's best endpoint.
 
 ### 6d. Mention replies and moderation on the cheap model *(verified 2026-11-13)*
@@ -341,7 +341,8 @@ the owner rejected it as too small a sample, rightly.
 
 ## 6a. Not measured
 
-- **The strong role** (summaries, the vocabulary bootstrap). Moderation and
+- **The strong role's identity summaries on GLM.** None were due when it
+  switched (2026-11-14). The vocabulary bootstrap was run (§7). Moderation and
   mention replies were compared later, in §6d.
 - **Real `#introductions` images**, which the 2026-10-17 run used.
 
@@ -362,7 +363,12 @@ the owner rejected it as too small a sample, rightly.
 3. **GIFs are sent as up to four frames** (§3). The design and its first
    packet are in the proposal, §4 *Animated GIFs*.
 4. **`LLM_MODEL_CHEAP` moves to GLM once the `/find` golden set passes** in
-   the container. It passed on 2026-11-12 (§6). `LLM_MODEL_STRONG` stays on
+   the container. It passed on 2026-11-12 (§6). **Since 2026-11-14 (owner),
+   `LLM_MODEL_STRONG` is GLM too: every role runs on it, under the
+   price-sorted routing.** The vocabulary bootstrap, which GLM never finished
+   on 2026-09-03, completed on it on 2026-11-14. It was run on the live
+   Catalog from an isolated copy that wrote nothing to the bot's volume: 3
+   runs, 25 tags, 6 min 20 s. Before that, `LLM_MODEL_STRONG` stayed on
    DeepSeek until summaries are compared. Moderation and mention replies
    also run on the cheap model. They were compared on 2026-11-13 and fixed
    for both models (§6d).
