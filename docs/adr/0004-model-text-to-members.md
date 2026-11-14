@@ -42,7 +42,8 @@ and no member name, keys included. On top of that, `line` is **refused**, never
 repaired, if it:
 
 - is longer than **500 characters** (code points);
-- holds a URL, a domain with a path, or `discord.gg`;
+- holds a URL, a domain with a path, or `discord.gg`. A bare domain with no
+  path (`bit.ly`) is not refused; the owner accepted that on 2026-11-14;
 - holds any `<`, `>` or `@`, which rules out every Discord mention, emoji and
   timestamp markup;
 - holds `||` or `](`, Discord markdown that hides text or masks a link;
