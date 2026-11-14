@@ -317,7 +317,11 @@ Neither model repeated the child's name or age, followed the injection, or
 took sides. GLM separated its two paragraphs with a blank line; a prompt line
 saying not to did not help (5/40). The answer is now
 `paragraphs: [string]`, which code joins with one line break (ADR-0004,
-amended). With that, GLM was refused 1/40 and DeepSeek 0/40.
+amended). With that, GLM was refused 1/40 and DeepSeek 0/40. In review, the
+joined line is checked again for member names, since a name split across the
+join exists only once joined. A name now matches across any run of
+whitespace, a line break included, and every Unicode line separator counts as
+a line break.
 
 **Moderation, O5 (no child details):** 3 histories, each with a different
 child detail (name, age and hospital stay; name and school; age and autism
@@ -337,10 +341,8 @@ the owner rejected it as too small a sample, rightly.
 
 ## 6a. Not measured
 
-- **The strong role** (summaries, the vocabulary bootstrap), **moderation**
-  (`moderation.ts`), and **mention replies**. Mention replies are the
-  ADR-0004 path whose words reach members, so a model change there needs
-  its own check of voice and of the output bounds.
+- **The strong role** (summaries, the vocabulary bootstrap). Moderation and
+  mention replies were compared later, in §6d.
 - **Real `#introductions` images**, which the 2026-10-17 run used.
 
 ---
@@ -362,7 +364,8 @@ the owner rejected it as too small a sample, rightly.
 4. **`LLM_MODEL_CHEAP` moves to GLM once the `/find` golden set passes** in
    the container. It passed on 2026-11-12 (§6). `LLM_MODEL_STRONG` stays on
    DeepSeek until summaries are compared. Moderation and mention replies
-   also run on the cheap model and were not compared (§6a).
+   also run on the cheap model. They were compared on 2026-11-13 and fixed
+   for both models (§6d).
 
 5. **The fenced extraction prompt** (owner, 2026-11-12) is PR #77, merged
    after this note's PR. Until it lands, extraction runs the unfenced prompt

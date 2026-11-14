@@ -266,7 +266,9 @@ export const namePattern = (name: string): RegExp => namesPattern([name], "iu");
 /** Any one of `names`, bounded as `namePattern` bounds one, tried in the order given. */
 const namesPattern = (names: string[], flags: string): RegExp =>
   new RegExp(
-    `(?<![\\p{L}\\p{N}])(?:${names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})(?![\\p{L}\\p{N}])`,
+    // Any run of whitespace in a name matches any run in the text, line breaks
+    // included: "John Doe" across a line break, or with two spaces, is still the name.
+    `(?<![\\p{L}\\p{N}])(?:${names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+")).join("|")})(?![\\p{L}\\p{N}])`,
     flags,
   );
 
@@ -493,7 +495,8 @@ const lineRefusal = (line: string): string | null => {
   if (URLISH.test(line)) return "holds a link";
   if (/[<>@]/.test(line)) return "holds Discord markup";
   if (line.includes("||") || line.includes("](")) return "holds hiding or link markdown";
-  if ((line.match(/\r\n|\r|\n/g)?.length ?? 0) > 1) return "has more than one line break";
+  // Every line separator, not only CR and LF: U+2028 and U+2029 break a line too.
+  if ((line.match(/\r\n|[\r\n\v\f\u0085\u2028\u2029]/g)?.length ?? 0) > 1) return "has more than one line break";
   return null;
 };
 
@@ -1040,9 +1043,13 @@ export const createBoundary = (deps: BoundaryDeps) => {
         "The asker's message to you:",
         out(request.question.content, MAX_INTRO_TEXT) || "(just your name)",
       ].join("\n");
-      return parseMentionReply(
+      const reply = parseMentionReply(
         await call({ model: deps.models.cheap, system: mentionPrompt(request.voice), user, patterns }),
       );
+      // `call` checked each paragraph; a name split across two only exists once
+      // they are joined, so the line as posted is checked again.
+      validate(reply.line, patterns);
+      return reply;
     },
   };
 };

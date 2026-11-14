@@ -667,11 +667,16 @@ describe("replyToMention (ADR-0004)", () => {
       [["one", "two", "three"], /not the reply shape/],
       [[], /not the reply shape/],
       [["one\ntwo", "three"], /line break/],
+      [["one\u2028two", "three"], /line break/],
+      [["one\u2029two\u2029three"], /line break/],
       [["  ", ""], /empty/],
     ] as const) {
       const { chat } = fixtureChat(JSON.stringify({ intent: "chat", paragraphs }));
       await expect(mentionBoundary(chat).replyToMention(mention()), JSON.stringify(paragraphs)).rejects.toThrow(why);
     }
+    // A name split across the join exists only in the joined line: each paragraph alone passes.
+    const split = fixtureChat(JSON.stringify({ intent: "chat", paragraphs: ["John", "Doe says hi"] }));
+    await expect(mentionBoundary(split.chat).replyToMention(mention({ askerNames: ["John Doe"] }))).rejects.toThrow(/names a member/);
     const { chat } = fixtureChat(JSON.stringify({ intent: "chat", paragraphs: [" Hi there. ", "", ] }));
     await expect(mentionBoundary(chat).replyToMention(mention())).resolves.toEqual({ intent: "chat", line: "Hi there." });
   });
