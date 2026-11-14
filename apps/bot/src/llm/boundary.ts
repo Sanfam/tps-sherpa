@@ -482,7 +482,18 @@ const MAX_MENTION_CONTEXT = 10;
 const MAX_CONTEXT_TEXT = 300;
 
 /** A scheme, `www.`, an invite, or a domain with a path: anything Discord could turn into a link. */
-const URLISH = /[a-z][a-z0-9+.-]*:\/\/|www\.|discord\.gg|\b[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z][a-z0-9-]*\/\S/i;
+export const URLISH = /[a-z][a-z0-9+.-]*:\/\/|www\.|discord\.gg|\b[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z][a-z0-9-]*\/\S/i;
+
+/**
+ * Whether model text would post as a link or as Discord markup: ADR-0004's
+ * bounds on model words to members, for every path that shows them. Tested
+ * with backslashes dropped, since a renderer that strips them, or Discord's
+ * own escaping, can turn `https:\//` into a working link.
+ */
+export const linkOrMarkup = (text: string): boolean => {
+  const plain = text.replace(/\\/g, "");
+  return URLISH.test(plain) || /[<>@]|\|\||\]\(/.test(plain);
+};
 
 /**
  * ADR-0004's refusals, beyond `validate`'s: a refused line is dropped, never

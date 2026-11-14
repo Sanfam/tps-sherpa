@@ -19,6 +19,7 @@
  * cache (`tier0-store.ts`): a nickname, or a name that is also a place or a
  * Topic, is not — the risk this accepted.
  */
+import { linkOrMarkup } from "./boundary.ts";
 import type { Entity } from "../sync/catalog.ts";
 import type { StoredMessage } from "../sync/tier0-store.ts";
 import { isEnrichable } from "./subject.ts";
@@ -284,7 +285,8 @@ export const pruneActivity = (
 
 export type ActivityRejection =
   | { reason: "too-long"; words: number }
-  | { reason: "names-a-member" };
+  | { reason: "names-a-member" }
+  | { reason: "holds-a-link-or-markup" };
 
 /**
  * Checked on the way back, after the boundary's own validation.
@@ -300,5 +302,8 @@ export const checkActivity = (summary: string): ActivityRejection | null => {
   // "member" in any case, its letters capitals only: "a member of" is prose, not a label.
   if (/@member/i.test(summary) || /\b[Mm][Ee][Mm][Bb][Ee][Rr]\s+[A-Z]{1,3}\b/u.test(summary))
     return { reason: "names-a-member" };
+  // Shown to Members in /lately, so held to ADR-0004's bounds on model words to members: no link
+  // Discord would make clickable, no mention or timestamp markup, nothing hidden or masked.
+  if (linkOrMarkup(summary)) return { reason: "holds-a-link-or-markup" };
   return null;
 };
