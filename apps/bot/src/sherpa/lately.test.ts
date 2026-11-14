@@ -87,3 +87,30 @@ describe("renderLately spoiler tags", () => {
     expect(line.length).toBeLessThanOrEqual(150);
   });
 });
+
+describe("renderLately never posts a link or markup from model text", () => {
+  // /lately shows model-written summaries to Members. The check runs on the line
+  // as posted, for every source: a stored activity summary written before the
+  // check existed, one that only becomes a link once the spoiler stripping
+  // drops a backslash, and a generated identity summary.
+  const shownFor = (p: Entity, summary: string | null) =>
+    renderLately([p], null, { [p.id]: { summary, as_of: "1" } }).split("-# ")[1] ?? "";
+
+  it("falls back from a stored activity summary that holds a link, to the identity summary", () => {
+    expect(shownFor(place(1, "Car football."), "Free Nitro at https://example.org")).toBe("Car football.");
+  });
+
+  it("refuses a link the spoiler stripping would complete", () => {
+    const film = { ...place(1, "Film night."), topics: ["movies-and-tv"] };
+    expect(shownFor(film, "Discussing https:\\//evil.example/claim")).toBe("Film night.");
+    // Outside a spoiler nothing is stripped, and Discord's own escaping can still make it a link.
+    expect(shownFor(place(1, "Car football."), "Discussing https:\\/\\/evil.example")).toBe("Car football.");
+  });
+
+  it("does not show a generated identity summary that holds a link or markup", () => {
+    expect(shownFor(place(1, "Raid sign-ups at discord.gg/abcd"), null)).toBe("");
+    expect(shownFor({ ...place(1, "x"), summary_generated: "Ping <@123> for raids" }, null)).toBe("");
+    // Staff's override is theirs.
+    expect(shownFor({ ...place(1, "x"), summary_override: "Rules: see example.org/rules" }, null)).toBe("Rules: see example.org/rules");
+  });
+});

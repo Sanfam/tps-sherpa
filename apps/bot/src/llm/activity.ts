@@ -19,7 +19,7 @@
  * cache (`tier0-store.ts`): a nickname, or a name that is also a place or a
  * Topic, is not — the risk this accepted.
  */
-import { URLISH } from "./boundary.ts";
+import { linkOrMarkup } from "./boundary.ts";
 import type { Entity } from "../sync/catalog.ts";
 import type { StoredMessage } from "../sync/tier0-store.ts";
 import { isEnrichable } from "./subject.ts";
@@ -304,6 +304,6 @@ export const checkActivity = (summary: string): ActivityRejection | null => {
     return { reason: "names-a-member" };
   // Shown to Members in /lately, so held to ADR-0004's bounds on model words to members: no link
   // Discord would make clickable, no mention or timestamp markup, nothing hidden or masked.
-  if (URLISH.test(summary) || /[<>@]|\|\||\]\(/.test(summary)) return { reason: "holds-a-link-or-markup" };
+  if (linkOrMarkup(summary)) return { reason: "holds-a-link-or-markup" };
   return null;
 };

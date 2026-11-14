@@ -8,6 +8,7 @@
  * a crafted first post feeding a summary — can make the bot say anything.
  * That is the prompt-injection containment (PROJECT-STATUS §6.6).
  */
+import { linkOrMarkup } from "../llm/boundary.ts";
 import type { Boundary, Origin } from "../llm/boundary.ts";
 import { isEnrichable } from "../llm/subject.ts";
 import type { Topic, Vocabulary } from "../llm/vocabulary.ts";
@@ -84,8 +85,15 @@ export const candidatesOf = (
 };
 
 /** The human correction wins, as on the Index. */
+/**
+ * What a place is, as members see it. Staff's override is theirs; a generated
+ * summary is model text, so one that would post a link or markup is not shown
+ * (ADR-0004's bounds), wherever it is rendered: `/find`, `/lately`, the
+ * responder's posts.
+ */
 export const summaryOf = (entity: Entity): string | null =>
-  entity.summary_override ?? entity.summary_generated;
+  entity.summary_override ??
+  (entity.summary_generated && !linkOrMarkup(entity.summary_generated) ? entity.summary_generated : null);
 
 export const findSystemPrompt = (vocabulary: Vocabulary): string =>
   [
