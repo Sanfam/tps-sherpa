@@ -650,16 +650,39 @@ describe("replyToMention (ADR-0004)", () => {
       ["Jughfer says hi", /names a member/],
     ];
     for (const [line, why] of refused) {
-      const { chat } = fixtureChat(JSON.stringify({ intent: "chat", line }));
+      const { chat } = fixtureChat(JSON.stringify({ intent: "chat", paragraphs: [line] }));
       await expect(mentionBoundary(chat).replyToMention(mention()), line).rejects.toThrow(why);
     }
-    const ok = "Deep Rock Galactic, a solid 9.5/10. Rock and stone!\nTry /find too.";
-    const { chat } = fixtureChat(JSON.stringify({ intent: "chat", line: ok }));
-    await expect(mentionBoundary(chat).replyToMention(mention())).resolves.toEqual({ intent: "chat", line: ok });
+    const { chat } = fixtureChat(JSON.stringify({ intent: "chat", paragraphs: ["Deep Rock Galactic, a solid 9.5/10. Rock and stone!", "Try /find too."] }));
+    await expect(mentionBoundary(chat).replyToMention(mention())).resolves.toEqual({
+      intent: "chat",
+      line: "Deep Rock Galactic, a solid 9.5/10. Rock and stone!\nTry /find too.",
+    });
+  });
+
+  it("joins at most two paragraphs with one line break, and judges the joined line", async () => {
+    // The join is what keeps a reply to one line break; a break inside a
+    // paragraph still counts, and a third paragraph is not the shape.
+    for (const [paragraphs, why] of [
+      [["one", "two", "three"], /not the reply shape/],
+      [[], /not the reply shape/],
+      [["one\ntwo", "three"], /line break/],
+      [["one\u2028two", "three"], /line break/],
+      [["one\u2029two\u2029three"], /line break/],
+      [["  ", ""], /empty/],
+    ] as const) {
+      const { chat } = fixtureChat(JSON.stringify({ intent: "chat", paragraphs }));
+      await expect(mentionBoundary(chat).replyToMention(mention()), JSON.stringify(paragraphs)).rejects.toThrow(why);
+    }
+    // A name split across the join exists only in the joined line: each paragraph alone passes.
+    const split = fixtureChat(JSON.stringify({ intent: "chat", paragraphs: ["John", "Doe says hi"] }));
+    await expect(mentionBoundary(split.chat).replyToMention(mention({ askerNames: ["John Doe"] }))).rejects.toThrow(/names a member/);
+    const { chat } = fixtureChat(JSON.stringify({ intent: "chat", paragraphs: [" Hi there. ", "", ] }));
+    await expect(mentionBoundary(chat).replyToMention(mention())).resolves.toEqual({ intent: "chat", line: "Hi there." });
   });
 
   it("drops other bots and opted-out authors, keeps Sherpa's own, and labels speakers without names", async () => {
-    const { chat, calls } = fixtureChat('{"intent":"chat","line":"Sounds fun."}');
+    const { chat, calls } = fixtureChat('{"intent":"chat","paragraphs":["Sounds fun."]}');
     const say = (authorId: string, content: string, authorIsBot = false) => ({ authorId, authorIsBot, content, origin: general.id });
 
     await mentionBoundary(chat, { hasOptedOut: (id) => id === "602" }).replyToMention(
@@ -684,7 +707,7 @@ describe("replyToMention (ADR-0004)", () => {
 
   it("labels each member one way within a call, as speaker, by mention and by name, and a shared name as no one", async () => {
     // Short ids on purpose: the bare-snowflake strip would hide an id that leaked through a label.
-    const { chat, calls } = fixtureChat('{"intent":"chat","line":"Sounds fun."}');
+    const { chat, calls } = fixtureChat('{"intent":"chat","paragraphs":["Sounds fun."]}');
     const say = (authorId: string, content: string) => ({ authorId, authorIsBot: false, content, origin: general.id });
     const memberNames = [
       { id: "601", name: "Schwagle" },
@@ -708,7 +731,7 @@ describe("replyToMention (ADR-0004)", () => {
   });
 
   it("refuses a monitored place, a Thread under one outside the Catalog, a withheld place, and a foreign source", async () => {
-    const { chat, calls } = fixtureChat('{"intent":"chat","line":"Hi."}');
+    const { chat, calls } = fixtureChat('{"intent":"chat","paragraphs":["Hi."]}');
     const at = (id: string, parentId: string | null = null) => ({
       place: { id, parentId },
       question: { authorId: ASKER, authorIsBot: false, content: "hi", origin: id },

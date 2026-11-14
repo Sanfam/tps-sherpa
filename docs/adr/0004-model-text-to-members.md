@@ -24,7 +24,13 @@ is, not an option on `ask()`. No other path's output is posted as text.
 
 ### The reply
 
-- The model answers `{"intent": "chat" | "help", "line": string}`.
+- The model answers `{"intent": "chat" | "help", "paragraphs": [string]}`:
+  one or two paragraphs, which the boundary joins with one line break into
+  `line`. *(Amended 2026-11-13; it was `"line": string`. Asked for "at most
+  two short paragraphs" in one string, GLM-5.3-flash put a blank line
+  between them, and the line-break refusal below turned 6 of 40 replies into
+  the fallback; with paragraphs, 1 of 40. Joining is not repair: every
+  refusal below applies to `line` as posted.)*
 - `help` posts the fixed help text, and `line` is dropped.
 - `chat` posts `line`, then code may append one fixed sign-off line, picked
   for the asker's role (below).

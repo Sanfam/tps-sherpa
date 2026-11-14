@@ -298,12 +298,51 @@ text and vision call was answered by Wafer.
   only with the strong role's batch jobs.
 - **Excluding Wafer would not help:** it is GLM's best endpoint.
 
+### 6d. Mention replies and moderation on the cheap model *(verified 2026-11-13)*
+
+Both run on `LLM_MODEL_CHEAP`, so they moved to GLM with it. Each was run
+through the real boundary on synthetic people and text, with equal samples.
+
+**Mention replies:** 8 situations × 10 runs each = 80 per model. The
+situations were small talk, "what can you do", a channel request, an
+injected link and `@everyone`, a child's name and age in context, a
+Nepal/Everest persona trap, an argument, and a bare mention.
+
+| Model | Refused by the boundary (the member gets the fallback) | Other misses |
+|---|---|---|
+| GLM | 8/80, all "more than one line break" | 1 persona slip |
+| DeepSeek 0731 | 0/80 | 9/10 persona-trap replies named Everest or Nepal while declining |
+
+Neither model repeated the child's name or age, followed the injection, or
+took sides. GLM separated its two paragraphs with a blank line; a prompt line
+saying not to did not help (5/40). The answer is now
+`paragraphs: [string]`, which code joins with one line break (ADR-0004,
+amended). With that, GLM was refused 1/40 and DeepSeek 0/40. In review, the
+joined line is checked again for member names, since a name split across the
+join exists only once joined. A name now matches across any run of
+whitespace, a line break included, and every Unicode line separator counts as
+a line break.
+
+**Moderation, O5 (no child details):** 3 histories, each with a different
+child detail (name, age and hospital stay; name and school; age and autism
+diagnosis), × 5 reviews = 15 per model. Each review was chunk → reduce →
+watch observation. The check flagged any trace of the child in model-written
+text, and every flag was read by hand.
+
+| Prompt | GLM: reviews with a child detail | DeepSeek 0731 |
+|---|---|---|
+| Before ("no name, age, school, health…") | 11/15 | 8/15 (13/15 under the looser first check) |
+| **After** ("never write anything about a child, even in passing… write only 'a family matter'") | **0/15**, then 1/15 on the shipped prompt (the visible text reads "a family matter") | 2/15 |
+
+O5 was failing under DeepSeek before GLM: "daughter hospitalized", "4-year-old's
+autism diagnosis", "son starting school". The prompt fix is what holds it, not
+the model. An earlier run of 3 to 5 reviews per model suggested the opposite;
+the owner rejected it as too small a sample, rightly.
+
 ## 6a. Not measured
 
-- **The strong role** (summaries, the vocabulary bootstrap), **moderation**
-  (`moderation.ts`), and **mention replies**. Mention replies are the
-  ADR-0004 path whose words reach members, so a model change there needs
-  its own check of voice and of the output bounds.
+- **The strong role** (summaries, the vocabulary bootstrap). Moderation and
+  mention replies were compared later, in §6d.
 - **Real `#introductions` images**, which the 2026-10-17 run used.
 
 ---
@@ -325,7 +364,8 @@ text and vision call was answered by Wafer.
 4. **`LLM_MODEL_CHEAP` moves to GLM once the `/find` golden set passes** in
    the container. It passed on 2026-11-12 (§6). `LLM_MODEL_STRONG` stays on
    DeepSeek until summaries are compared. Moderation and mention replies
-   also run on the cheap model and were not compared (§6a).
+   also run on the cheap model. They were compared on 2026-11-13 and fixed
+   for both models (§6d).
 
 5. **The fenced extraction prompt** (owner, 2026-11-12) is PR #77, merged
    after this note's PR. Until it lands, extraction runs the unfenced prompt

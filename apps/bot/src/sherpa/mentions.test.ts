@@ -48,7 +48,7 @@ const asking = (over: Partial<MentionMessage> = {}): MentionMessage =>
   }) as MentionMessage;
 
 const harness = (
-  answer = '{"intent":"chat","line":"Deep Rock Galactic. Rock and stone!"}',
+  answer = '{"intent":"chat","paragraphs":["Deep Rock Galactic. Rock and stone!"]}',
   over: Partial<MentionsDeps> & { modeIs?: Mode; optedOut?: string[] } = {},
 ) => {
   const calls: Array<Parameters<ChatPort["complete"]>[0]> = [];
@@ -120,7 +120,7 @@ describe("mention replies", () => {
   });
 
   it("answers Sherpa's managed role from the @ list, calls it Sherpa, and ignores another guild", async () => {
-    const h = harness('{"intent":"chat","line":"Sherpa here, happy to help."}');
+    const h = harness('{"intent":"chat","paragraphs":["Sherpa here, happy to help."]}');
     await h.mentions.onMessage(asking({ guild_id: "2" }));
     await h.mentions.onMessage(asking({ content: "<@&950> hi", mentions: [], mention_roles: ["950"] }));
     h.advance(15_000);
@@ -134,7 +134,7 @@ describe("mention replies", () => {
   });
 
   it("lends no name of Sherpa's own posts in the context to refuse", async () => {
-    const h = harness('{"intent":"chat","line":"Sherpa here, happy to help."}', {
+    const h = harness('{"intent":"chat","paragraphs":["Sherpa here, happy to help."]}', {
       discord: {
         botId: async () => SHERPA,
         botRoleId: async () => null,
@@ -181,7 +181,7 @@ describe("mention replies", () => {
   });
 
   it("posts the fallback when the model's line is refused", async () => {
-    const h = harness('{"intent":"chat","line":"go to https://example.org"}');
+    const h = harness('{"intent":"chat","paragraphs":["go to https://example.org"]}');
     await h.mentions.onMessage(asking());
     expect(h.posts[0]!.body["content"]).toBe("My brain blue-screened.\n-# Thanks, boss.");
   });
