@@ -1,6 +1,6 @@
 # ADR-0002: EmDash, inside the Astro site, on SQLite
 
-**Status:** Proposed, 2026-10-16; revised 2026-10-17. **The owner chose EmDash for a trial build, 2026-11-14.** The trial builds the open items below; the ADR is accepted once they are met, and the fallback still applies if one cannot be.
+**Status:** Proposed, 2026-10-16; revised 2026-10-17. **The owner chose EmDash for a trial build, 2026-11-14.** The trial builds the open items below. Acceptance stays the owner's decision, including whether the undocumented internals in open item 4 are acceptable; the fallback still applies if an item cannot be met.
 **Builds on:** [ADR-0001](0001-retire-git-as-content-store.md), which opened database-backed CMSs and left the site's datastore open.
 
 ## Context
@@ -42,7 +42,7 @@ Two spikes ran (`docs/research/2026-10-16-emdash-spike.md`), on EmDash 1.1.0 ins
 
 - scope `identify` only, with PKCE and state bound to the browser;
 - membership and roles read with the bot token on each private CMS request, behind a short cache that also holds refusals: "each request" becomes "within the TTL";
-- Staff map to Admin, and Club Leads and Events Managers to Author *(Events Managers added 2026-11-14, so the book club's voting page can be owned by an Events Manager who runs it. Every Events Manager can then write and own pages, and read drafts, as Club Leads can. This is the simplest grant that meets the owner's "give Ben edit powers over it"; a narrower one would need a per-user grant EmDash does not offer through external auth)*;
+- Staff (holders of `Staff` or `Event Managers`, per `CONTEXT.md`) map to Admin, and Club Leads to Author;
 - a Member with no editor role is refused, and gets no row;
 - a gate in `middleware.outer`, built as an **allow-list**, decides which `/_emdash` routes Members, editors and Viewers may reach. EmDash's own credential routes (OAuth server, device flow, API tokens, OAuth clients, MCP, `setup/admin`, `preview-url`) are not on it. The spike built a deny-list instead; see open item 2.
 
