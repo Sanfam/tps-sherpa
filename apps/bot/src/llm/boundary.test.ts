@@ -482,10 +482,11 @@ describe("an introduction", () => {
   });
   const extract = (chat: ChatPort, sources: Source[]) =>
     boundary(chat).extractIntroduction({ memberId: MEMBER, sources, memberNames: [], vocabulary });
-  const image = (over: Record<string, string> = {}) => ({
+  const JPEG = "data:image/jpeg;base64,AAAA";
+  const image = (over: { authorId?: string; stills?: string[] } = {}) => ({
     authorId: MEMBER,
     origin: WATCHED_CHANNEL,
-    dataUrl: "data:image/jpeg;base64,AAAA",
+    stills: [JPEG],
     ...over,
   });
 
@@ -562,16 +563,34 @@ describe("an introduction", () => {
     const reading = await boundary(chat).readImage({ memberId: MEMBER, image: image() });
 
     expect(reading).toStrictEqual({ kind: "meme", meaning: "greeting" });
-    expect(calls[0]).toMatchObject({ model: "test-vision", image: "data:image/jpeg;base64,AAAA" });
+    expect(calls[0]).toMatchObject({ model: "test-vision", user: "The member's image:", images: [JPEG] });
   });
 
-  it("sends an image inline and still, never a link the provider would fetch or a whole GIF", async () => {
+  it("sends an animation's frames in order, in one call, named as frames", async () => {
+    const { chat, calls } = fixtureChat('{"kind":"meme","known_as":null,"meaning":"greeting"}');
+    const frames = ["A", "B", "C", "D"].map((f) => `data:image/jpeg;base64,${f}AAA`);
+
+    await boundary(chat).readImage({ memberId: MEMBER, image: image({ stills: frames }) });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ user: "The member's GIF, as 4 frames in order:", images: frames });
+  });
+
+  it("sends 1 to 4 inline stills, never a link the provider would fetch or a whole GIF", async () => {
+    // Each frame is checked, not just the first: a GIF behind three JPEGs is
+    // still a whole animation going out. More than four is past the cost bound.
     const { chat, calls } = fixtureChat('{"kind":"meme","known_as":null,"meaning":"greeting"}');
 
-    for (const dataUrl of ["https://media.discordapp.net/attachments/1/2/a.png", "data:image/gif;base64,AAAA"])
+    for (const stills of [
+      ["https://media.discordapp.net/attachments/1/2/a.png"],
+      ["data:image/gif;base64,AAAA"],
+      [JPEG, JPEG, JPEG, "data:image/gif;base64,AAAA"],
+      [],
+      [JPEG, JPEG, JPEG, JPEG, JPEG],
+    ])
       await expect(
-        boundary(chat).readImage({ memberId: MEMBER, image: image({ dataUrl }) }),
-      ).rejects.toThrow(/inline still/);
+        boundary(chat).readImage({ memberId: MEMBER, image: image({ stills }) }),
+      ).rejects.toThrow(/inline stills/);
     expect(calls).toHaveLength(0);
   });
 });

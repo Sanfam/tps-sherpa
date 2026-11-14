@@ -29,6 +29,11 @@ RUN tar -xzf /tmp/litestream.tar.gz -C /usr/local/bin litestream \
   && apt-get update && apt-get install -y --no-install-recommends ca-certificates
 
 FROM base
+# ffmpeg takes up to four frames from an animated GIF or a GIF link's MP4 for
+# the introductions responder, over pipes only (introductions-responder.md §4,
+# Animated GIFs). From Debian, so a rebuild picks up its security fixes.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/bot/package.json apps/bot/
