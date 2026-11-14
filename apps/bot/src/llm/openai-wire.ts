@@ -45,7 +45,7 @@ const DEFAULT_TIMEOUT_MS = 180_000;
 const VISION_MAX_TOKENS = 2_500;
 
 export const openAiWire = (config: WireConfig): ChatPort => ({
-  complete: async ({ model, system, user, image }) => {
+  complete: async ({ model, system, user, images }) => {
     const response = await fetch(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: {
@@ -57,16 +57,16 @@ export const openAiWire = (config: WireConfig): ChatPort => ({
         ...(config.provider === undefined ? {} : { provider: config.provider }),
         messages: [
           { role: "system", content: system },
-          // The multipart form only when there is an image, so a text call's
+          // The multipart form only when there are images, so a text call's
           // body is exactly what it was before images existed.
           {
             role: "user",
             content:
-              image === undefined
+              images === undefined
                 ? user
                 : [
                     { type: "text", text: user },
-                    { type: "image_url", image_url: { url: image } },
+                    ...images.map((url) => ({ type: "image_url", image_url: { url } })),
                   ],
           },
         ],
@@ -74,7 +74,7 @@ export const openAiWire = (config: WireConfig): ChatPort => ({
         // preference: the app renders from a template, so no input can make
         // the bot say anything.
         response_format: { type: "json_object" },
-        ...(image === undefined ? {} : { max_tokens: VISION_MAX_TOKENS }),
+        ...(images === undefined ? {} : { max_tokens: VISION_MAX_TOKENS }),
       }),
       signal: AbortSignal.timeout(config.timeoutMs ?? DEFAULT_TIMEOUT_MS),
     });

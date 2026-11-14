@@ -62,10 +62,10 @@ describe("openAiWire request body", () => {
     ]);
   });
 
-  it("sends an image as OpenAI multipart content, under the same routing", async () => {
+  it("sends images as OpenAI multipart content, in order, under the same routing", async () => {
     const bodies = sent();
 
-    await routed.complete({ ...ask, image: "data:image/jpeg;base64,AAAA" });
+    await routed.complete({ ...ask, images: ["data:image/jpeg;base64,AAAA", "data:image/jpeg;base64,BBBB"] });
 
     expect(JSON.parse(bodies[0]!)).toEqual({
       model: "m",
@@ -77,6 +77,7 @@ describe("openAiWire request body", () => {
           content: [
             { type: "text", text: "u" },
             { type: "image_url", image_url: { url: "data:image/jpeg;base64,AAAA" } },
+            { type: "image_url", image_url: { url: "data:image/jpeg;base64,BBBB" } },
           ],
         },
       ],
