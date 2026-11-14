@@ -10,6 +10,7 @@
  * log (activity.ts).
  */
 import type { ActivityStore } from "../llm/activity.ts";
+import { linkOrMarkup } from "../llm/boundary.ts";
 import type { Topic } from "../llm/vocabulary.ts";
 import type { Entity } from "../sync/catalog.ts";
 import { ACTIVE_WITHIN_DAYS, activityBucket } from "../sync/facets.ts";
@@ -57,17 +58,19 @@ const SPOILER_TOPICS = ["movies-and-tv", "anime-and-manga", "books-and-reading"]
 const lineFor = (entity: Entity, activity: ActivityStore): string => {
   // Discord renders the time in the reader's own terms ("3 days ago").
   const line = `${anchorOf(entity)} · <t:${Math.floor(new Date(entity.last_activity_at!).getTime() / 1000)}:R>`;
-  const lately = activity[entity.id]?.summary;
+  const spoilers = entity.topics.some((t) => SPOILER_TOPICS.includes(t));
   // Whitespace collapsed so a summary cannot leave the subtext for a line of
-  // its own. Pipes and backslashes dropped so the text can neither close the
-  // spoiler tag nor escape its closing pipes; clipped short of the tag's four
-  // characters so the wrapped text is no longer than an unwrapped one.
-  const text = oneLine(lately ?? summaryOf(entity) ?? "");
+  // its own. Under a spoiler tag, pipes and backslashes dropped so the text can
+  // neither close the tag nor escape its closing pipes.
+  const posted = oneLine(activity[entity.id]?.summary ?? "").replace(spoilers ? /[|\\]/g : /(?!)/g, "");
+  // Checked as it will be posted, after that stripping: a dropped backslash can
+  // complete a link the stored text did not hold. A refused one falls back to
+  // the identity summary, which `summaryOf` has checked.
+  const lately = posted && !linkOrMarkup(posted) ? posted : null;
+  const text = lately ?? oneLine(summaryOf(entity) ?? "");
   if (!text) return line;
-  const shown =
-    lately && entity.topics.some((t) => SPOILER_TOPICS.includes(t))
-      ? `||${clip(text.replace(/[|\\]/g, ""), MAX_SUMMARY_CHARS - 4)}||`
-      : clip(text);
+  // Clipped short of the tag's four characters, so the wrapped text is no longer than an unwrapped one.
+  const shown = lately && spoilers ? `||${clip(lately, MAX_SUMMARY_CHARS - 4)}||` : clip(text);
   return `${line}\n-# ${shown}`;
 };
 

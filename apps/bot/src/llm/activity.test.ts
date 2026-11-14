@@ -229,4 +229,20 @@ describe("checkActivity", () => {
       expect(checkActivity(line), line).toEqual({ reason: "names-a-member" });
     expect(checkActivity("Members compare raid tips; a new member asks about co-op.")).toBeNull();
   });
+
+  it("rejects a link or Discord markup, since /lately shows the line to Members", () => {
+    // A member who plants a link in conversation must not get it repeated to
+    // everyone as the place's summary.
+    for (const line of [
+      "Free Nitro giveaway at nitro-gift.example/claim",
+      "Join us at https://example.org tonight",
+      "Raid planning, see discord.gg/abcd",
+      "Event at <t:1700000000:R> with <@123>",
+      "Planning @everyone raid night",
+      "Spoilers ||the end|| discussed",
+      "See [the guide](here) for builds",
+    ])
+      expect(checkActivity(line), line).toEqual({ reason: "holds-a-link-or-markup" });
+    expect(checkActivity("Comparing builds for the 2.0 update and the co-op tips thread.")).toBeNull();
+  });
 });

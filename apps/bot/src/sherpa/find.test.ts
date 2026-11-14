@@ -304,13 +304,19 @@ describe("renderFind", () => {
     const sly = entity({
       id: "8",
       name: "a](https://evil.example) *b* @everyone 🚙\n• Fake place",
-      summary_generated: "S.\n<#1> Fake",
+      summary_generated: "S.\n• Fake",
     });
     const reply = renderFind({ matches: [sly, rocket], topics: [] });
     expect(reply.split("\n").slice(2, 4)).toEqual([
       `**a\\]\\(https\\://evil.example\\) \\*b\\* \\@everyone 🚙 • Fake place** ([open](${sly.url}))`,
-      "-# S. <#1> Fake",
+      "-# S. • Fake",
     ]);
+  });
+
+  it("does not show a generated summary that would post a link or markup", () => {
+    // Model text to members, held to ADR-0004's bounds; the place still shows, by its anchor alone.
+    const marked = entity({ id: "12", name: "Marked", summary_generated: "S. <#1> Fake" });
+    expect(renderFind({ matches: [marked, rocket], topics: [] })).not.toContain("<#1>");
   });
 
   it("doubles a trailing backslash, so it cannot escape the closing bold", () => {
