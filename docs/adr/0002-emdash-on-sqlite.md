@@ -96,8 +96,12 @@ Two spikes ran (`docs/research/2026-10-16-emdash-spike.md`), on EmDash 1.1.0 ins
    - PKCE, browser-bound state, and no state written to the database: done in the spike's site sign-in.
    - Still unverified against the real Discord. Against Better Auth 1.7.14 (the Phase 4 auth spike, 2026-11-12, mock Discord): state is signed and single-use, and Better Auth keeps it in the database, a `verification` row per sign-in start, swept by the site's daily cleanup; but the Discord provider sends no PKCE verifier, so PKCE in the decision above holds only for a hand-rolled flow.
 4. **Erasure gaps.**
-   - **The FTS5 search index.** EmDash's search tables are contentful FTS5 tables with their own copy of the text. `secure_delete` does not scrub their segments, so deleted text stays in the live `%_data` rows until a merge. Candidates are FTS5's `secure-delete` option or a rebuild after deletions; untested.
+   - **The FTS5 search index.** EmDash's search tables are contentful FTS5 tables with their own copy of the text. `secure_delete` does not scrub their segments, so deleted text stays in the live `%_data` rows until a merge. Candidates are FTS5's `secure-delete` option or a rebuild after deletions.
    - **Migrations.** CLI and deploy migrations bypass our dialect, and some copy whole content tables (`INSERT … SELECT`).
+   - **Both are real. The SQLite mechanisms that close them are documented, but applying the FTS5 one depends on an EmDash internal** *(measured 2026-11-14 on SQLite 3.54.1 as bundled with Node 26, on a synthetic file with a planted string; EmDash itself was not run)*:
+     - **FTS5.** With `secure_delete` on, deleting a row from a plain FTS5 table left **2 copies** of the deleted text in the index until an `optimize` merge. With FTS5's own option set first (`INSERT INTO t(t, rank) VALUES('secure-delete', 1)`, SQLite 3.42+), it left **0**, at once. The option is stored in the table, so setting it once per search table after each migration holds. **It needs the names of EmDash's FTS5 tables, which are internal**: an upgrade that adds or renames a search table would miss it. Under the fallback clause above ("cannot be met without an undocumented EmDash internal"), whether that is acceptable is the owner's decision.
+     - **Migrations.** A copy-and-drop migration on a connection without `secure_delete` left the old copy in freed pages. It **survived a later secure erasure** of the row (1 copy left), and **`VACUUM` removed it** (0). So: run migrations only through our dialect, or `VACUUM` after every migration.
+   - **Backups are already bounded:** ADR-0001 caps Litestream retention and R2 object versions at 30 days.
 
 ### Refreshed against EmDash 1.5.0 (2026-11-11)
 
