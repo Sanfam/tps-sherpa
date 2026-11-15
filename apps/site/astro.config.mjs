@@ -1,6 +1,6 @@
 import node from "@astrojs/node";
 import react from "@astrojs/react";
-import { defineConfig } from "astro/config";
+import { defineConfig, fontProviders } from "astro/config";
 import emdash, { local } from "emdash/astro";
 import { sqlite } from "emdash/db";
 import { fileURLToPath } from "node:url";
@@ -10,20 +10,46 @@ import { fileURLToPath } from "node:url";
 // check rejects the https POST to /auth/sign-out. Read at build time.
 const site = process.env.BETTER_AUTH_URL ? new URL(process.env.BETTER_AUTH_URL) : undefined;
 
-// EmDash's database and uploads sit beside the session database, on the
-// volume mounted at .data. Read at build time.
-const data = process.env.SITE_EMDASH_DIR ?? "./.data";
+// EmDash's database and uploads go on the volume, beside the session
+// database: SITE_EMDASH_DIR on Railway (/data). Read at build time.
+const data = process.env.SITE_EMDASH_DIR || "./.data";
 
 // Everything is server-rendered unless a page opts in with `prerender = true`,
 // and only the public landing page may (test/gate.test.ts holds that line).
 export default defineConfig({
   output: "server",
+  // Absolute URLs for link-preview cards.
+  site: site?.origin,
   adapter: node({ mode: "standalone" }),
+  // The Clubhouse theme's two faces, downloaded at build and self-hosted.
+  fonts: [
+    {
+      provider: fontProviders.google(),
+      name: "Bricolage Grotesque",
+      cssVariable: "--font-display",
+      weights: [600, 800],
+      fallbacks: ["sans-serif"],
+    },
+    {
+      provider: fontProviders.google(),
+      name: "Atkinson Hyperlegible Next",
+      cssVariable: "--font-body",
+      weights: [400, 700],
+      styles: ["normal", "italic"],
+      fallbacks: ["sans-serif"],
+    },
+  ],
   integrations: [
     react(),
     emdash({
       // EmDash's setup refuses to run in production without a configured origin.
       siteUrl: site?.origin,
+      // Astro's own image endpoint, which reads the theme's images from disk.
+      // EmDash's fetches them from the site's public origin instead, and on
+      // Railway that fetch fails silently, so the images break.
+      // ponytail: EmDash media rendered through <Image> would break with this
+      // off; nothing renders it yet. Fix the self-fetch before a page does.
+      images: false,
       database: sqlite({ url: `file:${data}/emdash.db` }),
       // ponytail: uploads on the volume, outside Litestream; R2 is step 5 of the trial.
       storage: local({ directory: `${data}/uploads`, baseUrl: "/_emdash/api/media/file" }),

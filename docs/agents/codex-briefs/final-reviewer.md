@@ -32,8 +32,9 @@ Priorities, in order:
    are in scope exactly like code.
 3. **Tests that do not bite** — a test that would pass against a broken
    implementation is decoration. Say so. So is a test that only restates the
-   code it covers: `AGENTS.md` keeps tests for failures that are invisible or
-   complex.
+   code it covers, a test of a scenario that cannot happen in real use, and a
+   test pinning wording the system does not depend on: see "Tests are
+   purposeful" in `AGENTS.md`.
 4. **The class, not the instance** — if one caller has the bug, check them all.
 
 What this project has actually shipped past reviewers before: permission models

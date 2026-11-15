@@ -5,6 +5,7 @@ tools: Read, Glob, Grep, Bash, WebFetch, WebSearch
 model: claude-haiku-5-5
 effort: medium
 maxTurns: 30
+isolation: worktree
 ---
 
 You research and report. Your Bash is unrestricted, so the boundary is yours to

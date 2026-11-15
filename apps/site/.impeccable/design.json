@@ -1,0 +1,565 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-15T04:13:48.557640+00:00",
+  "title": "Design System: The Papa Squad",
+  "extensions": {
+    "colorMeta": {
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "#f4efe8",
+        "tonalRamp": [
+          "#342819",
+          "#564329",
+          "#795e3a",
+          "#9b7a4a",
+          "#b59364",
+          "#cab291",
+          "#e1d4c1",
+          "#f7f3ee"
+        ]
+      },
+      "navy": {
+        "role": "neutral",
+        "displayName": "Club Navy",
+        "canonical": "#13232e",
+        "tonalRamp": [
+          "#162936",
+          "#25455a",
+          "#34607e",
+          "#437ca2",
+          "#5d95bc",
+          "#8cb4cf",
+          "#bed5e4",
+          "#edf3f8"
+        ]
+      },
+      "orange": {
+        "role": "primary",
+        "displayName": "Clubhouse Orange",
+        "canonical": "#b24a22",
+        "tonalRamp": [
+          "#3f1b0e",
+          "#692d17",
+          "#933f20",
+          "#bd5129",
+          "#d66b42",
+          "#e29679",
+          "#efc4b3",
+          "#faefea"
+        ]
+      },
+      "orange-deep": {
+        "role": "primary",
+        "displayName": "Deep Orange",
+        "canonical": "#9a3e1b",
+        "tonalRamp": [
+          "#411a0c",
+          "#6c2c14",
+          "#973d1c",
+          "#c24e24",
+          "#db683d",
+          "#e69475",
+          "#f1c3b2",
+          "#fbeee9"
+        ]
+      },
+      "sky": {
+        "role": "secondary",
+        "displayName": "Headset Sky",
+        "canonical": "#4cadd0",
+        "tonalRamp": [
+          "#10313d",
+          "#1b5165",
+          "#25728d",
+          "#3092b6",
+          "#49accf",
+          "#7ec4dd",
+          "#b6deec",
+          "#ebf6fa"
+        ]
+      },
+      "sand": {
+        "role": "secondary",
+        "displayName": "Beard Sand",
+        "canonical": "#e6b383",
+        "tonalRamp": [
+          "#40250d",
+          "#6a3e15",
+          "#95571e",
+          "#bf7027",
+          "#d88a40",
+          "#e4ac77",
+          "#f0d0b3",
+          "#fbf2ea"
+        ]
+      },
+      "ground": {
+        "role": "neutral",
+        "displayName": "Ground (day)",
+        "canonical": "#dad2c6",
+        "tonalRamp": [
+          "#2e281e",
+          "#4d4232",
+          "#6c5d46",
+          "#8b785a",
+          "#a59174",
+          "#bfb19c",
+          "#dbd3c7",
+          "#f5f3f0"
+        ]
+      },
+      "ground-raised": {
+        "role": "neutral",
+        "displayName": "Raised Ground (day)",
+        "canonical": "#e6e0d6",
+        "tonalRamp": [
+          "#30291d",
+          "#4f4430",
+          "#6f5f44",
+          "#8f7a57",
+          "#a89370",
+          "#c1b29a",
+          "#dcd4c6",
+          "#f5f3ef"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface (day)",
+        "canonical": "#f4efe8",
+        "tonalRamp": [
+          "#342819",
+          "#564329",
+          "#795e3a",
+          "#9b7a4a",
+          "#b59364",
+          "#cab291",
+          "#e1d4c1",
+          "#f7f3ee"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink (day)",
+        "canonical": "#13232e",
+        "tonalRamp": [
+          "#162936",
+          "#25455a",
+          "#34607e",
+          "#437ca2",
+          "#5d95bc",
+          "#8cb4cf",
+          "#bed5e4",
+          "#edf3f8"
+        ]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Soft Ink (day)",
+        "canonical": "#3f4c56",
+        "tonalRamp": [
+          "#20272c",
+          "#36414a",
+          "#4b5b67",
+          "#617584",
+          "#7b8f9e",
+          "#a1afba",
+          "#cad2d8",
+          "#f0f3f4"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Line (day)",
+        "canonical": "rgb(19 35 46 / 0.16)",
+        "tonalRamp": [
+          "#162936",
+          "#25455a",
+          "#34607e",
+          "#437ca2",
+          "#5d95bc",
+          "#8cb4cf",
+          "#bed5e4",
+          "#edf3f8"
+        ]
+      },
+      "band": {
+        "role": "neutral",
+        "displayName": "Band (day)",
+        "canonical": "#13232e",
+        "tonalRamp": [
+          "#162936",
+          "#25455a",
+          "#34607e",
+          "#437ca2",
+          "#5d95bc",
+          "#8cb4cf",
+          "#bed5e4",
+          "#edf3f8"
+        ]
+      },
+      "band-soft": {
+        "role": "neutral",
+        "displayName": "Band Soft (day)",
+        "canonical": "#dad2c6",
+        "tonalRamp": [
+          "#2e281e",
+          "#4d4232",
+          "#6c5d46",
+          "#8b785a",
+          "#a59174",
+          "#bfb19c",
+          "#dbd3c7",
+          "#f5f3f0"
+        ]
+      },
+      "accent-text": {
+        "role": "primary",
+        "displayName": "Accent Text (day)",
+        "canonical": "#9a3e1b",
+        "tonalRamp": [
+          "#411a0c",
+          "#6c2c14",
+          "#973d1c",
+          "#c24e24",
+          "#db683d",
+          "#e69475",
+          "#f1c3b2",
+          "#fbeee9"
+        ]
+      },
+      "ground-dark": {
+        "role": "neutral",
+        "displayName": "Ground (night)",
+        "canonical": "#142029",
+        "tonalRamp": [
+          "#030c14",
+          "#1a2730",
+          "#37444e",
+          "#55636e",
+          "#768590",
+          "#98a7b3",
+          "#bcccd8",
+          "#e1f1fe"
+        ]
+      },
+      "ground-raised-dark": {
+        "role": "neutral",
+        "displayName": "Raised Ground (night)",
+        "canonical": "#1c2a35",
+        "tonalRamp": [
+          "#020c16",
+          "#192732",
+          "#354450",
+          "#546370",
+          "#748592",
+          "#97a8b5",
+          "#baccda",
+          "#dff1ff"
+        ]
+      },
+      "surface-dark": {
+        "role": "neutral",
+        "displayName": "Surface (night)",
+        "canonical": "#1c2a35",
+        "tonalRamp": [
+          "#020c16",
+          "#192732",
+          "#354450",
+          "#546370",
+          "#748592",
+          "#97a8b5",
+          "#baccda",
+          "#dff1ff"
+        ]
+      },
+      "ink-dark": {
+        "role": "neutral",
+        "displayName": "Ink (night)",
+        "canonical": "#eee7dc",
+        "tonalRamp": [
+          "#0f0a04",
+          "#29241c",
+          "#474138",
+          "#666057",
+          "#888177",
+          "#aba49a",
+          "#cfc8bd",
+          "#f5ede2"
+        ]
+      },
+      "ink-soft-dark": {
+        "role": "neutral",
+        "displayName": "Soft Ink (night)",
+        "canonical": "#b9b3a8",
+        "tonalRamp": [
+          "#0f0b04",
+          "#29241c",
+          "#464138",
+          "#666157",
+          "#878277",
+          "#aaa499",
+          "#cec8bd",
+          "#f4eee2"
+        ]
+      },
+      "line-dark": {
+        "role": "neutral",
+        "displayName": "Line (night)",
+        "canonical": "rgb(238 231 220 / 0.16)",
+        "tonalRamp": [
+          "#0f0a04",
+          "#29241c",
+          "#474138",
+          "#666057",
+          "#888177",
+          "#aba49a",
+          "#cfc8bd",
+          "#f5ede2"
+        ]
+      },
+      "band-dark": {
+        "role": "neutral",
+        "displayName": "Band (night)",
+        "canonical": "#0b141a",
+        "tonalRamp": [
+          "#050c12",
+          "#1d262d",
+          "#39444b",
+          "#58636b",
+          "#79848c",
+          "#9ba7af",
+          "#bfcbd4",
+          "#e4f1fa"
+        ]
+      },
+      "band-soft-dark": {
+        "role": "neutral",
+        "displayName": "Band Soft (night)",
+        "canonical": "#b9b3a8",
+        "tonalRamp": [
+          "#0f0b04",
+          "#29241c",
+          "#464138",
+          "#666157",
+          "#878277",
+          "#aaa499",
+          "#cec8bd",
+          "#f4eee2"
+        ]
+      },
+      "accent-text-dark": {
+        "role": "primary",
+        "displayName": "Accent Text (night)",
+        "canonical": "#ec8a5e",
+        "tonalRamp": [
+          "#1f0000",
+          "#431400",
+          "#692e11",
+          "#924a29",
+          "#bc6943",
+          "#dc8f6d",
+          "#fcb698",
+          "#ffdfc4"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Page title, one per page."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section headings, prose h2."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Prose h3."
+      },
+      "lede": {
+        "displayName": "Lede",
+        "purpose": "Line under a heading, copy beside imagery."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Everything you read; 68ch measure in prose."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Badge captions."
+      }
+    },
+    "shadows": [
+      {
+        "name": "lift",
+        "value": "0 1px 1px rgb(19 35 46 / 0.08), 0 6px 18px -6px rgb(19 35 46 / 0.28)",
+        "purpose": "Day: primary button, framed photos, cards."
+      },
+      {
+        "name": "lift-dark",
+        "value": "0 1px 1px rgb(0 0 0 / 0.3), 0 8px 22px -8px rgb(0 0 0 / 0.65)",
+        "purpose": "Night value of Lift."
+      },
+      {
+        "name": "sticker",
+        "value": "drop-shadow(0 3px 4px rgb(19 35 46 / 0.22))",
+        "purpose": "CSS filter on every badge, both modes."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Button rise (0.25s) and badge lift-and-tilt (0.35s). Collapsed under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "narrow",
+        "value": "40rem"
+      },
+      {
+        "name": "stack",
+        "value": "52rem"
+      },
+      {
+        "name": "dark",
+        "value": "(prefers-color-scheme: dark)"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one orange action on a view, e.g. Join us on Discord.",
+      "html": "<a class=\"ds-btn ds-btn-primary\" href=\"#\">Join us on Discord</a>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;gap:.6em;min-height:3rem;padding:.7em 1.4em;border-radius:999px;border:2px solid var(--ink,#13232e);font:700 1.0625rem/1 var(--body,'Atkinson Hyperlegible Next',system-ui,sans-serif);text-decoration:none;cursor:pointer;transition:transform .25s cubic-bezier(.16,1,.3,1),box-shadow .25s cubic-bezier(.16,1,.3,1),background-color .2s}.ds-btn:focus-visible{outline:3px solid var(--accent-text,#9a3e1b);outline-offset:3px}.ds-btn:active{transform:translateY(1px)}.ds-btn-primary{background:#b24a22;border-color:#13232e;color:#f4efe8;box-shadow:0 1px 1px rgb(19 35 46 / .08),0 6px 18px -6px rgb(19 35 46 / .28)}.ds-btn-primary:hover{background:#9a3e1b;transform:translateY(-2px)}"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Every other button, including sign-in when no invite is set.",
+      "html": "<a class=\"ds-btn ds-btn-quiet\" href=\"#\">Member sign in</a>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;gap:.6em;min-height:3rem;padding:.7em 1.4em;border-radius:999px;border:2px solid var(--ink,#13232e);font:700 1.0625rem/1 var(--body,'Atkinson Hyperlegible Next',system-ui,sans-serif);text-decoration:none;cursor:pointer;transition:transform .25s cubic-bezier(.16,1,.3,1),box-shadow .25s cubic-bezier(.16,1,.3,1),background-color .2s}.ds-btn:focus-visible{outline:3px solid var(--accent-text,#9a3e1b);outline-offset:3px}.ds-btn:active{transform:translateY(1px)}.ds-btn-quiet{background:transparent;color:var(--ink,#13232e)}.ds-btn-quiet:hover{background:var(--ink,#13232e);color:var(--ground,#dad2c6)}"
+    },
+    {
+      "name": "Topic Badge (sky)",
+      "kind": "custom",
+      "refersTo": "badge-sky",
+      "description": "Shield badge, sky fill. Fills cycle sky, sand, ink by index.",
+      "html": "<div class=\"ds-badge\"><svg viewBox=\"0 0 120 132\" aria-hidden=\"true\"><path d=\"M60 6C80 6 98 10 110 17V62C110 95 89 115 60 126C31 115 10 95 10 62V17C22 10 40 6 60 6Z\" fill=\"#f4efe8\" stroke=\"#f4efe8\" stroke-width=\"14\" stroke-linejoin=\"round\"/><path d=\"M60 6C80 6 98 10 110 17V62C110 95 89 115 60 126C31 115 10 95 10 62V17C22 10 40 6 60 6Z\" fill=\"#4cadd0\" stroke=\"#13232e\" stroke-width=\"5\" stroke-linejoin=\"round\"/><path d=\"M60 6C80 6 98 10 110 17V62C110 95 89 115 60 126C31 115 10 95 10 62V17C22 10 40 6 60 6Z\" fill=\"none\" stroke=\"#13232e\" stroke-opacity=\"0.55\" stroke-width=\"1.6\" stroke-dasharray=\"4 3.5\" transform=\"translate(60 66) scale(.84) translate(-60 -66)\"/><svg x=\"33\" y=\"36\" width=\"54\" height=\"54\" viewBox=\"0 0 256 256\" fill=\"#13232e\"><path d=\"M192,28H64A36,36,0,0,0,28,64V192a36,36,0,0,0,36,36H192a36,36,0,0,0,36-36V64A36,36,0,0,0,192,28Zm12,164a12,12,0,0,1-12,12H64a12,12,0,0,1-12-12V64A12,12,0,0,1,64,52H192a12,12,0,0,1,12,12ZM104,88A16,16,0,1,1,88,72,16,16,0,0,1,104,88Zm40,40a16,16,0,1,1-16-16A16,16,0,0,1,144,128Zm40-40a16,16,0,1,1-16-16A16,16,0,0,1,184,88Zm-80,80a16,16,0,1,1-16-16A16,16,0,0,1,104,168Zm80,0a16,16,0,1,1-16-16A16,16,0,0,1,184,168Z\"/></svg></svg><span>Tabletop Gaming</span></div>",
+      "css": ".ds-badge{display:grid;justify-items:center;gap:.6rem;width:8.5rem;text-align:center;font:700 .9375rem/1.25 'Atkinson Hyperlegible Next',system-ui,sans-serif;color:var(--ink,#13232e)}.ds-badge svg{width:5.5rem;height:auto;overflow:visible;filter:drop-shadow(0 3px 4px rgb(19 35 46 / .22));transition:transform .35s cubic-bezier(.16,1,.3,1)}.ds-badge:hover>svg{transform:translateY(-4px) rotate(-3deg)}"
+    },
+    {
+      "name": "Topic Badge (sand)",
+      "kind": "custom",
+      "refersTo": "badge-sand",
+      "description": "Shield badge, sand fill.",
+      "html": "<div class=\"ds-badge\"><svg viewBox=\"0 0 120 132\" aria-hidden=\"true\"><path d=\"M60 6C80 6 98 10 110 17V62C110 95 89 115 60 126C31 115 10 95 10 62V17C22 10 40 6 60 6Z\" fill=\"#f4efe8\" stroke=\"#f4efe8\" stroke-width=\"14\" stroke-linejoin=\"round\"/><path d=\"M60 6C80 6 98 10 110 17V62C110 95 89 115 60 126C31 115 10 95 10 62V17C22 10 40 6 60 6Z\" fill=\"#e6b383\" stroke=\"#13232e\" stroke-width=\"5\" stroke-linejoin=\"round\"/><path d=\"M60 6C80 6 98 10 110 17V62C110 95 89 115 60 126C31 115 10 95 10 62V17C22 10 40 6 60 6Z\" fill=\"none\" stroke=\"#13232e\" stroke-opacity=\"0.55\" stroke-width=\"1.6\" stroke-dasharray=\"4 3.5\" transform=\"translate(60 66) scale(.84) translate(-60 -66)\"/><svg x=\"33\" y=\"36\" width=\"54\" height=\"54\" viewBox=\"0 0 256 256\" fill=\"#13232e\"><path d=\"M192,28H64A36,36,0,0,0,28,64V192a36,36,0,0,0,36,36H192a36,36,0,0,0,36-36V64A36,36,0,0,0,192,28Zm12,164a12,12,0,0,1-12,12H64a12,12,0,0,1-12-12V64A12,12,0,0,1,64,52H192a12,12,0,0,1,12,12ZM104,88A16,16,0,1,1,88,72,16,16,0,0,1,104,88Zm40,40a16,16,0,1,1-16-16A16,16,0,0,1,144,128Zm40-40a16,16,0,1,1-16-16A16,16,0,0,1,184,88Zm-80,80a16,16,0,1,1-16-16A16,16,0,0,1,104,168Zm80,0a16,16,0,1,1-16-16A16,16,0,0,1,184,168Z\"/></svg></svg><span>Tabletop Gaming</span></div>",
+      "css": ".ds-badge{display:grid;justify-items:center;gap:.6rem;width:8.5rem;text-align:center;font:700 .9375rem/1.25 'Atkinson Hyperlegible Next',system-ui,sans-serif;color:var(--ink,#13232e)}.ds-badge svg{width:5.5rem;height:auto;overflow:visible;filter:drop-shadow(0 3px 4px rgb(19 35 46 / .22));transition:transform .35s cubic-bezier(.16,1,.3,1)}.ds-badge:hover>svg{transform:translateY(-4px) rotate(-3deg)}"
+    },
+    {
+      "name": "Topic Badge (ink)",
+      "kind": "custom",
+      "refersTo": "badge-ink",
+      "description": "Shield badge, navy fill with paper glyph and stitch. Brand constants only, same in both modes.",
+      "html": "<div class=\"ds-badge\"><svg viewBox=\"0 0 120 132\" aria-hidden=\"true\"><path d=\"M60 6C80 6 98 10 110 17V62C110 95 89 115 60 126C31 115 10 95 10 62V17C22 10 40 6 60 6Z\" fill=\"#f4efe8\" stroke=\"#f4efe8\" stroke-width=\"14\" stroke-linejoin=\"round\"/><path d=\"M60 6C80 6 98 10 110 17V62C110 95 89 115 60 126C31 115 10 95 10 62V17C22 10 40 6 60 6Z\" fill=\"#13232e\" stroke=\"#13232e\" stroke-width=\"5\" stroke-linejoin=\"round\"/><path d=\"M60 6C80 6 98 10 110 17V62C110 95 89 115 60 126C31 115 10 95 10 62V17C22 10 40 6 60 6Z\" fill=\"none\" stroke=\"#f4efe8\" stroke-opacity=\"0.55\" stroke-width=\"1.6\" stroke-dasharray=\"4 3.5\" transform=\"translate(60 66) scale(.84) translate(-60 -66)\"/><svg x=\"33\" y=\"36\" width=\"54\" height=\"54\" viewBox=\"0 0 256 256\" fill=\"#f4efe8\"><path d=\"M192,28H64A36,36,0,0,0,28,64V192a36,36,0,0,0,36,36H192a36,36,0,0,0,36-36V64A36,36,0,0,0,192,28Zm12,164a12,12,0,0,1-12,12H64a12,12,0,0,1-12-12V64A12,12,0,0,1,64,52H192a12,12,0,0,1,12,12ZM104,88A16,16,0,1,1,88,72,16,16,0,0,1,104,88Zm40,40a16,16,0,1,1-16-16A16,16,0,0,1,144,128Zm40-40a16,16,0,1,1-16-16A16,16,0,0,1,184,88Zm-80,80a16,16,0,1,1-16-16A16,16,0,0,1,104,168Zm80,0a16,16,0,1,1-16-16A16,16,0,0,1,184,168Z\"/></svg></svg><span>Tabletop Gaming</span></div>",
+      "css": ".ds-badge{display:grid;justify-items:center;gap:.6rem;width:8.5rem;text-align:center;font:700 .9375rem/1.25 'Atkinson Hyperlegible Next',system-ui,sans-serif;color:var(--ink,#13232e)}.ds-badge svg{width:5.5rem;height:auto;overflow:visible;filter:drop-shadow(0 3px 4px rgb(19 35 46 / .22));transition:transform .35s cubic-bezier(.16,1,.3,1)}.ds-badge:hover>svg{transform:translateY(-4px) rotate(-3deg)}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Surface field with ink outline and bold label above.",
+      "html": "<label class=\"ds-field\">Event name <input placeholder=\"Game Night\"></label>",
+      "css": ".ds-field{display:grid;gap:.4rem;font:700 1.0625rem/1.6 'Atkinson Hyperlegible Next',system-ui,sans-serif;color:var(--ink,#13232e)}.ds-field input{font:inherit;font-weight:400;color:var(--ink,#13232e);background:var(--surface,#f4efe8);border:2px solid var(--ink,#13232e);border-radius:10px;padding:.6em .8em;min-height:3rem}.ds-field input::placeholder{color:var(--ink-soft,#3f4c56)}.ds-field input:focus-visible{outline:3px solid var(--accent-text,#9a3e1b);outline-offset:3px}"
+    },
+    {
+      "name": "Site Header",
+      "kind": "nav",
+      "refersTo": "",
+      "description": "Crest wordmark left, bold text link right; orange underline on hover and current page.",
+      "html": "<header class=\"ds-nav\"><a class=\"ds-word\" href=\"#\"><span class=\"ds-crest\"></span>The Papa Squad</a><nav><a href=\"#\" aria-current=\"page\">Members</a><a href=\"#\">Brand kit</a></nav></header>",
+      "css": ".ds-nav{display:flex;align-items:center;justify-content:space-between;gap:1.5rem;padding:1rem;background:var(--ground,#dad2c6);color:var(--ink,#13232e);font:700 1.0625rem/1.6 'Atkinson Hyperlegible Next',system-ui,sans-serif}.ds-word{display:inline-flex;align-items:center;gap:.6rem;font:800 1.25rem/1 'Bricolage Grotesque',sans-serif;letter-spacing:-.02em;text-decoration:none;color:inherit}.ds-crest{width:44px;height:44px;border-radius:50%;background:#13232e}.ds-nav nav{display:flex;gap:1.25rem}.ds-nav nav a{color:inherit;text-decoration:none}.ds-nav nav a:hover,.ds-nav nav a[aria-current=page]{text-decoration:underline;text-decoration-color:#b24a22;text-decoration-thickness:2px;text-underline-offset:.2em}"
+    },
+    {
+      "name": "Closing Band",
+      "kind": "card",
+      "refersTo": "close-band",
+      "description": "Full-bleed band that ends a page with the one action; a step darker than the ground at night.",
+      "html": "<section class=\"ds-close\"><h2>Pull up a chair.</h2><p>There's always room for one more on the couch.</p></section>",
+      "css": ".ds-close{background:var(--band,#13232e);color:#f4efe8;text-align:center;padding:4rem 1rem}.ds-close h2{margin:0;font:800 2.5rem/1.05 'Bricolage Grotesque',sans-serif;letter-spacing:-.025em}.ds-close p{margin:.75rem 0 0;font:400 1.25rem/1.6 'Atkinson Hyperlegible Next',system-ui,sans-serif;color:var(--band-soft,#dad2c6)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Clubhouse",
+    "overview": "The Papa Squad looks like a members' club. By day the ground is the warm grey of the crest's original background and navy ink carries the type; after hours (the visitor's `prefers-color-scheme: dark`) the lights go down: navy becomes the ground and cream becomes the ink. The crest is a cut-out, so it sits straight on either ground. Orange is held back for the one thing a visitor should do. Even after hours the world refuses the neon gaming-community page: no glows, no black, no electric accents.\n\nThe signature is the badge family. Every Topic and every club wears the same shield: a thick navy outline, a paper sticker edge, a stitched inner line, and one glyph. Pages are generous and calm, with big rounded-grotesque headings, legible body text, and a single full-bleed navy band to close a page.\n\nThe same theme covers everything the club publishes: the site, CMS club pages (`.prose`), 1080×1080 event graphics, and the 1200×630 link preview. The class names in `src/styles/theme.css` are the contract those surfaces depend on.",
+    "keyCharacteristics": [
+      "Two modes from one set of tokens: warm grey ground by day, deep navy after hours. Rasters are always day.",
+      "Brand constants (paper, navy, orange, sky, sand) never change with the mode; badges and the orange action look identical in both.",
+      "Orange only for the one action.",
+      "One shield badge shape in three fills (sky, sand, navy).",
+      "Bricolage Grotesque 800 headings, tightly tracked. Atkinson Hyperlegible Next body.",
+      "Soft lift shadows. No hard offset shadows, no glows."
+    ],
+    "rules": [
+      {
+        "name": "The One Way Forward Rule",
+        "body": "One orange button per view, for the thing you most want people to do. On the public landing that is \"Join us on Discord\", rendered only when `PUBLIC_DISCORD_INVITE` is set at build. It may repeat in the page's closing band, as the same action. With no invite, sign-in is a quiet outlined button and the page has no orange fill.",
+        "section": "colors"
+      },
+      {
+        "name": "The Orange Is Not A Badge Rule",
+        "body": "Badges are filled sky, sand or navy, cycled by index so neighbours differ. Never orange.",
+        "section": "colors"
+      },
+      {
+        "name": "The Constant Brand Rule",
+        "body": "Badges, the orange action and anything drawn in Paper or Navy use the brand constants, never the mode colours, so they look the same by day and after hours. Only ground, surface, ink, line and band swap.",
+        "section": "colors"
+      },
+      {
+        "name": "The Cut-Out Crest Rule",
+        "body": "The crest is a transparent cut-out and sits directly on the ground in either mode. It is never boxed, never placed on a coloured shape, recoloured, cropped into a frame, or overlaid with text. In small lockups (header wordmark, event footer) it is clipped to a circle.",
+        "section": "colors"
+      },
+      {
+        "name": "The Daylight Graphics Rule",
+        "body": "The event graphic and link preview set `data-theme=\"light\"`, so a raster never depends on who rendered it.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tight Display Rule",
+        "body": "Display-face headings are always 800 (600 only for h3 and quotes) and always negatively tracked (-0.025em, -0.035em at display size, -0.04em on rasters). Headings are sentence case. No uppercase labels above headings.",
+        "section": "typography"
+      },
+      {
+        "name": "The Object On A Table Rule",
+        "body": "Only physical-feeling objects (a photo, a sticker, a card, the one button) cast a shadow, and always the soft Lift. Text, sections and quiet buttons are flat.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** colour pages with the mode tokens (ground, surface, ink, line, band) so they work in both modes; render rasters with `data-theme=\"light\"`.",
+      "**Do** use exactly one orange button per view, for the main action; repeat it only as the same action in the closing band.",
+      "**Do** give every Topic and club a badge from the one shield family, filled sky, sand or navy, drawn in brand constants.",
+      "**Do** keep text ink or soft ink on the ground and surface, and paper on the band or orange.",
+      "**Do** wrap CMS content in `.prose` rather than styling it by hand.",
+      "**Do** frame photos with a paper border, 14px corners and the Lift shadow."
+    ],
+    "donts": [
+      "**Don't** use orange for badges, body text, backgrounds or a second competing button.",
+      "**Don't** box, recolour, crop or put text over the crest, or set it on a coloured shape; it sits on the ground.",
+      "**Don't** use the gaming aesthetic, in either mode: neon, glows, pure black backgrounds. After hours is navy.",
+      "**Don't** draw a new badge shape or a badge without the navy outline, sticker edge and stitch.",
+      "**Don't** use hard offset shadows or glows; depth is the soft Lift only.",
+      "**Don't** put small uppercase labels or kickers above headings.",
+      "**Don't** set any text on orange except Paper. Paper on Orange is 4.7:1 and on Deep Orange 6.0:1 in both modes, AA at every size. Don't lighten the orange: anything brighter than #b24a22 drops Paper below 4.5:1."
+    ]
+  }
+}

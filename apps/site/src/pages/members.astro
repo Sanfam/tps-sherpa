@@ -1,9 +1,9 @@
 ---
 // Stub Member-gated page. Must stay server-rendered: the middleware is the gate.
+import Base from "../layouts/Base.astro";
 ---
-<html lang="en">
-  <head><meta charset="utf-8" /><title>Members</title></head>
-  <body>
+<Base title="Members" members>
+  <div class="wrap prose">
     <h1>Members only</h1>
-  </body>
-</html>
+  </div>
+</Base>

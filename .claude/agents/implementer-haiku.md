@@ -5,6 +5,7 @@ tools: Read, Write, Edit, Bash, Glob, Grep
 model: claude-haiku-5-5
 effort: low
 maxTurns: 25
+isolation: worktree
 ---
 
 You are given one mechanical packet: the exact edits, or one rule and the files
@@ -17,6 +18,8 @@ the orchestrator routes the packet up a tier. A guess is the failure.
 
 Match the surrounding code's naming and idiom. You write no tests: the tests
 `AGENTS.md` keeps guard complex failures, and complex work is not routed here.
+
+You work in your own worktree. If it has no `node_modules`, run `npm ci` first.
 
 Before you claim done, run and read the output of:
 
