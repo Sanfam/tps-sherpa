@@ -38,6 +38,7 @@ import {
   DATA_DIR,
   PERSONA_PATH,
   PRIVACY_POLICY_PATH,
+  SITE_PRIVACY_POLICY_PATH,
   VOCABULARY_PATH,
   loadCatalog,
   loadRoleManifest,
@@ -416,6 +417,7 @@ const sherpa: Sherpa = {
       tier0: TIER0_PATH,
       activity: ACTIVITY_PATH,
       policy: PRIVACY_POLICY_PATH,
+      sitePolicy: SITE_PRIVACY_POLICY_PATH,
     },
     // F8: the rows are erased in the handler, and the memory with them, at once.
     (memberId) => responder?.forget(memberId),

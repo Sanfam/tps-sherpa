@@ -201,6 +201,15 @@ test("leak: no gated route is prerendered, and the stub is not served without a 
   expect(await res.text()).not.toContain("Members only");
 });
 
+test("the privacy page is public and server-rendered, and shows both policies, bold kept", async () => {
+  const res = await fetch(`${SITE}/privacy`, { redirect: "manual" });
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  expect(body).toContain("Papa Squad website privacy policy");
+  expect(body).toContain("Papa Sherpa privacy policy");
+  expect(body).toContain("<strong>we will never sell, rent or trade it.</strong>");
+}, 10_000);
+
 test("cookies: the session cookie carries only the opaque token; nothing else is set", async () => {
   setCookies.length = 0;
   guild.set(MEMBER, [MEMBER_ROLE]);

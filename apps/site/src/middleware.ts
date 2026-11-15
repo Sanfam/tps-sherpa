@@ -2,7 +2,7 @@ import { defineMiddleware } from "astro:middleware";
 import { groupsFor, memberRoles } from "./auth.ts";
 
 // Default-deny: every server-rendered route is Member-gated except these.
-const isPublic = (path: string) => path === "/" || path.startsWith("/auth/");
+const isPublic = (path: string) => path === "/" || path === "/privacy" || path.startsWith("/auth/");
 
 export const onRequest = defineMiddleware(async (context, next) => {
   // Prerendered pages are public by construction; this runs for them only at build.

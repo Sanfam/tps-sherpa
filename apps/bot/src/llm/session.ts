@@ -32,6 +32,8 @@ export const DATA_DIR = resolve(import.meta.dirname, "../../.data");
 export const ACTIVITY_PATH = resolve(DATA_DIR, "activity.json");
 /** Owner-authorized (2026-10-15) and edited by hand; nothing in the pipeline writes it. */
 export const PRIVACY_POLICY_PATH = contentPath("privacy-policy.md");
+/** The site's policy, which `/privacy policy` sends second. Approved by the owner 2026-11-15. */
+export const SITE_PRIVACY_POLICY_PATH = contentPath("privacy-policy-site.md");
 
 export const readIfPresent = (path: string): string | null => {
   try {

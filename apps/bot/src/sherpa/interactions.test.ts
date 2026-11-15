@@ -11,7 +11,7 @@ import {
 import { describe, expect, it } from "vitest";
 import type { ActivityStore } from "../llm/activity.ts";
 import { createBoundary, type ChatPort } from "../llm/boundary.ts";
-import { PRIVACY_POLICY_PATH, retrying } from "../llm/session.ts";
+import { PRIVACY_POLICY_PATH, SITE_PRIVACY_POLICY_PATH, retrying } from "../llm/session.ts";
 import type { Vocabulary } from "../llm/vocabulary.ts";
 import type { Entity } from "../sync/catalog.ts";
 import {
@@ -48,6 +48,7 @@ import {
   BACKFILL_PENDING,
   BACKFILL_REQUESTED,
   MAX_EMBED_DESCRIPTION,
+  MAX_EMBEDS_TOTAL,
   NOTHING_DELETED,
   POLICY_INTRO,
   openPrivacy,
@@ -158,16 +159,18 @@ const privacyCommand = (
 };
 
 /** `/privacy`'s real stores, on temp paths: bot.db, tier0.db, activity.json and the policy. */
-const tempPrivacy = (policy = "The policy.") => {
+const tempPrivacy = (policy = "The policy.", sitePolicy = "The site policy.") => {
   const dir = mkdtempSync(join(tmpdir(), "sherpa-privacy-"));
   const paths = {
     durable: join(dir, "bot.db"),
     tier0: join(dir, "tier0.db"),
     activity: join(dir, "activity.json"),
     policy: join(dir, "privacy-policy.md"),
+    sitePolicy: join(dir, "privacy-policy-site.md"),
   };
   initDurableStore(paths.durable, { exclusionSeed: null, catalog: null, roleManifest: null });
   writeFileSync(paths.policy, policy);
+  writeFileSync(paths.sitePolicy, sitePolicy);
   return { paths, privacy: openPrivacy(paths) };
 };
 
@@ -183,6 +186,7 @@ const harness = (
     limit?: number;
     roles?: RoleManifestEntry[];
     policy?: string;
+    sitePolicy?: string;
     /** The invoker has turned processing off. */
     optedOut?: boolean;
     /** Members' own denies, written by a sync as the real one writes them. */
@@ -199,7 +203,7 @@ const harness = (
     },
   };
   const { cap, path } = tempCap(opts.limit ?? 10);
-  const { privacy, paths } = tempPrivacy(opts.policy);
+  const { privacy, paths } = tempPrivacy(opts.policy, opts.sitePolicy);
   if (opts.optedOut) privacy.set(INVOKER, "processing", false);
   // The real seed's Channel is not in these fixtures; a test that wants one
   // missing adds it back.
@@ -336,14 +340,28 @@ describe("/privacy", () => {
     expect(reply).toContain("Reading what you write: on.");
   });
 
-  it("sends the policy in an embed, and refuses one too long for it rather than cutting it", async () => {
-    const { run, sent } = harness({ policy: "Sherpa keeps little." });
+  it("sends the bot's policy then the site's as two embeds, and refuses what Discord would cut rather than cutting it", async () => {
+    const { run, sent } = harness({ policy: "Sherpa keeps little.", sitePolicy: "The site keeps less." });
     expect(await run(privacyCommand("policy"))).toBe(POLICY_INTRO);
-    expect(sent.replies[0]!.embeds).toEqual([{ description: "Sherpa keeps little." }]);
+    expect(sent.replies[0]!.embeds).toEqual([{ description: "Sherpa keeps little." }, { description: "The site keeps less." }]);
 
-    const long = harness({ policy: "p".repeat(MAX_EMBED_DESCRIPTION + 1) });
-    expect(await long.run(privacyCommand("policy"))).toBe(FAILED);
-    expect(long.sent.replies[0]!.embeds).toBeUndefined();
+    // One embed over its 4,096; then each within it, but the message over 6,000.
+    for (const opts of [
+      { policy: "p".repeat(MAX_EMBED_DESCRIPTION + 1) },
+      { sitePolicy: "s".repeat(MAX_EMBED_DESCRIPTION + 1) },
+      { policy: "p".repeat(MAX_EMBED_DESCRIPTION), sitePolicy: "s".repeat(MAX_EMBEDS_TOTAL - MAX_EMBED_DESCRIPTION + 1) },
+    ]) {
+      const long = harness(opts);
+      expect(await long.run(privacyCommand("policy"))).toBe(FAILED);
+      expect(long.sent.replies[0]!.embeds).toBeUndefined();
+    }
+    // Exactly 6,000 goes through, with the trailing newline each file has:
+    // Discord trims a description before counting it.
+    const exact = harness({
+      policy: "p".repeat(MAX_EMBED_DESCRIPTION) + "\n",
+      sitePolicy: "s".repeat(MAX_EMBEDS_TOTAL - MAX_EMBED_DESCRIPTION) + "\n",
+    });
+    expect(await exact.run(privacyCommand("policy"))).toBe(POLICY_INTRO);
   });
 
   it("answers a subcommand it does not know as unknown", async () => {
@@ -658,8 +676,10 @@ describe("the /privacy definition", () => {
     ]);
   });
 
-  it("fits the policy Staff wrote in one embed", () => {
-    expect(readFileSync(PRIVACY_POLICY_PATH, "utf8").length).toBeLessThanOrEqual(MAX_EMBED_DESCRIPTION);
+  it("fits the policies Staff wrote in two embeds, and one message", () => {
+    const [bot, site] = [PRIVACY_POLICY_PATH, SITE_PRIVACY_POLICY_PATH].map((p) => readFileSync(p, "utf8").length);
+    expect(Math.max(bot!, site!)).toBeLessThanOrEqual(MAX_EMBED_DESCRIPTION);
+    expect(bot! + site!).toBeLessThanOrEqual(MAX_EMBEDS_TOTAL);
   });
 });
 
