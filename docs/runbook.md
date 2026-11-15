@@ -197,6 +197,48 @@ uploaded, no snapshot yet) started normally next time and its row restored.
 With the local state deletion removed from `start.sh`, both post-restart rows
 were lost.
 
+## Erasure in the CMS: purge history and anonymise
+
+Both are Admin actions (holders of `Staff`), checked against the live role, and
+refused without a same-origin `Origin` header (ADR-0002, trial step 4). There is
+no button for either yet. Run them from the browser's developer console on the
+site, signed in, so the request carries your session and the site's origin.
+
+**Purge history**, after removing someone's personal data from a page. This
+deletes every old version of that page at once, and keeps the version it
+currently shows and any unpublished draft. The entry's ID is the last part of
+its URL in the CMS (`/_emdash/admin/content/pages/<id>`).
+
+```js
+await fetch("/admin/emdash/purge-history", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ collection: "pages", entryId: "<id>" }),
+}).then((r) => r.status); // 200 done, 404 no such entry
+```
+
+**Anonymise an editor**, on their request. This clears their name from their CMS
+account and moves their pages, versions, media and bylines to an "Anonymous"
+author. Their account still exists, and if they still hold an editor role their
+next CMS visit keeps them anonymous. Their address is `<Discord ID>@discord.local`.
+
+```js
+await fetch("/admin/emdash/anonymise", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ email: "<Discord ID>@discord.local" }),
+}).then((r) => r.status); // 200 done, 404 no such editor
+```
+
+Neither touches the site's sign-in record. To delete that, see the privacy
+policy's "until you ask Staff to delete them": until issue #74, that is by hand.
+
+The 90-day revision prune runs by itself, a minute after the site's first
+server-rendered request after a start, then daily. A failure is logged as `[emdash] Revision prune failed`. Purge,
+anonymise and prune checkpoint SQLite's WAL with `TRUNCATE`; if Litestream or a
+long-lived reader keeps the checkpoint busy, the operation logs the failure and
+Litestream retains the WAL for its normal replication cycle.
+
 ## The site's database: replication and restore
 
 The deployed site starts through `apps/site/start.sh`, `apps/site/Dockerfile`'s

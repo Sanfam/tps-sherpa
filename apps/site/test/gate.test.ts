@@ -1,7 +1,7 @@
 // The Phase 4 mechanical gate, end to end: the built site against a mock
 // Discord, on a fresh session database.
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -59,6 +59,10 @@ const prodEnv = Object.fromEntries(
 
 const db = () => new DatabaseSync(DB, { readOnly: true });
 const rows = (sql: string, ...params: string[]) => db().prepare(sql).all(...params);
+const emdashBytes = () =>
+  Buffer.concat([join(tmp, "emdash.db"), join(tmp, "emdash.db-wal"), join(tmp, "emdash.db-shm")]
+    .filter((path) => existsSync(path))
+    .map((path) => readFileSync(path))).toString("utf8");
 const usersFor = (id: string) =>
   rows('select u.id from "user" u join account a on a.userId = u.id where a.accountId = ?', id);
 
@@ -507,4 +511,43 @@ test("gate: each kind of caller reaches only the routes placed for it", async ()
     const home = res.status === 302 && res.headers.get("location") === "/";
     expect(home, `${who}: ${res.status} ${res.headers.get("location")}`).toBe(who === "viewer" || who === "member");
   }
+});
+
+test("EmDash permanently deletes content through the site's configured SQLite dialect", async () => {
+  guild.set(STAFF, [MEMBER_ROLE, STAFF_ROLE]);
+  const { cookie } = await signIn(STAFF);
+  const token = "zqxrestsentinelqz";
+  const headers = {
+    cookie,
+    "content-type": "application/json",
+    "X-EmDash-Request": "1",
+    Origin: SITE,
+  };
+  const created = await fetch(`${SITE}/_emdash/api/content/pages`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ data: { title: token, content: [] } }),
+  });
+  expect(created.status).toBe(201);
+  const payload = (await created.json()) as { success: boolean; data: { item: { id: string } } };
+  const id = payload.data.item.id;
+  const trashed = await fetch(`${SITE}/_emdash/api/content/pages/${id}`, {
+    method: "DELETE",
+    headers: { cookie, "X-EmDash-Request": "1", Origin: SITE },
+  });
+  expect(trashed.status).toBe(200);
+  const deleted = await fetch(`${SITE}/_emdash/api/content/pages/${id}/permanent`, {
+    method: "DELETE",
+    headers: { cookie, "X-EmDash-Request": "1", Origin: SITE },
+  });
+  expect(deleted.status).toBe(200);
+  // Deleted text reaches the main file at the next WAL checkpoint, which
+  // Litestream runs in production; until then it lingers on disk, out of any
+  // user's reach, which the owner accepts (2026-11-15). Checkpoint as Litestream
+  // would, then scan: without secure_delete on EmDash's own connection, the
+  // freed pages would still hold the text.
+  const db = new DatabaseSync(join(tmp, "emdash.db"));
+  db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+  db.close();
+  expect(emdashBytes()).not.toContain(token);
 });

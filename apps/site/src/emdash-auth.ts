@@ -10,6 +10,7 @@
  * a Member who is no longer one loses the session itself.
  */
 import { env, memberRoles } from "./auth.ts";
+import { ANONYMOUS_NAME, isAnonymisedEmail } from "./emdash-erasure.ts";
 
 // EmDash's role levels.
 export const ADMIN = 50;
@@ -26,6 +27,10 @@ export function editorRole(roles: string[]) {
   return null;
 }
 
+export function nameForEditor(email: string, name: string) {
+  return isAnonymisedEmail(email) ? ANONYMOUS_NAME : name;
+}
+
 export async function authenticate(request: Request) {
   const { roles, user } = await memberRoles(request.headers);
   if (!roles || !user) throw new Error("no Member session");
@@ -34,5 +39,5 @@ export async function authenticate(request: Request) {
   if (role === null) throw new Error("no editor role");
   // EmDash matches users by email, the snowflake-derived address, and keeps
   // the name in step with the Discord username.
-  return { email: user.email, name: user.name, role };
+  return { email: user.email, name: nameForEditor(user.email, user.name), role };
 }
