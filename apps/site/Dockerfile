@@ -21,6 +21,8 @@ COPY apps/site/package.json apps/site/
 # the type packages are for development.
 RUN npm ci --omit=dev -w @tps/site
 COPY apps/site apps/site
+# The topic vocabulary the landing and brand pages import from the repo root.
+COPY content/config/topics.json content/config/topics.json
 # astro.config.mjs reads it at build time, for the domains whose forwarded
 # headers Astro trusts.
 ARG BETTER_AUTH_URL
