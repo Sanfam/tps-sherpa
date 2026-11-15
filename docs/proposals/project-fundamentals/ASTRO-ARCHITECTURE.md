@@ -628,9 +628,9 @@ If the visual editing turns out to be insufficient for real editors, that is a r
 **All** wiki content migrates — it is not expansive and none of it should be lost *(one exception, owner 2026-11-14: the generated channel index, below)*. Export via Wiki.js's GraphQL API and import into the CMS, then cut over once *(was "to markdown, commit" before ADR-0001)*. **Wiki.js goes read-only at cutover; no dual-running period** — two writable sources for the same page is exactly the failure this architecture is shaped to avoid. Leave the old wiki up read-only as an archive for as long as it is free.
 
 **Owner decisions, 2026-11-14** (corpus: `docs/research/2026-11-13-wikijs-inventory.md`):
-- The CMS is EmDash (ADR-0002, trial build). Pages are owned per author; Staff reassign at handover.
+- The CMS is EmDash (ADR-0002, trial build). Pages are owned per author; Admins (holders of `Staff`) reassign at handover.
 - `papasquad/threads-and-channels`, the stale generated index, is **replaced by the Catalog** (shown to people as the Index), not migrated as a page.
-- The unpublished `entertainment/Need4ReadBookClub/Voting` page **migrates as a draft**, owned by the member the owner named, who holds `Event Managers`. That makes them Staff, and so an Admin who can already edit it; ownership names them as its editor. It needs a signed-in read, since guests cannot see drafts.
+- The unpublished `entertainment/Need4ReadBookClub/Voting` page **migrates as a draft**, owned by the member the owner named, who holds `Event Managers`. In the CMS that makes them an Author, so ownership is what lets them edit it *(was "an Admin who can already edit it"; the owner made `Event Managers` Author later on 2026-11-14)*. It needs a signed-in read, since guests cannot see drafts.
 - Every other published page migrates, from the reconstituted export (kept out of git) or the Markdown source.
 
 Flip shadow mode off after ≥2 weeks of reviewed output. Full spec in `PROJECT-STATUS.md` §7.

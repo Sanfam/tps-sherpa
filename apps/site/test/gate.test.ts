@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { BOT_TOKEN, GUILD_ID, guild, mock, startMock } from "./mock-discord.ts";
+import { BOT_TOKEN, GUILD_ID, guild, mock, startMock, usernames } from "./mock-discord.ts";
 
 const SITE_DIR = join(import.meta.dirname, "..");
 const PORT = 4329;
@@ -19,14 +19,12 @@ const MEMBER_ROLE = "300000000000000001";
 const STAFF_ROLE = "300000000000000002";
 const AMBASSADOR_ROLE = "300000000000000003";
 const EVENT_MANAGERS_ROLE = "300000000000000006";
-const CLUB_LEAD_ROLE = "300000000000000007";
 const MEMBER = "900000000000000001";
 const JOINED = "900000000000000002"; // in the guild, no Member role yet
 const OUTSIDER = "900000000000000003"; // not in the guild
 const MOVER = "900000000000000004"; // roles change while signed in
 const STAFF = "900000000000000005";
 const EVENT_MANAGER = "900000000000000006";
-const CLUB_LEAD = "900000000000000007";
 
 const tmp = mkdtempSync(join(tmpdir(), "site-gate-"));
 const DB = join(tmp, "sessions.db");
@@ -302,7 +300,7 @@ test("a gated response carries Better Auth's renewal of the session cookie", asy
   expect(res.headers.getSetCookie().some((c) => c.startsWith("better-auth.session_token="))).toBe(true);
 });
 
-test("the site stores no username, IP address or user agent", async () => {
+test("the site stores the username, and no IP address or user agent", async () => {
   guild.set(MEMBER, [MEMBER_ROLE]);
   const { b, callback: url } = await startSignIn(MEMBER);
   // The session is created in the callback, from the request that carries these.
@@ -319,7 +317,7 @@ test("the site stores no username, IP address or user agent", async () => {
     rows("select * from account where accountId = ?", MEMBER),
     rows("select s.* from session s join account a on a.userId = s.userId where a.accountId = ?", MEMBER),
   ]);
-  expect(stored, "username").not.toContain(`fixture-${MEMBER}`);
+  expect(stored, "username").toContain(`fixture-${MEMBER}`);
   expect(stored, "IP address").not.toContain("203.0.113.7");
   expect(stored, "user agent").not.toContain("gate-test-agent");
 });
@@ -360,22 +358,21 @@ test("the sweep deletes expired sessions and sign-in states, and keeps live ones
 // EmDash in external-auth mode (ADR-0002), on the site's session.
 const editors = (id: string) =>
   new DatabaseSync(join(tmp, "emdash.db"), { readOnly: true })
-    .prepare("select role from users where email = ?")
+    .prepare("select role, name from users where email = ?")
     .all(`${id}@discord.local`);
 const cms = (cookie: string) => fetch(`${SITE}/_emdash/api/auth/me`, { headers: { cookie } });
 
 // First among the EmDash tests: EmDash makes whoever it provisions first an
 // Admin, whatever their role (step 3 of the trial seeds a Staff row instead).
-test("EmDash: Staff, from either role, land as Admin and Club Leads as Author", async () => {
+test("EmDash: Staff land as Admin and Event Managers as Author, named by username", async () => {
   for (const [id, role, level] of [
     [STAFF, STAFF_ROLE, 50],
-    [EVENT_MANAGER, EVENT_MANAGERS_ROLE, 50],
-    [CLUB_LEAD, CLUB_LEAD_ROLE, 30],
+    [EVENT_MANAGER, EVENT_MANAGERS_ROLE, 30],
   ] as const) {
     guild.set(id, [MEMBER_ROLE, role]);
     const { cookie } = await signIn(id);
     expect((await cms(cookie)).status, id).toBe(200);
-    expect(editors(id), id).toEqual([{ role: level }]);
+    expect(editors(id), id).toEqual([{ role: level, name: `fixture-${id}` }]);
   }
 });
 
@@ -391,17 +388,32 @@ test("EmDash: a role change applies on private routes within the TTL, without a 
   guild.set(MOVER, [MEMBER_ROLE, STAFF_ROLE]);
   const { cookie } = await signIn(MOVER);
   expect((await cms(cookie)).status).toBe(200);
-  expect(editors(MOVER)).toEqual([{ role: 50 }]);
+  expect(editors(MOVER)).toEqual([{ role: 50, name: `fixture-${MOVER}` }]);
 
-  guild.set(MOVER, [MEMBER_ROLE, CLUB_LEAD_ROLE]);
+  guild.set(MOVER, [MEMBER_ROLE, EVENT_MANAGERS_ROLE]);
   await new Promise((r) => setTimeout(r, TTL_MS + 100));
   expect((await cms(cookie)).status).toBe(200);
-  expect(editors(MOVER)).toEqual([{ role: 30 }]);
+  expect(editors(MOVER)).toEqual([{ role: 30, name: `fixture-${MOVER}` }]);
 
   guild.set(MOVER, [MEMBER_ROLE]);
   await new Promise((r) => setTimeout(r, TTL_MS + 100));
   expect((await cms(cookie)).status).toBe(401);
 }, 10_000);
+
+test("EmDash: a renamed Discord account is renamed on its next sign-in", async () => {
+  guild.set(EVENT_MANAGER, [MEMBER_ROLE, EVENT_MANAGERS_ROLE]);
+  expect((await cms((await signIn(EVENT_MANAGER)).cookie)).status).toBe(200);
+  usernames.set(EVENT_MANAGER, "renamed");
+  try {
+    const { cookie } = await signIn(EVENT_MANAGER);
+    expect((await cms(cookie)).status).toBe(200);
+    expect(editors(EVENT_MANAGER)).toEqual([{ role: 30, name: "renamed" }]);
+    expect(rows('select u.name from "user" u join account a on a.userId = u.id where a.accountId = ?', EVENT_MANAGER))
+      .toEqual([{ name: "renamed" }]);
+  } finally {
+    usernames.delete(EVENT_MANAGER);
+  }
+});
 
 test("EmDash: within the TTL, CMS requests and refusals use the stored roles", async () => {
   guild.set(MEMBER, [MEMBER_ROLE]);

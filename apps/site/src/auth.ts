@@ -82,6 +82,8 @@ function createAuth(database: DatabaseSync) {
             scopes: ["identify"],
             pkce: true,
             prompt: "none",
+            // A renamed Discord account gets its new username on next sign-in.
+            overrideUserInfo: true,
             // Awaited in the OAuth callback before any user row exists, so
             // returning null rejects the sign-in with nothing persisted.
             async getUserInfo(tokens) {
@@ -89,13 +91,14 @@ function createAuth(database: DatabaseSync) {
                 headers: { Authorization: `Bearer ${tokens.accessToken}` },
               });
               if (!me.ok) return null;
-              const { id } = (await me.json()) as { id: string };
+              const { id, username } = (await me.json()) as { id: string; username: string };
               const roles = await guildRoles(id).catch(() => null);
               if (!isMember(roles)) return null;
               // `identify` has no email, and the callback fails with
               // EMAIL_NOT_FOUND without one, so it is synthesised. The site
-              // keeps only the snowflake: no username, no avatar.
-              return { id, name: id, email: `${id}@discord.local`, emailVerified: false };
+              // keeps the snowflake and the username, which names the editor
+              // in the CMS (owner, 2026-11-14): no display name, no avatar.
+              return { id, name: username, email: `${id}@discord.local`, emailVerified: false };
             },
           },
         ],
@@ -176,15 +179,15 @@ export function auth() {
  */
 export async function memberRoles(
   headers: Headers,
-): Promise<{ roles: string[] | null; setCookie: string[]; discordId?: string }> {
+): Promise<{ roles: string[] | null; setCookie: string[]; user?: { email: string; name: string } }> {
   const { auth: a, ready } = auth();
   await ready;
   // `setCookie` carries Better Auth's sliding renewal of the session cookie.
   const { headers: out, response: found } = await a.api.getSession({ headers, returnHeaders: true });
   const setCookie = out.getSetCookie();
   if (!found) return { roles: null, setCookie };
-  // The user's name is their snowflake (getUserInfo above).
-  return { roles: await rolesFor(found.session), setCookie, discordId: found.user.name };
+  const { email, name } = found.user;
+  return { roles: await rolesFor(found.session), setCookie, user: { email, name } };
 }
 
 async function rolesFor(session: { token: string; userId: string }): Promise<string[] | null> {

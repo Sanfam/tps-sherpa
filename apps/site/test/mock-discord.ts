@@ -18,6 +18,8 @@ export const BOT_TOKEN = "mock-bot-token";
 /** Guild roles by snowflake; absent means not in the guild. Tests edit it. */
 export const guild = new Map<string, string[]>();
 export const mock = { signInAs: "", memberLookups: 0 };
+// Discord usernames by snowflake, for a rename; `fixture-<id>` otherwise.
+export const usernames = new Map<string, string>();
 
 /** PKCE challenge by issued code. */
 const challenges = new Map<string, string>();
@@ -60,8 +62,8 @@ export async function startMock() {
       return json(res, 200, { access_token: `tok-${id}`, token_type: "Bearer", expires_in: 604800, scope: "identify" });
     }
     if (path === "/users/@me") {
-      const id = req.headers.authorization?.replace(/^Bearer tok-/, "");
-      return json(res, 200, { id, username: `fixture-${id}`, global_name: null });
+      const id = req.headers.authorization?.replace(/^Bearer tok-/, "") ?? "";
+      return json(res, 200, { id, username: usernames.get(id) ?? `fixture-${id}`, global_name: null });
     }
     const m = path.match(/^\/guilds\/(\d+)\/members\/(\d+)$/);
     if (m) {
