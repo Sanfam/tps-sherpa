@@ -4,6 +4,6 @@
     "noUncheckedIndexedAccess": true,
     "types": ["node"]
   },
-  "include": [".astro/types.d.ts", "src", "test"],
+  "include": [".astro/types.d.ts", "src", "test", "scripts"],
   "exclude": ["dist"]
 }
