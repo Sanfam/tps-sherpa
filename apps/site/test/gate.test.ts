@@ -1,12 +1,13 @@
 // The Phase 4 mechanical gate, end to end: the built site against a mock
 // Discord, on a fresh session database.
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
-import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeAll, expect, test } from "vitest";
+import { NEVER, concrete, injected } from "./emdash-routes.ts";
 import { BOT_TOKEN, GUILD_ID, guild, mock, startMock, usernames } from "./mock-discord.ts";
 
 const SITE_DIR = join(import.meta.dirname, "..");
@@ -361,6 +362,8 @@ const editors = (id: string) =>
     .prepare("select role, name from users where email = ?")
     .all(`${id}@discord.local`);
 const cms = (cookie: string) => fetch(`${SITE}/_emdash/api/auth/me`, { headers: { cookie } });
+const at = (path: string, cookie = "", method = "GET") =>
+  fetch(`${SITE}${path}`, { method, redirect: "manual", headers: { cookie } });
 
 // First among the EmDash tests: EmDash makes whoever it provisions first an
 // Admin, whatever their role (step 3 of the trial seeds a Staff row instead).
@@ -380,7 +383,7 @@ test("EmDash: a Member with no editor role is refused and leaves no users row", 
   guild.set(MEMBER, [MEMBER_ROLE, AMBASSADOR_ROLE]);
   const { cookie } = await signIn(MEMBER);
   expect((await stub(cookie)).status).toBe(200); // a Member on the site
-  expect((await cms(cookie)).status).toBe(401);
+  expect((await cms(cookie)).status).toBe(404); // the gate, ahead of EmDash
   expect(editors(MEMBER)).toEqual([]);
 });
 
@@ -397,7 +400,10 @@ test("EmDash: a role change applies on private routes within the TTL, without a 
 
   guild.set(MOVER, [MEMBER_ROLE]);
   await new Promise((r) => setTimeout(r, TTL_MS + 100));
-  expect((await cms(cookie)).status).toBe(401);
+  expect((await cms(cookie)).status).toBe(404);
+  // EmDash's public search would still serve drafts on the stored role.
+  expect((await at("/_emdash/api/search?q=x", cookie)).status).toBe(404);
+  expect(editors(MOVER)).toEqual([{ role: 30, name: `fixture-${MOVER}` }]);
 }, 10_000);
 
 test("EmDash: a renamed Discord account is renamed on its next sign-in", async () => {
@@ -420,6 +426,67 @@ test("EmDash: within the TTL, CMS requests and refusals use the stored roles", a
   const { cookie } = await signIn(MEMBER);
   expect((await stub(cookie)).status).toBe(200); // roles now stored on the session
   mock.memberLookups = 0;
-  for (let i = 0; i < 3; i++) expect((await cms(cookie)).status).toBe(401);
+  for (let i = 0; i < 3; i++) expect((await cms(cookie)).status).toBe(404);
   expect(mock.memberLookups).toBe(0);
+});
+
+// The gate (src/emdash-gate.ts) over HTTP; emdash-gate.test.ts places every route.
+test("gate: each kind of caller reaches only the routes placed for it", async () => {
+  guild.set(MEMBER, [MEMBER_ROLE]);
+  guild.set(EVENT_MANAGER, [MEMBER_ROLE, EVENT_MANAGERS_ROLE]);
+  guild.set(STAFF, [MEMBER_ROLE, STAFF_ROLE]);
+  mkdirSync(join(tmp, "uploads"), { recursive: true });
+  writeFileSync(join(tmp, "uploads", "gate-test.txt"), "uploaded");
+  const callers = {
+    viewer: "",
+    member: (await signIn(MEMBER)).cookie,
+    author: (await signIn(EVENT_MANAGER)).cookie,
+    admin: (await signIn(STAFF)).cookie,
+  };
+  // [method, path, the callers who get through]. EmDash answers each of these
+  // with something other than 404 for whoever reaches it.
+  const cases: [string, string, (keyof typeof callers)[]][] = [
+    ["GET", "/_emdash/api/media/file/gate-test.txt", ["member", "author", "admin"]],
+    ["GET", "/_emdash/api/auth/me", ["author", "admin"]],
+    ["GET", "/_emdash/api/search?q=x", ["author", "admin"]],
+    ["GET", "/_emdash/api/setup/status", ["admin"]],
+    ["GET", "/_emdash/api/snapshot", []],
+    ["GET", "/_emdash/api/admin/api-tokens", []],
+    ["POST", "/_emdash/api/content/pages/x1/preview-url", []],
+    ["POST", "/_emdash/api/mcp", []],
+    ["GET", "/.well-known/oauth-protected-resource", []],
+    ["GET", "/_emdash/api/health", []],
+    ["GET", "/_emdash/api/no-such-route", []],
+  ];
+  for (const [method, path, allowed] of cases) {
+    for (const [who, cookie] of Object.entries(callers)) {
+      const { status } = await at(path, cookie, method);
+      const through = allowed.includes(who as keyof typeof callers);
+      expect(status === 404, `${who} ${method} ${path}: ${status}`).toBe(!through);
+    }
+  }
+  // Every route EmDash injects, against expectations that do not come from the
+  // gate's lists: a caller without an editor role reaches nothing but uploaded
+  // files (a Viewer not even those), and no one reaches a credential or export.
+  for (const pattern of injected) {
+    const path = concrete(pattern);
+    if (!path.startsWith("/_emdash") && !path.startsWith("/.well-known")) continue; // robots.txt, sitemaps: the site's
+    // Astro answers 404 for a method a route lacks, so both are sent. A POST
+    // without EmDash's CSRF header changes nothing even where it gets through.
+    for (const method of ["GET", "POST"]) {
+      for (const [who, cookie] of Object.entries(callers)) {
+        const uploads = who === "member" && pattern === "/_emdash/api/media/file/[...key]";
+        if (!NEVER.test(pattern) && (who === "author" || who === "admin" || uploads)) continue;
+        const res = await at(path, cookie, method);
+        const refused = res.status === 404 || (res.status === 302 && res.headers.get("location") === "/");
+        expect(refused, `${who} ${method} ${path}: ${res.status}`).toBe(true);
+      }
+    }
+  }
+  // The admin pages send a caller without an editor role home.
+  for (const [who, cookie] of Object.entries(callers)) {
+    const res = await at("/_emdash/admin", cookie);
+    const home = res.status === 302 && res.headers.get("location") === "/";
+    expect(home, `${who}: ${res.status} ${res.headers.get("location")}`).toBe(who === "viewer" || who === "member");
+  }
 });

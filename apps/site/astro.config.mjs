@@ -22,6 +22,8 @@ export default defineConfig({
   integrations: [
     react(),
     emdash({
+      // EmDash's setup refuses to run in production without a configured origin.
+      siteUrl: site?.origin,
       database: sqlite({ url: `file:${data}/emdash.db` }),
       // ponytail: uploads on the volume, outside Litestream; R2 is step 5 of the trial.
       storage: local({ directory: `${data}/uploads`, baseUrl: "/_emdash/api/media/file" }),
@@ -32,6 +34,8 @@ export default defineConfig({
         entrypoint: fileURLToPath(new URL("./src/emdash-auth.ts", import.meta.url)),
         config: { syncRoles: true },
       },
+      // The allow-list gate on every EmDash route, ahead of all of EmDash.
+      middleware: { outer: fileURLToPath(new URL("./src/emdash-gate.ts", import.meta.url)) },
     }),
   ],
   security: {
