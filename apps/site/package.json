@@ -2,7 +2,9 @@
   "name": "@tps/site",
   "private": true,
   "type": "module",
-  "engines": { "node": "26" },
+  "engines": {
+    "node": "26"
+  },
   "scripts": {
     "build": "astro build",
     "start": "node ./dist/server/entry.mjs",
@@ -16,7 +18,11 @@
   },
   "dependencies": {
     "@astrojs/node": "11.1.9",
+    "@astrojs/react": "7.1.2",
     "astro": "7.4.4",
-    "better-auth": "1.7.14"
+    "better-auth": "1.7.14",
+    "emdash": "1.4.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   }
 }

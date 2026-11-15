@@ -7,7 +7,10 @@
 #
 # The session database defaults to apps/site/.data/sessions.db, under the
 # working directory npm gives the workspace: mount the volume at
-# /app/apps/site/.data, or set SITE_SESSION_DB.
+# /app/apps/site/.data, or set SITE_SESSION_DB. EmDash's database and uploads
+# go in .data too, unless SITE_EMDASH_DIR names another directory: its path is
+# fixed at build time, so it is a build argument. On Railway the volume is at
+# /data, and both variables point there.
 
 # The bot's base image, so both services run the same Node.
 FROM node:26.11.1-trixie-slim@sha256:193fe51b64e77981119c98c2002c9e32a70e2f006fb4d25068ce0558998917f0
@@ -26,7 +29,11 @@ COPY content/config/topics.json content/config/topics.json
 # astro.config.mjs reads it at build time, for the domains whose forwarded
 # headers Astro trusts.
 ARG BETTER_AUTH_URL
-RUN test -n "$BETTER_AUTH_URL" && BETTER_AUTH_URL=$BETTER_AUTH_URL npm run build -w @tps/site
+# Where EmDash's database and uploads go; see above.
+ARG SITE_EMDASH_DIR
+# The landing page's Join button; without it the page has none.
+ARG PUBLIC_DISCORD_INVITE
+RUN test -n "$BETTER_AUTH_URL" && npm run build -w @tps/site
 ENV HOST=0.0.0.0 PORT=8080
 EXPOSE 8080
 CMD ["npm", "start", "-w", "@tps/site"]

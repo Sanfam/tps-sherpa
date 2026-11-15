@@ -61,8 +61,8 @@ Roles are Discord-first: guild role membership is the source of truth, and every
 other role is derived from it. A person can hold more than one of these at once.
 
 **Staff**:
-A person holding the `Staff` or `Event Managers` role in the guild. Administers
-the CMS, edits any content, and performs bot management actions.
+A person holding the `Staff` or `Event Managers` role in the guild. Performs bot
+management actions.
 _Avoid_: mod, moderator, admin
 
 **Ambassador**:
@@ -73,14 +73,15 @@ _Avoid_: greeter, welcomer
 **Staff role holder**:
 A person holding the role named `Staff` itself, not `Event Managers`. Only they
 may run Sherpa's moderation tools: Deep User Analysis and User Monitoring
-(ADR-0003 O7). A narrower group than **Staff**.
+(ADR-0003 O7), and they administer the CMS and edit any content in it. A
+narrower group than **Staff**.
 _Avoid_: mod, moderator, admin
 
 **Club Lead**:
 A person who owns a club or interest group and is expected to edit only that
 club's pages. The limit is a convention among a small, known group, not a
-control the CMS enforces. Held today by people in `Event Managers`; becoming its
-own guild role.
+control the CMS enforces. Held today by people in `Event Managers`, who are the
+CMS's Authors until Club Lead becomes its own guild role.
 _Avoid_: club owner, page owner, group admin
 
 **Member**:
