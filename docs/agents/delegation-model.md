@@ -54,8 +54,10 @@ What this repo adds to each call:
   reviewer that does not know what the code was for can only check syntax.
 - **The model, effort and sandbox are the roster's**, passed explicitly so a
   local Codex default cannot substitute its own.
-- **Working directory is the repo root**, so the brief's relative paths
-  resolve.
+- **Working directory is a worktree root** (`codex exec -C <path>`), so the
+  brief's relative paths resolve. A reviewer runs in the worktree whose diff it
+  reviews; an implementer gets a fresh worktree of its own, made the way the
+  next section describes.
 
 ## Why it is shaped this way
 
@@ -109,8 +111,22 @@ parallel packets beat one large delegation.
   writing code, not after.
 - **Before every commit** → the final review. Not optional.
 
-**Parallel packets** name disjoint files and share the main tree, so the final
-review sees all of them; packets that must share a file go in sequence.
+**Every delegate works in its own worktree** (the rule is in `AGENTS.md`).
+Claude subagents get one from `isolation: "worktree"` on the Agent call, which
+their frontmatter also sets; for a Codex implementer, run
+`git worktree add .claude/worktrees/<task> -b <task>` from the conversation's
+worktree first. Either way:
+
+- **The worktree starts from the conversation branch's last commit.**
+  Uncommitted edits in the conversation's worktree are invisible to the
+  delegate, so dispatch packets that do not depend on them.
+- **Its work comes back as a diff the orchestrator applies** to the
+  conversation's worktree: `git -C <wt> add -A && git -C <wt> diff --cached --binary | git apply --allow-empty`.
+  The final review then sees every packet together, in one tree.
+- **Parallel packets name disjoint files** so their diffs apply cleanly;
+  packets that must share a file go in sequence.
+- **Remove the delegate's worktree and branch** once its diff is applied or
+  rejected.
 
 **A packet that comes back stopped or failing goes up one tier** — Haiku to
 Sonnet, Sonnet to Opus — with the delegate's report attached. It is not

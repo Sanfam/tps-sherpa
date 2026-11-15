@@ -5,6 +5,7 @@ tools: Read, Write, Edit, Bash, Glob, Grep
 model: claude-sonnet-5-5
 effort: medium
 maxTurns: 25
+isolation: worktree
 ---
 
 You are given one packet: a bounded task with a clear spec and named files.
@@ -27,8 +28,10 @@ Post, Thread, Channel — in code, comments, and commit text. Read the parts of
 Match the surrounding code: its comment density, naming, and idiom. Reuse what
 already exists in the repo before writing a new helper.
 
-Tests follow the YAGNI rule in `AGENTS.md`: only for failures that are
-invisible or complex, and proven to bite.
+Tests follow "Tests are purposeful" in `AGENTS.md`: a real-world scenario, a
+failure that is invisible or complex, proven to bite.
+
+You work in your own worktree. If it has no `node_modules`, run `npm ci` first.
 
 Before you claim done, run and read the output of:
 

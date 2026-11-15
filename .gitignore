@@ -10,3 +10,6 @@ dist/
 # (ADR-0001, #26). A local sync still writes them here; never commit them again.
 content/index/data.json
 content/config/roles.json
+
+# Agent worktrees (AGENTS.md): one per conversation and per task.
+.claude/worktrees/
