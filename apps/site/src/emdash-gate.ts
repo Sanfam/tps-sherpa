@@ -276,6 +276,13 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
       ? context.redirect("/")
       : new Response(null, { status: 404 });
   if (need === null) return refuse();
+  // On Railway the site must start through apps/site/start.sh, which replicates
+  // EmDash's database. A start command replaces it without an error, so EmDash
+  // is shut instead of taking edits no backup holds (docs/runbook.md).
+  if (process.env["RAILWAY_ENVIRONMENT_ID"] && process.env["SITE_STARTED_BY_ENTRYPOINT"] !== "1") {
+    console.error("[gate] Started on Railway without apps/site/start.sh: EmDash's database is not replicated. Refusing EmDash's routes.");
+    return new Response(null, { status: 503 });
+  }
 
   const { roles, setCookie } = await memberRoles(context.request.headers);
   const role = roles && editorRole(roles);
