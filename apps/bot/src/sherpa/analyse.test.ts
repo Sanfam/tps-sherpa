@@ -38,6 +38,7 @@ const harness = (
   const posted: Array<{ memberId: string; by: string; content: string; embeds: import("discord-api-types/v10").APIEmbed[] }> = [];
   const sent: ModerationMessage[][] = [];
   const names: string[] = [];
+  const others: string[] = [];
   let chunkCalls = 0;
   let taken = 0;
   let clock = Date.parse("2026-10-19T00:00:00.000Z");
@@ -61,6 +62,7 @@ const harness = (
         }) as never,
       member: async () => ({ joinedAt: "2026-01-01T00:00:00.000Z", names: ["s"] }),
       message: async () => null,
+      after: async () => [],
       ...over,
     },
     session: () => ({
@@ -70,6 +72,7 @@ const harness = (
       boundary: {
         analyseChunk: async (who, messages) => {
           names.push(...who.memberNames);
+          others.push(...[...who.otherNames].map((o) => o.name));
           chunkCalls++;
           const forced = over.chunk?.(chunkCalls);
           if (forced) return forced;
@@ -102,10 +105,26 @@ const harness = (
     log: () => {},
   };
   const advance = (ms: number) => (clock += ms);
-  return { analyse: createAnalyse(deps), sent, names, posted, chunkCalls: () => chunkCalls, taken: () => taken, advance };
+  return { analyse: createAnalyse(deps), sent, names, others, posted, chunkCalls: () => chunkCalls, taken: () => taken, advance };
 };
 
 describe("/sherpa analyse", () => {
+  it("sends what others wrote next as context checked as the member's place, and hands the boundary their names to redact", async () => {
+    // A room read from a Thread carries the Thread's id; checked under that, every review with a public Thread in it would throw.
+    const other = { id: "500000000000000002", username: "wilbur", global_name: "Wilbur" };
+    const { analyse, sent, others } = harness({
+      after: async (channelId) =>
+        channelId === "20"
+          ? ([{ ...msg("900000000000000002", "20"), reactions: [{ emoji: { name: "💯" }, count: 3 }] }, { id: "900000000000000005", channel_id: "20", author: other, content: "Wilbur thinks this is trolling" }] as never)
+          : [],
+    });
+    await analyse({ id: SUBJECT }, ask(), async () => {}, "t");
+    const fromThread = sent[0]!.find((m) => m.source.content === "text 900000000000000002")!;
+    expect(fromThread.followedBy).toEqual([{ authorId: other.id, authorIsBot: false, content: "Wilbur thinks this is trolling", origin: general.id }]);
+    expect(fromThread.reactions).toEqual([{ emoji: "💯", count: 3 }]);
+    expect(others).toEqual(expect.arrayContaining(["wilbur", "Wilbur"]));
+  });
+
   it("sends only messages from places a Member can see, public Threads under them included, and links what it cites", async () => {
     const { analyse, sent, posted } = harness();
     await analyse({ id: SUBJECT }, ask(), async () => {}, "t");

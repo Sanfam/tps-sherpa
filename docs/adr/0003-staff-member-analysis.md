@@ -204,3 +204,24 @@ early notice under triggers they set, in the Forum they already use.
   so a busy watch can hide a recent review, which then runs again; and while
   the Forum's checks fail, no review runs and a watch's start or stop is
   not noted in the Post, which the Staff member is told.
+- **O5 amended (owner, 2026-11-14): the member's conduct toward children.**
+  A review missed a member who rated hair colour in an adult channel and
+  then raised children's hair colour in the parenting one. "Never write
+  anything about a child" kept the model from describing what the member
+  did. A child's details stay out of the output. The member's own conduct
+  is the exception: sexualising children, tying them to attractiveness or
+  adult themes, or steering talk that way is reported in general words
+  ("children", "a child"), with no detail of any child. On the synthetic
+  eval (`apps/bot/src/llm/moderation-eval.ts`) a child's details reached the output in 3 of
+  30 reviews, against 1 in 15 before, where the shipped prompt also wrote
+  "a family matter involving a hospital stay".
+- **O6 amended (owner, 2026-11-14): the room.** Reply context alone showed
+  the model none of how others took a member's words, so a baiting member
+  who never used Discord's reply read as friendly. Each burst of the
+  member's messages in one place is now read with what followed: up to 5
+  of others' messages after each of the member's, until the member spoke
+  again, and the reactions each drew. The window is read from the
+  member's own place, so it passes the same check. Names are redacted,
+  bots and opted-out authors are dropped, and each author keeps their
+  label for the whole review. `/sherpa watch` gets the same window, read
+  when its buffer is sent. Reviews read up to 200 bursts, newest first.

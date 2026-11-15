@@ -54,6 +54,7 @@ const harness = (
     guildId: "1",
     discord: {
       member: async (id) => ({ names: ["Watched Dad"], serverName: "Watched Dad", username: `u${id}` }),
+      after: async () => [],
       channel: async (id) =>
         id === "30"
           ? { type: ChannelType.PrivateThread, parent_id: general.id }

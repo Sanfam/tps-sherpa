@@ -126,6 +126,21 @@ describe("the moderation origin", () => {
     expect(optedOut.calls[0]).not.toContain("says hi");
   });
 
+  it("sends what others wrote next, each by label, redacted, without an opted-out author's or a bot's, and never from a place a Member cannot see", async () => {
+    const said = (authorId: string, content: string, origin = general.id) => ({ authorId, authorIsBot: false, content, origin });
+    const room = (followedBy: ModerationMessage["followedBy"]) => ({ ...message(0), followedBy, reactions: [{ emoji: "kekw", count: 2 }] });
+    const OPTED = "500000000000000003";
+    const { boundary, calls } = fixture(CHUNK, [OPTED]);
+    await boundary.analyseChunk(subject, [
+      room([said(OTHER, "Wilbur thinks Jughfer is trolling"), said(OPTED, "keep me out of it"), { ...said(OTHER, "a bot's line"), authorIsBot: true }]),
+    ]);
+    expect(calls[0]).toContain("(reactions: kekw 2)");
+    expect(calls[0]).toContain("then others wrote: member A: member A thinks the member is trolling");
+    expect(calls[0]).not.toMatch(/keep me out|a bot's line|Wilbur|Jughfer/);
+    await expect(boundary.analyseChunk(subject, [room([said(OTHER, "staff talk", staffOnly.id)])])).rejects.toThrow(/Refusing/);
+    expect(calls).toHaveLength(1);
+  });
+
   it("fails a call that cites a message it was not sent, or names someone", async () => {
     await expect(
       fixture(CHUNK.replace('"at":0', '"at":7')).boundary.analyseChunk(subject, [message(0)]),
@@ -141,14 +156,11 @@ describe("the moderation origin", () => {
     );
   });
 
-  it("lets the review's key events cite only the events noted", async () => {
-    const report = (key: number) =>
-      `{"timeline":[],"key_events":[${key}],"recent":"Calm.","trend":"stable","notes":"None.","actions":[]}`;
+  it("lets the review's key events cite only the events noted, dropping any other", async () => {
+    const report = (keys: unknown[]) =>
+      `{"timeline":[],"key_events":${JSON.stringify(keys)},"recent":"Calm.","trend":"stable","notes":"None.","actions":[]}`;
     const noted = { events: [{ at: 0, kind: "contribution" as const, note: "Organised a raid", date: "2026-10-01" }], tone: [] };
-    expect((await fixture(report(0)).boundary.analyseReduce(subject, noted, [message(0)])).key_events).toEqual([0]);
-    await expect(fixture(report(1)).boundary.analyseReduce(subject, noted, [message(0), message(1)])).rejects.toThrow(
-      /not one of the events/,
-    );
+    expect((await fixture(report([1, 0, "0"])).boundary.analyseReduce(subject, noted, [message(0), message(1)])).key_events).toEqual([0]);
   });
 });
 
