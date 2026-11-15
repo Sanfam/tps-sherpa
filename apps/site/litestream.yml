@@ -1,0 +1,26 @@
+# Litestream 0.5.17 (pinned in the root Dockerfile). Read by apps/site/start.sh.
+#
+# Replicates EmDash's database, and only that: the session database beside it
+# is disposable and never replicated (ADR-0001). Same replica settings,
+# retention and erasure bound as the bot's (apps/bot/litestream.yml, and
+# docs/runbook.md for why each holds), in the site's own bucket, under site/
+# so it cannot meet bot.db even in a shared one. $SITE_EMDASH_DB is set by
+# start.sh.
+
+dbs:
+  - path: ${SITE_EMDASH_DB}
+    replica:
+      type: s3
+      bucket: ${LITESTREAM_BUCKET}
+      path: site/emdash.db
+      endpoint: ${LITESTREAM_ENDPOINT}
+      region: auto
+
+# heartbeat.mjs changes the file hourly, so it is snapshotted daily even when
+# idle, as the bot's heartbeat does for bot.db.
+snapshot:
+  interval: 24h
+  retention: 168h
+
+logging:
+  stderr: true
