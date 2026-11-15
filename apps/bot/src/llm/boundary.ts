@@ -162,6 +162,10 @@ export interface ModerationMessage {
   source: PlacedSource;
   /** The one message it replies to, someone else's, as context (O6). */
   repliesTo?: PlacedSource;
+  /** Others' messages in the same place after it, until the member spoke again, as context (O6, amended 2026-11-14). */
+  followedBy?: PlacedSource[];
+  /** The reactions it drew, by emoji name. */
+  reactions?: Array<{ emoji: string; count: number }>;
 }
 
 /**
@@ -767,7 +771,8 @@ export const createBoundary = (deps: BoundaryDeps) => {
     for (const m of messages) {
       if (m.source.authorId !== subject.memberId || m.source.authorIsBot)
         throw new Error("A moderation source is not the member's own. Refusing it.");
-      if (!moderationPlace(m.source.origin, byId, subject.memberRoles) || (m.repliesTo && !moderationPlace(m.repliesTo.origin, byId, subject.memberRoles)))
+      const context = [...(m.repliesTo ? [m.repliesTo] : []), ...(m.followedBy ?? [])];
+      if (!moderationPlace(m.source.origin, byId, subject.memberRoles) || context.some((c) => !moderationPlace(c.origin, byId, subject.memberRoles)))
         throw new Error("A moderation source is not from a place a Member can see. Refusing it.");
     }
     // Every name of the subject and of the context's authors is replaced on the way out, whatever it
@@ -792,11 +797,18 @@ export const createBoundary = (deps: BoundaryDeps) => {
       ]),
     );
     const out = (t: string, max: number) => cutText(redacted(t).replace(/\s+/g, " ").trim(), max) || "(no text)";
+    // Others' words from a monitored place never go (O4 admits the subject's own alone): an introduction
+    // Thread's replies are other members' introductions.
+    const shown = (c: PlacedSource) =>
+      c.authorId !== subject.memberId && !c.authorIsBot && !hasOptedOut(c.authorId) && !isMonitored(byId.get(c.origin)!, byId, monitored);
     const lines = messages.map((m) => {
       const context = m.repliesTo;
-      const shown = context && context.authorId !== subject.memberId && !context.authorIsBot && !hasOptedOut(context.authorId);
+      const reactions = (m.reactions ?? []).map((r) => `${out(r.emoji, 40)} ${r.count}`).join(", ");
+      const then = (m.followedBy ?? []).filter(shown);
       return `[${m.n}] ${m.date} ${out(m.place, 100)}: ${out(m.source.content, 500)}` +
-        (shown ? `\n  ↳ replying to another member: ${out(context.content, 300)}` : "");
+        (reactions ? ` (reactions: ${reactions})` : "") +
+        (context && shown(context) ? `\n  ↳ replying to another member: ${out(context.content, 300)}` : "") +
+        (then.length ? `\n  ↳ then others wrote: ${then.map((c) => `${out(`<@${c.authorId}>`, 40)}: ${out(c.content, 150)}`).join(" | ")}` : "");
     });
     return { lines, patterns, redacted };
   };
@@ -834,7 +846,7 @@ export const createBoundary = (deps: BoundaryDeps) => {
         ...lines,
       ].join("\n");
       return parseReport(
-        await call({ model: deps.models.cheap, system: REDUCE_PROMPT, user, patterns }),
+        await call({ model: deps.models.strong, system: REDUCE_PROMPT, user, patterns }),
         new Set(noted.events.map((e) => e.at)),
         new Set([...noted.events.map((e) => e.date.slice(0, 7)), ...noted.tone.map((t) => t.month), ...recent.map((m) => m.date.slice(0, 7))]),
       );

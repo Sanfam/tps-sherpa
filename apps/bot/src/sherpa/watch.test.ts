@@ -32,6 +32,7 @@ const harness = (
     observation?: Partial<Observation>;
     catalog?: Entity[];
     search?: WatchDeps["discord"]["search"];
+    after?: WatchDeps["discord"]["after"];
     during?: () => Promise<void> | void;
     postMessages?: WatchDeps["discord"]["postMessages"];
     locked?: boolean;
@@ -49,11 +50,13 @@ const harness = (
   const createdTags: string[][] = [];
   const calls: string[][] = [];
   const histories: string[][] = [];
+  const contexts: Array<{ others: string[]; followedBy: string[] }> = [];
   let clock = Date.parse("2026-10-19T00:00:00.000Z");
   const deps: WatchDeps = {
     guildId: "1",
     discord: {
       member: async (id) => ({ names: ["Watched Dad"], serverName: "Watched Dad", username: `u${id}` }),
+      after: over.after ?? (async () => []),
       channel: async (id) =>
         id === "30"
           ? { type: ChannelType.PrivateThread, parent_id: general.id }
@@ -84,7 +87,8 @@ const harness = (
       memberRoles: [MEMBER_ROLE],
       excluded: new Set(),
       boundary: {
-        observeMember: async (_, request) => {
+        observeMember: async (who, request) => {
+          contexts.push({ others: [...who.otherNames].map((o) => o.name), followedBy: request.messages.flatMap((m) => (m.followedBy ?? []).map((f) => f.content)) });
           calls.push(request.messages.map((m) => m.source.content));
           histories.push(request.post.map((m) => m.content));
           await over.during?.();
@@ -97,7 +101,7 @@ const harness = (
     now: () => clock,
     log: () => {},
   };
-  return { watch: createWatch(deps), writes, notices, created, createdTags, calls, histories, advance: (ms: number) => (clock += ms), deps };
+  return { watch: createWatch(deps), writes, notices, created, createdTags, calls, histories, contexts, advance: (ms: number) => (clock += ms), deps };
 };
 
 const start = (days = 30, triggers = "hostile to newcomers; selling") =>
@@ -149,6 +153,21 @@ describe("User Monitoring", () => {
       await h.watch.onMessage(message(id, channel));
     await flushNow(h);
     expect(h.calls).toEqual([["words 7"]]);
+  });
+
+  it("sends what others wrote next, with their names for the boundary to redact", async () => {
+    const h = harness({
+      after: async () =>
+        [
+          { ...message("7", general.id), type: 0 },
+          { ...message("8", general.id, OTHER), type: 0, author: { id: OTHER, username: "wilbur", global_name: "Wilbur" }, content: "Wilbur says no" },
+        ] as never,
+    });
+    await h.watch.check();
+    await h.watch.answer(start(), "t");
+    await h.watch.onMessage(message("7", general.id));
+    await flushNow(h);
+    expect(h.contexts).toEqual([{ others: ["wilbur", "Wilbur"], followedBy: ["Wilbur says no"] }]);
   });
 
   it("makes the member's Post at the start, titled with their server name and username, and writes only there", async () => {

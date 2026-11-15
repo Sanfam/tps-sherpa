@@ -18,6 +18,10 @@
  * about one a second), so a run reads up to about 9,000 messages; one that
  * stops early says so. Model calls: one per 200 messages, and one more.
  *
+ * Context (O6): for each burst of the member's messages, what others in the
+ * place wrote next and the reactions it drew (room.ts), and for a reply, the
+ * message it answers.
+ *
  * Logs carry ids and counts only (D51-5).
  */
 import {
@@ -34,6 +38,7 @@ import type { Entity } from "../sync/catalog.ts";
 import { plainName } from "./find.ts";
 import type { DailyCap } from "./interactions.ts";
 import type { Answer } from "./privacy.ts";
+import { namesOf, readRooms } from "./room.ts";
 import { REVIEW_TITLE, WATCH_FORUM as FORUM } from "./watch.ts";
 
 const SECOND = 1000;
@@ -63,6 +68,8 @@ export interface AnalyseDeps {
     member: (userId: string) => Promise<{ joinedAt: string | null; names: string[] } | null>;
     /** Null once it is deleted. */
     message: (channelId: string, messageId: string) => Promise<APIMessage | null>;
+    /** Up to `limit` messages after `afterId` in the channel (room.ts). */
+    after: (channelId: string, afterId: string, limit: number) => Promise<APIMessage[]>;
   };
   /** Built per run, so each reads today's Catalog, names and opt-outs. */
   session: () => {
@@ -86,9 +93,6 @@ export interface AnalyseDeps {
   sleep?: (ms: number) => Promise<void>;
   log: (message: string) => void;
 }
-
-const namesOf = (user: { username: string; global_name?: string | null }): string[] =>
-  [user.username, user.global_name].filter((n): n is string => typeof n === "string" && n.trim() !== "");
 
 /** Model text, inert: whitespace collapsed and Discord markdown escaped, so it can neither format, link nor ping. */
 const inert = (text: string): string => plainName(text);
@@ -242,6 +246,9 @@ export const createAnalyse = (deps: AnalyseDeps) => {
     // --- context (O6) ---------------------------------------------------------
     const ordered = [...read.values()].sort((a, b) => (BigInt(a.message.id) < BigInt(b.message.id) ? -1 : 1));
     const otherNames: MemberName[] = [];
+    // The room first: what others made of the member's words says more than what any one reply answered.
+    const rooms = await readRooms(memberId, ordered.map(({ message }) => message), deps.discord.after, () => deps.now() - start <= READ_MS);
+    for (const room of rooms.values()) for (const m of room.followedBy) for (const name of namesOf(m.author)) otherNames.push({ id: m.author.id, name });
     const replies = new Map<string, PlacedSource>();
     const newestReplies = ordered.filter(({ message }) => message.message_reference?.message_id).slice(-MAX_CONTEXT);
     for (const { message, origin } of newestReplies.reverse()) {
@@ -253,13 +260,21 @@ export const createAnalyse = (deps: AnalyseDeps) => {
       replies.set(message.id, { authorId: replied.author.id, authorIsBot: replied.author.bot === true, content: replied.content, origin });
     }
 
-    const messages: ModerationMessage[] = ordered.map(({ message, origin }, n) => ({
-      n,
-      date: message.timestamp.slice(0, 10),
-      place: byId.get(origin)?.name ?? "",
-      source: { authorId: memberId, authorIsBot: false, content: message.content, origin },
-      ...(replies.has(message.id) ? { repliesTo: replies.get(message.id)! } : {}),
-    }));
+    const messages: ModerationMessage[] = ordered.map(({ message, origin }, n) => {
+      const room = rooms.get(message.id);
+      return {
+        n,
+        date: message.timestamp.slice(0, 10),
+        place: byId.get(origin)?.name ?? "",
+        source: { authorId: memberId, authorIsBot: false, content: message.content, origin },
+        ...(replies.has(message.id) ? { repliesTo: replies.get(message.id)! } : {}),
+        ...(room?.reactions.length ? { reactions: room.reactions } : {}),
+        // The same place as the member's message, so it passed the same check.
+        ...(room?.followedBy.length
+          ? { followedBy: room.followedBy.map((m) => ({ authorId: m.author.id, authorIsBot: m.author.bot === true, content: m.content, origin })) }
+          : {}),
+      };
+    });
     /** Where each numbered message is, for its jump link. */
     const refs = ordered.map(({ message }) => ({ channelId: message.channel_id, id: message.id }));
     const who: ModerationSubject = { memberId, memberNames, otherNames, memberRoles };

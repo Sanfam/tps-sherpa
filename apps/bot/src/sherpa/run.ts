@@ -304,6 +304,7 @@ const watch = introductions
         postMessages: (postId) => api.channels.getMessages(postId, { limit: 50 }),
         postTags: async (postId) => ((await api.channels.get(postId)) as { applied_tags?: string[] }).applied_tags ?? [],
         search: (query) => api.guilds.searchForMessages(guildId, query),
+        after: (channelId, afterId, limit) => api.channels.getMessages(channelId, { after: afterId, limit }),
         botId: async () => (botId ??= (await api.users.getCurrent()).id),
       },
       store: (work) => withWatchStore(work, DURABLE_STORE_PATH),
@@ -449,6 +450,7 @@ const sherpa: Sherpa = {
           throw error;
         }
       },
+      after: (channelId, afterId, limit) => api.channels.getMessages(channelId, { after: afterId, limit }),
     },
     session: () => {
       const catalog = loadCatalog();

@@ -34,6 +34,7 @@ import { moderationPlace } from "../llm/moderation.ts";
 import type { Entity } from "../sync/catalog.ts";
 import { DURABLE_STORE_PATH, openDurableDatabase } from "../sync/durable-store.ts";
 import { clip, plainName } from "./find.ts";
+import { namesOf, readRooms } from "./room.ts";
 import type { DailyCap } from "./interactions.ts";
 import type { ChannelAccess } from "./responder.ts";
 
@@ -151,6 +152,8 @@ export interface WatchDeps {
     postMessages: (postId: string) => Promise<APIMessage[]>;
     postTags: (postId: string) => Promise<string[]>;
     search: (query: RESTGetAPIGuildMessagesSearchQuery) => Promise<RESTGetAPIGuildMessagesSearchResult>;
+    /** Up to `limit` messages after `afterId` in the channel (room.ts). */
+    after: (channelId: string, afterId: string, limit: number) => Promise<APIMessage[]>;
     /** Sherpa's own user id: only its messages in a Post are its earlier observations. */
     botId: () => Promise<string>;
   };
@@ -307,12 +310,23 @@ export const createWatch = (deps: WatchDeps) => {
       .filter((m) => m.author.id === me || (!m.author.bot && !m.webhook_id))
       .sort((a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1));
     const tags = (await deps.discord.forumTags()).map((t) => t.name);
-    const messages: ModerationMessage[] = buffer.messages.map((m, n) => ({
-      n,
-      date: m.timestamp.slice(0, 10),
-      place: session.catalog.find((e) => e.id === m.origin)?.name ?? "",
-      source: { authorId: memberId, authorIsBot: false, content: m.content, origin: m.origin },
-    }));
+    // The room as it stands: after the buffer's wait, or at once when it fills, when the newest have little after them yet.
+    // At most 20 messages, so at most 20 reads.
+    const rooms = await readRooms(memberId, buffer.messages, deps.discord.after, () => true);
+    const otherNames = [...rooms.values()].flatMap((r) => r.followedBy.flatMap((o) => namesOf(o.author).map((name) => ({ id: o.author.id, name }))));
+    const messages: ModerationMessage[] = buffer.messages.map((m, n) => {
+      const room = rooms.get(m.id);
+      return {
+        n,
+        date: m.timestamp.slice(0, 10),
+        place: session.catalog.find((e) => e.id === m.origin)?.name ?? "",
+        source: { authorId: memberId, authorIsBot: false, content: m.content, origin: m.origin },
+        ...(room?.reactions.length ? { reactions: room.reactions } : {}),
+        ...(room?.followedBy.length
+          ? { followedBy: room.followedBy.map((o) => ({ authorId: o.author.id, authorIsBot: o.author.bot === true, content: o.content, origin: m.origin })) }
+          : {}),
+      };
+    });
     let capped = false;
     let observation;
     try {
@@ -322,7 +336,7 @@ export const createWatch = (deps: WatchDeps) => {
           return Promise.reject(new Error("the daily cap is reached"));
         }
         return session.boundary.observeMember(
-          { memberId, memberNames: member?.names ?? [], otherNames: [], memberRoles: session.memberRoles },
+          { memberId, memberNames: member?.names ?? [], otherNames, memberRoles: session.memberRoles },
           {
             triggers: watch.triggers,
             post: post.map((m) => ({ authorId: m.author.id, authorIsBot: m.author.id === me, content: m.content })),
