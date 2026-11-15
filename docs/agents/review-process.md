@@ -2,7 +2,8 @@
 
 **A change set is challenged by an adversarial review from a model other than
 its author's before it becomes history — Codex for Claude's work, Claude for
-Codex's. Valid, in-scope findings are fixed first.**
+Codex's, and a Claude model other than the author's when Codex is at its usage
+limit. Valid, in-scope findings are fixed first.**
 
 ## Scope: what this applies to
 
@@ -44,7 +45,8 @@ reviewer differ, not that any particular model is the authority.
 2. **Run the adversarial review with the other vendor's model.**
    - **Claude or a person wrote it** → GPT-5.6 Sol at High through the `skill-codex`
      skill, `read-only` sandbox, prompted with
-     `docs/agents/codex-briefs/final-reviewer.md` plus the intent.
+     `docs/agents/codex-briefs/final-reviewer.md` plus the intent. If Codex is
+     at its usage limit, use the fallback under "When the cycle cannot run".
    - **Codex wrote it** (any GPT role) → Claude's `/code-review`, per the
      table above.
 
@@ -79,9 +81,27 @@ authority to reach the live guild.
 
 ## When the cycle cannot run
 
+- **Codex usage limit hit, for Claude's work** → fall back automatically; no
+  need to ask (owner, 2026-11-15). A usage limit is `codex exec` failing with
+  "You've hit your usage limit"; treat any other failure, or an ambiguous one,
+  as the unavailable case below.
+  - **Who reviews:** a Claude model that wrote none of the change set.
+    **Sonnet** for work by Opus, whether the orchestrator or an Opus
+    subagent; **Opus** for work by Sonnet or Haiku. A change set with several
+    authors takes a model that wrote none of it.
+  - **How:** a read-only subagent, prompted with
+    `docs/agents/codex-briefs/final-reviewer.md` plus the intent, exactly as
+    Sol would be. Triage and re-review by the same rules.
+  - **Record:** as in step 5, plus which model stood in and that Codex was at
+    its limit, in the commit message and the PR. Tell the user it happened;
+    you need not wait for them.
+  - This is a weaker check than the other vendor's model, since both are
+    Claude, and is accepted as the cost of not stalling.
 - **Codex unavailable or unauthenticated, for Claude's work** → stop and tell
-  the user; do not commit it as reviewed. `/code-review` is Claude marking
-  Claude's work and does not satisfy the rule. If the user chooses to proceed,
+  the user; do not commit it as reviewed. `/code-review` run by the change's own
+  author is one model marking its own work and does not satisfy the rule;
+  the fallback above satisfies it only because its reviewer is a different
+  model. If the user chooses to proceed,
   run `/code-review` anyway and say in the commit message that no independent
   review ran, and why. Check with `codex --version`; `codex doctor` diagnoses
   auth and runtime.
