@@ -70,7 +70,9 @@ parallelism.
 `review-process.md`, and it is the one rule here that is not negotiable. An
 Opus-authored change reviewed by Sol is independent; an Opus-authored change
 reviewed by Opus is one mind marking its own work. A change a Codex role wrote
-is reviewed by Claude instead — see `review-process.md`.
+is reviewed by Claude instead. When Codex is at its usage limit, a Claude model
+that did not write the change stands in, e.g. Sonnet for Opus's work — see
+`review-process.md`, "When the cycle cannot run".
 
 **Workers are cheap but unverified.** Luna, Sonnet and Haiku implementers take
 bounded, well-specified tasks. Their output is *always* validated — by the orchestrator,
