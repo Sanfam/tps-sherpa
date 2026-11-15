@@ -797,7 +797,10 @@ export const createBoundary = (deps: BoundaryDeps) => {
       ]),
     );
     const out = (t: string, max: number) => cutText(redacted(t).replace(/\s+/g, " ").trim(), max) || "(no text)";
-    const shown = (c: PlacedSource) => c.authorId !== subject.memberId && !c.authorIsBot && !hasOptedOut(c.authorId);
+    // Others' words from a monitored place never go (O4 admits the subject's own alone): an introduction
+    // Thread's replies are other members' introductions.
+    const shown = (c: PlacedSource) =>
+      c.authorId !== subject.memberId && !c.authorIsBot && !hasOptedOut(c.authorId) && !isMonitored(byId.get(c.origin)!, byId, monitored);
     const lines = messages.map((m) => {
       const context = m.repliesTo;
       const reactions = (m.reactions ?? []).map((r) => `${out(r.emoji, 40)} ${r.count}`).join(", ");

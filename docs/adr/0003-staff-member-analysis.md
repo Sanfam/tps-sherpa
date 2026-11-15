@@ -211,10 +211,12 @@ early notice under triggers they set, in the Forum they already use.
   did. A child's details stay out of the output. The member's own conduct
   is the exception: sexualising children, tying them to attractiveness or
   adult themes, or steering talk that way is reported in general words
-  ("children", "a child"), with no detail of any child. On the synthetic
-  eval (`apps/bot/src/llm/moderation-eval.ts`) a child's details reached the output in 3 of
-  30 reviews, against 1 in 15 before, where the shipped prompt also wrote
-  "a family matter involving a hospital stay".
+  ("children", "a child"), with no detail of any child, and "a family
+  matter" is never followed by what the matter is. On the synthetic eval
+  (`apps/bot/src/llm/moderation-eval.ts`, GLM flash, 10 runs a case) a
+  child's details reached the output in 0 of 30 reviews, against 1 in 15
+  before ("a family matter involving a hospital stay"); the bait case was
+  flagged 10 of 10, the earnest one 0 of 10.
 - **O6 amended (owner, 2026-11-14): the room.** Reply context alone showed
   the model none of how others took a member's words, so a baiting member
   who never used Discord's reply read as friendly. Each burst of the
@@ -222,6 +224,11 @@ early notice under triggers they set, in the Forum they already use.
   of others' messages after each of the member's, until the member spoke
   again, and the reactions each drew. The window is read from the
   member's own place, so it passes the same check. Names are redacted,
-  bots and opted-out authors are dropped, and each author keeps their
-  label for the whole review. `/sherpa watch` gets the same window, read
-  when its buffer is sent. Reviews read up to 200 bursts, newest first.
+  bots, system lines and opted-out authors are dropped, and each author
+  keeps their label for the whole review. Nothing of others' is sent from
+  a monitored place, replied-to messages included: O4 admits the
+  subject's own words there alone. Others' words elsewhere, the parenting
+  places included, reach the provider as replied-to messages already did;
+  the output may say only how they took the member's words, never their
+  details. `/sherpa watch` gets the same window, read when its buffer is
+  sent. Reviews make up to 200 reads, newest bursts first.

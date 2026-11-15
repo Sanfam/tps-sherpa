@@ -34,7 +34,7 @@ import { moderationPlace } from "../llm/moderation.ts";
 import type { Entity } from "../sync/catalog.ts";
 import { DURABLE_STORE_PATH, openDurableDatabase } from "../sync/durable-store.ts";
 import { clip, plainName } from "./find.ts";
-import { readRooms } from "./room.ts";
+import { namesOf, readRooms } from "./room.ts";
 import type { DailyCap } from "./interactions.ts";
 import type { ChannelAccess } from "./responder.ts";
 
@@ -310,11 +310,10 @@ export const createWatch = (deps: WatchDeps) => {
       .filter((m) => m.author.id === me || (!m.author.bot && !m.webhook_id))
       .sort((a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1));
     const tags = (await deps.discord.forumTags()).map((t) => t.name);
-    // The room, read once the buffer has waited: replies to its early messages are in by now.
+    // The room as it stands: after the buffer's wait, or at once when it fills, when the newest have little after them yet.
+    // At most 20 messages, so at most 20 reads.
     const rooms = await readRooms(memberId, buffer.messages, deps.discord.after, () => true);
-    const otherNames = [...rooms.values()].flatMap((r) =>
-      r.followedBy.flatMap((o) => [o.author.username, o.author.global_name].filter((name): name is string => !!name?.trim()).map((name) => ({ id: o.author.id, name }))),
-    );
+    const otherNames = [...rooms.values()].flatMap((r) => r.followedBy.flatMap((o) => namesOf(o.author).map((name) => ({ id: o.author.id, name }))));
     const messages: ModerationMessage[] = buffer.messages.map((m, n) => {
       const room = rooms.get(m.id);
       return {

@@ -139,6 +139,12 @@ describe("the moderation origin", () => {
     expect(calls[0]).not.toMatch(/keep me out|a bot's line|Wilbur|Jughfer/);
     await expect(boundary.analyseChunk(subject, [room([said(OTHER, "staff talk", staffOnly.id)])])).rejects.toThrow(/Refusing/);
     expect(calls).toHaveLength(1);
+    // In a monitored place the member's own words go (O4), and nobody else's, replied to or after.
+    await boundary.analyseChunk(subject, [
+      { ...message(0, { origin: intros.id }), repliesTo: said(OTHER, "my intro, two kids, Leeds", intros.id), followedBy: [said(OTHER, "welcome, I'm in Leeds too", intros.id)] },
+    ]);
+    expect(calls[1]).toContain("loving the raid nights");
+    expect(calls[1]).not.toMatch(/Leeds|replying to|then others/);
   });
 
   it("fails a call that cites a message it was not sent, or names someone", async () => {
@@ -160,7 +166,8 @@ describe("the moderation origin", () => {
     const report = (keys: unknown[]) =>
       `{"timeline":[],"key_events":${JSON.stringify(keys)},"recent":"Calm.","trend":"stable","notes":"None.","actions":[]}`;
     const noted = { events: [{ at: 0, kind: "contribution" as const, note: "Organised a raid", date: "2026-10-01" }], tone: [] };
-    expect((await fixture(report([1, 0, "0"])).boundary.analyseReduce(subject, noted, [message(0), message(1)])).key_events).toEqual([0]);
+    // Nine non-events first, past the cap of eight, then the real one twice.
+    expect((await fixture(report([1, 1, 1, 1, 1, 1, 1, 1, 1, "0", 0, 0])).boundary.analyseReduce(subject, noted, [message(0), message(1)])).key_events).toEqual([0]);
   });
 });
 

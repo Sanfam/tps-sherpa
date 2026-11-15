@@ -115,7 +115,7 @@ describe("/sherpa analyse", () => {
     const { analyse, sent, others } = harness({
       after: async (channelId) =>
         channelId === "20"
-          ? ([{ ...msg("900000000000000002", "20"), reactions: [{ emoji: { name: "💯" }, count: 3 }] }, { id: "900000000000000005", channel_id: "20", author: other, content: "Wilbur thinks this is trolling" }] as never)
+          ? ([{ ...msg("900000000000000002", "20"), reactions: [{ emoji: { name: "💯" }, count: 3 }] }, { id: "900000000000000005", channel_id: "20", type: 0, author: other, content: "Wilbur thinks this is trolling" }] as never)
           : [],
     });
     await analyse({ id: SUBJECT }, ask(), async () => {}, "t");

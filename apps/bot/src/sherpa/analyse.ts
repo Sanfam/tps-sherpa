@@ -38,7 +38,7 @@ import type { Entity } from "../sync/catalog.ts";
 import { plainName } from "./find.ts";
 import type { DailyCap } from "./interactions.ts";
 import type { Answer } from "./privacy.ts";
-import { readRooms } from "./room.ts";
+import { namesOf, readRooms } from "./room.ts";
 import { REVIEW_TITLE, WATCH_FORUM as FORUM } from "./watch.ts";
 
 const SECOND = 1000;
@@ -93,9 +93,6 @@ export interface AnalyseDeps {
   sleep?: (ms: number) => Promise<void>;
   log: (message: string) => void;
 }
-
-const namesOf = (user: { username: string; global_name?: string | null }): string[] =>
-  [user.username, user.global_name].filter((n): n is string => typeof n === "string" && n.trim() !== "");
 
 /** Model text, inert: whitespace collapsed and Discord markdown escaped, so it can neither format, link nor ping. */
 const inert = (text: string): string => plainName(text);
