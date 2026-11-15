@@ -15,7 +15,8 @@ const PORT = 4329;
 const SITE = `http://127.0.0.1:${PORT}`;
 const TTL_MS = 1000;
 
-// Fake snowflakes. Role IDs match fixtures/roles.json.
+// Fake snowflakes. Member, Ambassador and Flight Sim role IDs match
+// fixtures/roles.json. The editor roles are absent from it, as real IDs are.
 const MEMBER_ROLE = "300000000000000001";
 const STAFF_ROLE = "300000000000000002";
 const AMBASSADOR_ROLE = "300000000000000003";
@@ -45,6 +46,8 @@ const ENV = {
   DISCORD_BOT_TOKEN: BOT_TOKEN,
   DISCORD_GUILD_ID: GUILD_ID,
   DISCORD_MEMBER_ROLE_ID: MEMBER_ROLE,
+  DISCORD_STAFF_ROLE_ID: STAFF_ROLE,
+  DISCORD_EVENT_MANAGERS_ROLE_ID: EVENT_MANAGERS_ROLE,
 };
 
 // Vitest's environment, less the import.meta.env values it mirrors into it.
