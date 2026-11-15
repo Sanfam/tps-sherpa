@@ -4,9 +4,10 @@
    badge from one family. The class names here are the contract that CMS
    content and graphics templates rely on.
 
-   Light is the default; dark follows the visitor's system setting. A page can
-   opt out of dark with data-theme="light" on <html>, as the graphics
-   templates do, so a screenshot never depends on who took it. */
+   Light is the default; dark follows the visitor's system setting.
+   data-theme="light" or "dark" on <html> overrides it either way: the header
+   toggle sets it, and the graphics templates pin light so a screenshot never
+   depends on who took it. */
 
 :root {
   color-scheme: light;
@@ -50,7 +51,7 @@
 /* After hours: the clubhouse with the lights down. Navy becomes the ground,
    cream becomes the ink, and the badges and the orange action stay as they are. */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme]) {
     color-scheme: dark;
     --ground: #142029;
     --ground-raised: #1c2a35;
@@ -63,6 +64,20 @@
     --accent-text: #ec8a5e;
     --lift: 0 1px 1px rgb(0 0 0 / 0.3), 0 8px 22px -8px rgb(0 0 0 / 0.65);
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #142029;
+  --ground-raised: #1c2a35;
+  --surface: #1c2a35;
+  --ink: #eee7dc;
+  --ink-soft: #b9b3a8;
+  --line: rgb(238 231 220 / 0.16);
+  --band: #0b141a;
+  --band-soft: #b9b3a8;
+  --accent-text: #ec8a5e;
+  --lift: 0 1px 1px rgb(0 0 0 / 0.3), 0 8px 22px -8px rgb(0 0 0 / 0.65);
 }
 
 *,
@@ -237,6 +252,21 @@ a:hover {
   text-decoration: underline;
   text-decoration-color: var(--orange);
   text-decoration-thickness: 2px;
+}
+
+.theme-toggle {
+  min-height: 2.5rem;
+  padding: 0.4em 1em;
+  font-size: 0.9375rem;
+}
+
+.theme-toggle[hidden] {
+  display: none;
+}
+
+.theme-toggle[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--ground);
 }
 
 .site-footer {
