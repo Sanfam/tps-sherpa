@@ -12,7 +12,7 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
-import type { DiscordProfile } from "better-auth/social-providers";
+import { genericOAuth } from "better-auth/plugins/generic-oauth";
 // Spike stand-in for the role manifest the Catalog snapshot will carry
 // (ADR-0001); same shape as the bot's `content/config/roles.json`.
 import manifest from "../fixtures/roles.json";
@@ -67,37 +67,40 @@ function createAuth(database: DatabaseSync) {
     basePath: "/auth",
     secret: env("BETTER_AUTH_SECRET"),
     database,
-    socialProviders: {
-      discord: {
-        clientId: env("DISCORD_CLIENT_ID"),
-        clientSecret: env("DISCORD_CLIENT_SECRET"),
-        disableDefaultScope: true,
-        scope: ["identify"],
-        // Awaited in the OAuth callback before any user row exists, so
-        // returning null rejects the sign-in with nothing persisted.
-        async getUserInfo(tokens) {
-          const me = await fetch(`${DISCORD_API}/users/@me`, {
-            headers: { Authorization: `Bearer ${tokens.accessToken}` },
-          });
-          if (!me.ok) return null;
-          const profile = (await me.json()) as DiscordProfile;
-          const roles = await guildRoles(profile.id).catch(() => null);
-          if (!isMember(roles)) return null;
-          return {
-            // The override bypasses the provider's `mapProfileToUser`, so the
-            // email that `identify` lacks is synthesised here; without one
-            // the callback fails with EMAIL_NOT_FOUND. The site keeps only
-            // the snowflake: no username, no avatar.
-            user: {
-              name: profile.id,
-              email: `${profile.id}@discord.local`,
-              emailVerified: false,
+    plugins: [
+      // Discord through the generic OAuth plugin, because Better Auth's own
+      // Discord provider sends no PKCE (owner, 2026-11-14). It is still the
+      // `discord` social provider: same sign-in call, same callback path.
+      genericOAuth({
+        config: [
+          {
+            providerId: "discord",
+            clientId: env("DISCORD_CLIENT_ID"),
+            clientSecret: env("DISCORD_CLIENT_SECRET"),
+            authorizationUrl: "https://discord.com/api/oauth2/authorize",
+            tokenUrl: `${DISCORD_API}/oauth2/token`,
+            scopes: ["identify"],
+            pkce: true,
+            prompt: "none",
+            // Awaited in the OAuth callback before any user row exists, so
+            // returning null rejects the sign-in with nothing persisted.
+            async getUserInfo(tokens) {
+              const me = await fetch(`${DISCORD_API}/users/@me`, {
+                headers: { Authorization: `Bearer ${tokens.accessToken}` },
+              });
+              if (!me.ok) return null;
+              const { id } = (await me.json()) as { id: string };
+              const roles = await guildRoles(id).catch(() => null);
+              if (!isMember(roles)) return null;
+              // `identify` has no email, and the callback fails with
+              // EMAIL_NOT_FOUND without one, so it is synthesised. The site
+              // keeps only the snowflake: no username, no avatar.
+              return { id, name: id, email: `${id}@discord.local`, emailVerified: false };
             },
-            data: profile,
-          };
-        },
-      },
-    },
+          },
+        ],
+      }),
+    ],
     session: {
       additionalFields: {
         // JSON array of role IDs. Empty and 0 until the first gated request
@@ -173,13 +176,15 @@ export function auth() {
  */
 export async function memberRoles(
   headers: Headers,
-): Promise<{ roles: string[] | null; setCookie: string[] }> {
+): Promise<{ roles: string[] | null; setCookie: string[]; discordId?: string }> {
   const { auth: a, ready } = auth();
   await ready;
   // `setCookie` carries Better Auth's sliding renewal of the session cookie.
   const { headers: out, response: found } = await a.api.getSession({ headers, returnHeaders: true });
   const setCookie = out.getSetCookie();
-  return { roles: found ? await rolesFor(found.session) : null, setCookie };
+  if (!found) return { roles: null, setCookie };
+  // The user's name is their snowflake (getUserInfo above).
+  return { roles: await rolesFor(found.session), setCookie, discordId: found.user.name };
 }
 
 async function rolesFor(session: { token: string; userId: string }): Promise<string[] | null> {
@@ -196,6 +201,8 @@ async function rolesFor(session: { token: string; userId: string }): Promise<str
   const ctx = await a.$context;
   const [account] = await ctx.internalAdapter.findAccounts(session.userId);
   // ponytail: a Discord outage denies this request but keeps the session; no retry or grace period.
+  // Parallel requests past the TTL each call Discord (no in-flight coalescing); add it if a CMS page's
+  // burst of API calls ever meets a 429.
   const roles = account ? await guildRoles(account.accountId).catch(() => undefined) : null;
   if (roles === undefined) return null;
   if (!isMember(roles)) {

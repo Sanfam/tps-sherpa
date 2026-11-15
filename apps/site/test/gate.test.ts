@@ -18,10 +18,15 @@ const TTL_MS = 1000;
 const MEMBER_ROLE = "300000000000000001";
 const STAFF_ROLE = "300000000000000002";
 const AMBASSADOR_ROLE = "300000000000000003";
+const EVENT_MANAGERS_ROLE = "300000000000000006";
+const CLUB_LEAD_ROLE = "300000000000000007";
 const MEMBER = "900000000000000001";
 const JOINED = "900000000000000002"; // in the guild, no Member role yet
 const OUTSIDER = "900000000000000003"; // not in the guild
 const MOVER = "900000000000000004"; // roles change while signed in
+const STAFF = "900000000000000005";
+const EVENT_MANAGER = "900000000000000006";
+const CLUB_LEAD = "900000000000000007";
 
 const tmp = mkdtempSync(join(tmpdir(), "site-gate-"));
 const DB = join(tmp, "sessions.db");
@@ -32,6 +37,7 @@ let site: ChildProcess;
 // The site's configuration, shared with the in-process auth instance below.
 const ENV = {
   SITE_SESSION_DB: DB,
+  SITE_EMDASH_DIR: tmp,
   ROLES_TTL_MS: String(TTL_MS),
   BETTER_AUTH_URL: SITE,
   BETTER_AUTH_SECRET: "test-secret-test-secret-test-secret-0123",
@@ -42,20 +48,27 @@ const ENV = {
   DISCORD_MEMBER_ROLE_ID: MEMBER_ROLE,
 };
 
+// Vitest's environment, less the import.meta.env values it mirrors into it.
+// Inherited, DEV=1 or NODE_ENV=test makes a dev build, in which EmDash skips
+// external auth for its own passkey sign-in.
+const prodEnv = Object.fromEntries(
+  Object.entries(process.env).filter(([k]) => !["NODE_ENV", "MODE", "DEV", "PROD", "SSR", "BASE_URL"].includes(k)),
+);
+
 const db = () => new DatabaseSync(DB, { readOnly: true });
 const rows = (sql: string, ...params: string[]) => db().prepare(sql).all(...params);
 const usersFor = (id: string) =>
   rows('select u.id from "user" u join account a on a.userId = u.id where a.accountId = ?', id);
 
 beforeAll(async () => {
-  execFileSync("npx", ["astro", "build"], { cwd: SITE_DIR, stdio: "ignore", env: { ...process.env, ...ENV } });
+  execFileSync("npx", ["astro", "build"], { cwd: SITE_DIR, stdio: "ignore", env: { ...prodEnv, ...ENV } });
   const started = await startMock();
   mockServer = started.server;
   mockOrigin = started.origin;
   site = spawn(process.execPath, ["--import", "./test/redirect-discord.mjs", "./dist/server/entry.mjs"], {
     cwd: SITE_DIR,
     stdio: "ignore",
-    env: { ...process.env, ...ENV, HOST: "127.0.0.1", PORT: String(PORT), MOCK_DISCORD: started.origin },
+    env: { ...prodEnv, ...ENV, HOST: "127.0.0.1", PORT: String(PORT), MOCK_DISCORD: started.origin },
   });
   for (let i = 0; ; i++) {
     if (await fetch(SITE).then(() => true, () => false)) break;
@@ -98,6 +111,8 @@ async function startSignIn(id: string) {
   const authorize = new URL(res.headers.get("location")!);
   expect(authorize.origin).toBe("https://discord.com");
   expect(authorize.searchParams.get("scope")).toBe("identify");
+  // The mock refuses a sign-in without the challenge, and a token exchange without its verifier.
+  expect(authorize.searchParams.get("code_challenge_method")).toBe("S256");
   // The browser's leg to Discord, pointed at the mock.
   res = await fetch(`${mockOrigin}${authorize.pathname}${authorize.search}`, { redirect: "manual" });
   return { b, callback: res.headers.get("location")! };
@@ -340,4 +355,59 @@ test("the sweep deletes expired sessions and sign-in states, and keeps live ones
   expect(ids("verification")).not.toContain(expiredState);
   expect(ids("verification")).toContain(liveState);
   rw.close();
+});
+
+// EmDash in external-auth mode (ADR-0002), on the site's session.
+const editors = (id: string) =>
+  new DatabaseSync(join(tmp, "emdash.db"), { readOnly: true })
+    .prepare("select role from users where email = ?")
+    .all(`${id}@discord.local`);
+const cms = (cookie: string) => fetch(`${SITE}/_emdash/api/auth/me`, { headers: { cookie } });
+
+// First among the EmDash tests: EmDash makes whoever it provisions first an
+// Admin, whatever their role (step 3 of the trial seeds a Staff row instead).
+test("EmDash: Staff, from either role, land as Admin and Club Leads as Author", async () => {
+  for (const [id, role, level] of [
+    [STAFF, STAFF_ROLE, 50],
+    [EVENT_MANAGER, EVENT_MANAGERS_ROLE, 50],
+    [CLUB_LEAD, CLUB_LEAD_ROLE, 30],
+  ] as const) {
+    guild.set(id, [MEMBER_ROLE, role]);
+    const { cookie } = await signIn(id);
+    expect((await cms(cookie)).status, id).toBe(200);
+    expect(editors(id), id).toEqual([{ role: level }]);
+  }
+});
+
+test("EmDash: a Member with no editor role is refused and leaves no users row", async () => {
+  guild.set(MEMBER, [MEMBER_ROLE, AMBASSADOR_ROLE]);
+  const { cookie } = await signIn(MEMBER);
+  expect((await stub(cookie)).status).toBe(200); // a Member on the site
+  expect((await cms(cookie)).status).toBe(401);
+  expect(editors(MEMBER)).toEqual([]);
+});
+
+test("EmDash: a role change applies on private routes within the TTL, without a new sign-in", async () => {
+  guild.set(MOVER, [MEMBER_ROLE, STAFF_ROLE]);
+  const { cookie } = await signIn(MOVER);
+  expect((await cms(cookie)).status).toBe(200);
+  expect(editors(MOVER)).toEqual([{ role: 50 }]);
+
+  guild.set(MOVER, [MEMBER_ROLE, CLUB_LEAD_ROLE]);
+  await new Promise((r) => setTimeout(r, TTL_MS + 100));
+  expect((await cms(cookie)).status).toBe(200);
+  expect(editors(MOVER)).toEqual([{ role: 30 }]);
+
+  guild.set(MOVER, [MEMBER_ROLE]);
+  await new Promise((r) => setTimeout(r, TTL_MS + 100));
+  expect((await cms(cookie)).status).toBe(401);
+}, 10_000);
+
+test("EmDash: within the TTL, CMS requests and refusals use the stored roles", async () => {
+  guild.set(MEMBER, [MEMBER_ROLE]);
+  const { cookie } = await signIn(MEMBER);
+  expect((await stub(cookie)).status).toBe(200); // roles now stored on the session
+  mock.memberLookups = 0;
+  for (let i = 0; i < 3; i++) expect((await cms(cookie)).status).toBe(401);
+  expect(mock.memberLookups).toBe(0);
 });

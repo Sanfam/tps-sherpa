@@ -7,7 +7,9 @@
 #
 # The session database defaults to apps/site/.data/sessions.db, under the
 # working directory npm gives the workspace: mount the volume at
-# /app/apps/site/.data, or set SITE_SESSION_DB.
+# /app/apps/site/.data, or set SITE_SESSION_DB. EmDash's database and uploads
+# go in .data too: the path is fixed at build time, and this image does not pass
+# SITE_EMDASH_DIR, which only the tests set.
 
 # The bot's base image, so both services run the same Node.
 FROM node:26.11.1-trixie-slim@sha256:193fe51b64e77981119c98c2002c9e32a70e2f006fb4d25068ce0558998917f0
