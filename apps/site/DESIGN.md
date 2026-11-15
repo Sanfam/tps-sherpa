@@ -134,7 +134,7 @@ The same theme covers everything the club publishes: the site, CMS club pages (`
 
 ## Colors
 
-A warm palette in two layers: brand constants that never change, and mode colours that swap by day and after hours. Dark follows the system setting (`:root:not([data-theme="light"])` inside `prefers-color-scheme: dark`); a page opts out with `data-theme="light"` on `<html>`.
+A warm palette in two layers: brand constants that never change, and mode colours that swap by day and after hours. Dark follows the system setting (`:root:not([data-theme])` inside `prefers-color-scheme: dark`) unless `data-theme` on `<html>` sets a mode: `"light"` or `"dark"` forces it, from the header toggle (remembered in `localStorage`) or a page that pins itself, as the graphics templates pin light. Forced dark (`:root[data-theme="dark"]`) repeats the dark token list; keep the two blocks identical.
 
 ### Primary
 - **Clubhouse Orange** (#b24a22, both modes): the fill of the single primary button on a view, with a navy border. It also appears as thin signals: link underlines, text selection, list markers and the pull-quote mark in prose. Never a badge fill, never body text, never a large surface.

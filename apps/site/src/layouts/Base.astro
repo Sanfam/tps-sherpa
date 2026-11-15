@@ -25,8 +25,42 @@ const here = Astro.url.pathname;
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#dad2c6" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#142029" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" data-scheme="light" content="#dad2c6" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" data-scheme="dark" content="#142029" media="(prefers-color-scheme: dark)" />
+    <script is:inline>
+      // Apply a stored theme choice before paint; the toggle below reveals itself and flips it.
+      function applyTheme(t) {
+        document.documentElement.dataset.theme = t;
+        document.querySelectorAll("meta[name=theme-color]").forEach(function (m) {
+          m.media = m.dataset.scheme === t ? "all" : "not all";
+        });
+      }
+      try {
+        var saved = localStorage.getItem("theme");
+        if (saved === "light" || saved === "dark") applyTheme(saved);
+      } catch (e) {}
+      document.addEventListener("DOMContentLoaded", function () {
+        var btn = document.getElementById("theme-toggle");
+        var dark = function () {
+          var t = document.documentElement.dataset.theme;
+          return t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+        };
+        btn.hidden = false;
+        btn.setAttribute("aria-pressed", dark());
+        // With no stored choice the page follows the OS, so the button must too.
+        matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function () {
+          btn.setAttribute("aria-pressed", dark());
+        });
+        btn.addEventListener("click", function () {
+          var t = dark() ? "light" : "dark";
+          applyTheme(t);
+          btn.setAttribute("aria-pressed", t === "dark");
+          try {
+            localStorage.setItem("theme", t);
+          } catch (e) {}
+        });
+      });
+    </script>
     <link rel="icon" href="/favicon.png" type="image/png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta property="og:title" content={fullTitle} />
@@ -61,6 +95,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             <a class="site-nav" href="/auth/discord/start">Member sign in</a>
           )
         }
+        <button id="theme-toggle" class="button button-quiet theme-toggle" type="button" aria-pressed="false" hidden>Dark mode</button>
       </div>
     </header>
     <main>
