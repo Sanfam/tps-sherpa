@@ -481,10 +481,16 @@ test("gate: each kind of caller reaches only the routes placed for it", async ()
         const uploads = who === "member" && pattern === "/_emdash/api/media/file/[...key]";
         if (!NEVER.test(pattern) && (who === "author" || who === "admin" || uploads)) continue;
         const res = await at(path, cookie, method);
-        const refused = res.status === 404 || (res.status === 302 && res.headers.get("location") === "/");
+        // 501 is upload-url's refusal: the admin's cue to upload through the site.
+        const refused = res.status === 404 || res.status === 501 || (res.status === 302 && res.headers.get("location") === "/");
         expect(refused, `${who} ${method} ${path}: ${res.status}`).toBe(true);
       }
     }
+  }
+  // EmDash's admin uploads through the site only when upload-url answers 501;
+  // any other refusal breaks uploads.
+  for (const who of ["author", "admin"] as const) {
+    expect((await at("/_emdash/api/media/upload-url", callers[who], "POST")).status, who).toBe(501);
   }
   // The admin pages send a caller without an editor role home.
   for (const [who, cookie] of Object.entries(callers)) {
