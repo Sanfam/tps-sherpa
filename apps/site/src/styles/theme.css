@@ -1,0 +1,408 @@
+/* The Clubhouse: the Papa Squad theme.
+   The mascot is the club crest, cut out so it sits on either ground. Navy is
+   the ink by day, orange is reserved for the action, and every Topic wears a
+   badge from one family. The class names here are the contract that CMS
+   content and graphics templates rely on.
+
+   Light is the default; dark follows the visitor's system setting. A page can
+   opt out of dark with data-theme="light" on <html>, as the graphics
+   templates do, so a screenshot never depends on who took it. */
+
+:root {
+  color-scheme: light;
+
+  /* Brand constants: the same in both modes. */
+  --paper: #f4efe8; /* sticker edges, photo frames, text on orange and on the band */
+  --navy: #13232e; /* badge artwork */
+  --orange: #b24a22; /* the one action; Paper on it is 4.7:1 */
+  --orange-deep: #9a3e1b;
+  --sky: #4cadd0;
+  --sand: #e6b383;
+
+  /* Mode colours. --ground is the icon's original background. */
+  --ground: #dad2c6;
+  --ground-raised: #e6e0d6;
+  --surface: #f4efe8; /* cards and form fields */
+  --ink: #13232e;
+  --ink-soft: #3f4c56;
+  --line: rgb(19 35 46 / 0.16);
+  --band: #13232e; /* the full-bleed closing band */
+  --band-soft: #dad2c6;
+  --accent-text: #9a3e1b; /* orange as text: link hover, focus ring */
+
+  /* Type. The font variables come from Astro's <Font>. */
+  --display: var(--font-display), "Arial Rounded MT Bold", sans-serif;
+  --body: var(--font-body), system-ui, sans-serif;
+  --step-0: 1.0625rem;
+  --step-1: 1.25rem;
+  --step-2: 1.625rem;
+  --step-3: clamp(2rem, 4vw, 2.75rem);
+  --step-4: clamp(3rem, 9vw, 6rem);
+
+  /* Space and shape. */
+  --gutter: clamp(1rem, 4vw, 3rem);
+  --measure: 68ch;
+  --radius: 14px;
+  --lift: 0 1px 1px rgb(19 35 46 / 0.08), 0 6px 18px -6px rgb(19 35 46 / 0.28);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* After hours: the clubhouse with the lights down. Navy becomes the ground,
+   cream becomes the ink, and the badges and the orange action stay as they are. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #142029;
+    --ground-raised: #1c2a35;
+    --surface: #1c2a35;
+    --ink: #eee7dc;
+    --ink-soft: #b9b3a8;
+    --line: rgb(238 231 220 / 0.16);
+    --band: #0b141a;
+    --band-soft: #b9b3a8;
+    --accent-text: #ec8a5e;
+    --lift: 0 1px 1px rgb(0 0 0 / 0.3), 0 8px 22px -8px rgb(0 0 0 / 0.65);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--ground);
+  color: var(--ink);
+  font: 400 var(--step-0) / 1.6 var(--body);
+  scrollbar-color: var(--ink-soft) var(--ground);
+  accent-color: var(--orange);
+  caret-color: var(--orange);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+main {
+  flex: 1;
+}
+
+::selection {
+  background: var(--orange);
+  color: var(--paper);
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent-text);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--display);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+  margin: 0;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+a {
+  color: inherit;
+  text-decoration-color: var(--orange);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.2em;
+}
+
+a:hover {
+  color: var(--accent-text);
+}
+
+.wrap {
+  width: min(100% - 2 * var(--gutter), 72rem);
+  margin-inline: auto;
+}
+
+/* Buttons: orange is the one way forward on any view. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  min-height: 3rem;
+  padding: 0.7em 1.4em;
+  border-radius: 999px;
+  border: 2px solid var(--ink);
+  font: 700 var(--step-0) / 1 var(--body);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 0.25s var(--ease-out),
+    box-shadow 0.25s var(--ease-out),
+    background-color 0.2s;
+}
+
+.button svg {
+  width: 1.3em;
+  height: 1.3em;
+  flex: none;
+}
+
+.button-primary {
+  background: var(--orange);
+  border-color: var(--navy);
+  color: var(--paper);
+  box-shadow: var(--lift);
+}
+
+.button-primary:hover {
+  background: var(--orange-deep);
+  color: var(--paper);
+  transform: translateY(-2px);
+}
+
+.button-quiet {
+  background: transparent;
+  color: var(--ink);
+}
+
+.button-quiet:hover {
+  background: var(--ink);
+  color: var(--ground);
+}
+
+.button:active {
+  transform: translateY(1px);
+}
+
+/* Site chrome. */
+.site-header {
+  padding-block: 1rem;
+}
+
+.site-header .wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font: 800 clamp(1rem, 4vw, var(--step-1)) / 1 var(--display);
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.wordmark img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+
+.site-nav {
+  display: flex;
+  gap: 1.25rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.site-nav a {
+  text-decoration: none;
+}
+
+.site-nav a:hover,
+.site-nav a[aria-current="page"] {
+  text-decoration: underline;
+  text-decoration-color: var(--orange);
+  text-decoration-thickness: 2px;
+}
+
+.site-footer {
+  margin-top: clamp(4rem, 10vw, 7rem);
+  padding-block: 2rem;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+/* A page that ends on a full-bleed band ends there, with no strip of ground. */
+main:has(> :last-child.close) + .site-footer {
+  margin-top: 0;
+}
+
+/* The badge family. One shape and one sticker edge for every Topic and club. */
+.badge-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2rem 1.25rem;
+}
+
+.badge-grid > li {
+  width: 8.5rem;
+}
+
+.badge {
+  display: grid;
+  justify-items: center;
+  gap: 0.6rem;
+  text-align: center;
+  font: 700 0.9375rem / 1.25 var(--body);
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.badge svg {
+  width: 5.5rem;
+  height: auto;
+  overflow: visible;
+  filter: drop-shadow(0 3px 4px rgb(19 35 46 / 0.22));
+  transition: transform 0.35s var(--ease-out);
+}
+
+a.badge:hover svg {
+  transform: translateY(-4px) rotate(-3deg);
+}
+
+@media (max-width: 40rem) {
+  .badge-grid {
+    gap: 1.5rem 0.75rem;
+  }
+
+  .badge-grid > li {
+    width: calc((100% - 1.5rem) / 3);
+  }
+
+  .badge {
+    font-size: 0.8125rem;
+  }
+
+  .badge svg {
+    width: 4.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* CMS content. Wrap any authored page body in .prose and it looks deliberate. */
+.prose {
+  max-width: var(--measure);
+  font-size: var(--step-0);
+}
+
+.prose > * + * {
+  margin-top: 1.1em;
+}
+
+.prose h2 {
+  font-size: var(--step-3);
+  margin-top: 2em;
+}
+
+.prose h3 {
+  font-size: var(--step-2);
+  font-weight: 600;
+  margin-top: 1.75em;
+}
+
+.prose h2 + *,
+.prose h3 + * {
+  margin-top: 0.6em;
+}
+
+.prose :is(ul, ol) {
+  padding-left: 1.25em;
+}
+
+.prose li + li {
+  margin-top: 0.35em;
+}
+
+.prose li::marker {
+  color: var(--orange);
+  font-weight: 700;
+}
+
+.prose blockquote {
+  margin-inline: 0;
+  padding-left: 1.25em;
+  font: 600 var(--step-1) / 1.45 var(--display);
+  letter-spacing: -0.01em;
+  position: relative;
+}
+
+.prose blockquote::before {
+  content: "\201C";
+  position: absolute;
+  left: -0.15em;
+  top: -0.35em;
+  font-size: 2.5em;
+  color: var(--orange);
+}
+
+.prose img {
+  border-radius: var(--radius);
+  border: 4px solid var(--paper);
+  box-shadow: var(--lift);
+}
+
+.prose hr {
+  border: 0;
+  border-top: 2px dashed var(--line);
+  margin-block: 2.5em;
+}
+
+.prose table {
+  border-collapse: collapse;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+.prose :is(th, td) {
+  text-align: left;
+  padding: 0.55em 0.75em;
+  border-bottom: 1px solid var(--line);
+}
+
+.prose th {
+  font-family: var(--display);
+}
+
+.prose code {
+  font-size: 0.9em;
+  background: var(--ground-raised);
+  padding: 0.1em 0.35em;
+  border-radius: 5px;
+}

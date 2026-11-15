@@ -1,0 +1,60 @@
+---
+// The 1200×630 link-preview card. Screenshot the frame to regenerate public/og.png.
+import { Font, Image } from "astro:assets";
+import crest from "../../assets/brand/icon.png";
+import "../../styles/theme.css";
+---
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <title>Link preview · The Papa Squad</title>
+    <Font cssVariable="--font-display" preload />
+    <Font cssVariable="--font-body" preload />
+  </head>
+  <body>
+    <div class="frame">
+      <Image src={crest} alt="" width={1040} height={1040} />
+      <div>
+        <h1>The Papa Squad</h1>
+        <p>Gamer dads, gathered. Play when time allows.</p>
+      </div>
+    </div>
+  </body>
+</html>
+
+<style>
+  body {
+    display: block;
+    min-height: 0;
+  }
+
+  .frame {
+    width: 1200px;
+    height: 630px;
+    background: var(--ground);
+    display: grid;
+    grid-template-columns: 520px 1fr;
+    align-items: center;
+    gap: 24px;
+    padding-right: 72px;
+    overflow: hidden;
+  }
+
+  img {
+    width: 560px;
+    margin-left: -24px;
+  }
+
+  h1 {
+    font-size: 104px;
+    line-height: 0.9;
+    letter-spacing: -0.04em;
+  }
+
+  p {
+    margin: 28px 0 0;
+    font-size: 34px;
+    line-height: 1.3;
+    color: var(--ink-soft);
+  }
+</style>

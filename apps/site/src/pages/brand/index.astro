@@ -1,0 +1,319 @@
+---
+// The brand kit: the theme in one place, for Staff and Club Leads. Member-gated.
+import { Image } from "astro:assets";
+import Base from "../../layouts/Base.astro";
+import Badge from "../../components/Badge.astro";
+import crest from "../../assets/brand/icon.png";
+import { topics } from "../../../../../content/config/topics.json";
+
+// Day and night values; a colour with one value never changes with the mode.
+const colours = [
+  { name: "Ground", day: "#dad2c6", night: "#142029", use: "Every page. By day it's the crest's original background." },
+  { name: "Ink", day: "#13232e", night: "#eee7dc", use: "Text and outlines." },
+  { name: "Ink soft", day: "#3f4c56", night: "#b9b3a8", use: "Supporting text." },
+  { name: "Surface", day: "#f4efe8", night: "#1c2a35", use: "Cards and form fields." },
+  { name: "Navy", day: "#13232e", use: "Badge outlines and a badge fill, in both modes." },
+  { name: "Paper", day: "#f4efe8", use: "Sticker edges, photo frames, text on orange." },
+  { name: "Orange", day: "#b24a22", use: "The one action on a view. Never body text." },
+  { name: "Sky", day: "#4cadd0", use: "Badge fill. Staff's role colour." },
+  { name: "Sand", day: "#e6b383", use: "Badge fill." },
+];
+---
+<Base title="Brand kit" members>
+  <div class="wrap kit">
+    <h1>Brand kit</h1>
+    <p class="intro">
+      Everything the Papa Squad looks like, in one place. Use it for club pages, event posts, and anything else you make
+      for the server. The site follows each visitor's light or dark setting; the graphics are always light.
+    </p>
+
+    <section aria-labelledby="crest">
+      <h2 id="crest">The crest</h2>
+      <div class="crest-row">
+        <Image src={crest} alt="The Papa Squad crest" width={320} height={320} />
+        <p>
+          The mascot is the club crest. It's cut out, so it sits straight on the page in light or dark mode. Never put
+          it in a box or a coloured shape, and don't recolour it, crop it, or put text over it.
+        </p>
+      </div>
+    </section>
+
+    <section aria-labelledby="colour">
+      <h2 id="colour">Colour</h2>
+      <ul class="swatches">
+        {
+          colours.map((c) => (
+            <li>
+              <span class="chips">
+                <span class="chip" style={`background: ${c.day}`} title="Day" />
+                {c.night && <span class="chip" style={`background: ${c.night}`} title="Night" />}
+              </span>
+              <strong>{c.name}</strong>
+              <code>{c.night ? `${c.day} / ${c.night}` : c.day}</code>
+              <span>{c.use}</span>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
+    <section aria-labelledby="type">
+      <h2 id="type">Type</h2>
+      <p class="specimen-display">Bricolage Grotesque, for headings</p>
+      <p class="specimen-body">
+        Atkinson Hyperlegible Next, for everything you read. It was drawn so that every letter stays clear, including
+        for readers with low vision.
+      </p>
+    </section>
+
+    <section aria-labelledby="badges">
+      <h2 id="badges">Badges</h2>
+      <p>
+        Every Topic has a badge: one shield, one outline, three fills. A new club gets a badge from the same family, so
+        ask in the server for a glyph rather than drawing a new shape.
+      </p>
+      <ul class="badge-grid">
+        {topics.map((t, i) => <li><Badge slug={t.slug} label={t.label} index={i} /></li>)}
+      </ul>
+    </section>
+
+    <section aria-labelledby="buttons">
+      <h2 id="buttons">Buttons and links</h2>
+      <div class="row">
+        <a class="button button-primary" href="#buttons">Primary action</a>
+        <a class="button button-quiet" href="#buttons">Secondary</a>
+        <a href="#buttons">An inline link</a>
+      </div>
+      <p>Use one orange button per view, for the thing you most want people to do.</p>
+    </section>
+
+    <section aria-labelledby="pages">
+      <h2 id="pages">Club pages</h2>
+      <p>
+        Pages written in the CMS take this style automatically. Write headings, lists, quotes and pictures as normal.
+        Here's an example:
+      </p>
+      <article class="prose sample">
+        <h2>Tabletop Tuesdays</h2>
+        <p>
+          Once a week, once the kids are down, we roll dice. New players are always welcome, and nobody minds if you
+          need to step away for a bedtime story.
+        </p>
+        <h3>How it works</h3>
+        <ul>
+          <li>Sign up in the club's thread by Monday night.</li>
+          <li>Show up in voice ten minutes early to check your mic.</li>
+          <li>Bring snacks. Nobody can see them, but you'll know.</li>
+        </ul>
+        <blockquote>Best two hours of my week, and I didn't have to clean up any pieces after.</blockquote>
+        <hr />
+        <table>
+          <thead><tr><th>Week</th><th>Game</th><th>Seats</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>A dungeon crawl</td><td>5</td></tr>
+            <tr><td>2</td><td>A train-building game</td><td>4</td></tr>
+          </tbody>
+        </table>
+      </article>
+      <p class="note">This is sample text, not a real club.</p>
+    </section>
+
+    <section aria-labelledby="graphics">
+      <h2 id="graphics">Event graphics</h2>
+      <p>
+        Fill this in to make a square graphic for an event post. It opens at full size (1080 × 1080). Screenshot the
+        square and post it in Discord.
+      </p>
+      <form class="event-form" action="/brand/event" method="get" target="_blank">
+        <label>Event name <input name="title" required maxlength="40" placeholder="Game Night" /></label>
+        <label>When <input name="when" maxlength="40" placeholder="Friday · 9pm Eastern" /></label>
+        <label>Where <input name="where" maxlength="40" placeholder="Voice: The Couch" /></label>
+        <label
+          >Topic
+          <select name="topic">
+            {
+              topics.map((t) => (
+                <option value={t.slug} selected={t.slug === "social-activities-and-events"}>
+                  {t.label}
+                </option>
+              ))
+            }
+          </select>
+        </label>
+        <button class="button button-primary" type="submit">Make the graphic</button>
+      </form>
+    </section>
+
+    <section aria-labelledby="preview">
+      <h2 id="preview">Link previews</h2>
+      <p>This is the card Discord and other apps show when someone shares a link to the site.</p>
+      <img class="og" src="/og.png" alt="The link-preview card: the crest beside 'The Papa Squad'" width="1200" height="630" />
+    </section>
+  </div>
+</Base>
+
+<style>
+  h1 {
+    font-size: var(--step-4);
+    letter-spacing: -0.035em;
+  }
+
+  .intro {
+    font-size: var(--step-1);
+    max-width: 44ch;
+    color: var(--ink-soft);
+  }
+
+  section {
+    margin-top: clamp(3.5rem, 8vw, 5.5rem);
+    max-width: 52rem;
+  }
+
+  section > h2 {
+    font-size: var(--step-3);
+    margin-bottom: 1rem;
+  }
+
+  section > p {
+    max-width: var(--measure);
+  }
+
+  .crest-row {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .crest-row img {
+    width: 12rem;
+  }
+
+  .crest-row p {
+    flex: 1 1 18rem;
+    max-width: var(--measure);
+    margin: 0;
+  }
+
+  .swatches {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.25rem 1rem;
+  }
+
+  .swatches li {
+    display: grid;
+    grid-template-columns: 6.25rem 6rem 10rem 1fr;
+    align-items: center;
+    gap: 1rem;
+    padding-block: 0.6rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .chips {
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .chip {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 50%;
+    border: 2px solid var(--ink);
+  }
+
+  .swatches code {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .swatches span:last-child {
+    color: var(--ink-soft);
+  }
+
+  .specimen-display {
+    font: 800 var(--step-3) / 1.05 var(--display);
+    letter-spacing: -0.025em;
+    margin: 0;
+  }
+
+  .specimen-body {
+    font-size: var(--step-1);
+  }
+
+  .badge-grid {
+    margin-top: 2rem;
+  }
+
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem 1.5rem;
+  }
+
+  .sample {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: clamp(1.5rem, 4vw, 3rem);
+    box-shadow: var(--lift);
+  }
+
+  .sample > h2:first-child {
+    margin-top: 0;
+  }
+
+  .note {
+    font-size: 0.9375rem;
+    color: var(--ink-soft);
+  }
+
+  .event-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: 1rem 1.5rem;
+    align-items: end;
+  }
+
+  .event-form label {
+    display: grid;
+    gap: 0.4rem;
+    font-weight: 700;
+  }
+
+  .event-form :is(input, select) {
+    font: inherit;
+    font-weight: 400;
+    color: var(--ink);
+    background: var(--surface);
+    border: 2px solid var(--ink);
+    border-radius: 10px;
+    padding: 0.6em 0.8em;
+    min-height: 3rem;
+  }
+
+  .event-form input::placeholder {
+    color: var(--ink-soft);
+  }
+
+  .event-form .button {
+    justify-self: start;
+  }
+
+  .og {
+    border-radius: var(--radius);
+    box-shadow: var(--lift);
+  }
+
+  @media (max-width: 40rem) {
+    .swatches li {
+      grid-template-columns: 6.25rem 1fr;
+    }
+
+    .swatches li > :is(code, span:last-child) {
+      grid-column: 2;
+    }
+  }
+</style>
