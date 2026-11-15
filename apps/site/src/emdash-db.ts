@@ -118,8 +118,15 @@ class SecureDeleteDriver implements Driver {
     }
   }
 
-  beginTransaction(connection: DatabaseConnection, settings: Parameters<Driver["beginTransaction"]>[1]) {
-    return this.base.beginTransaction(connection, settings);
+  // IMMEDIATE, not Kysely's deferred `begin`: the transaction takes the write
+  // lock before it reads. Deferred, a transaction that reads and then writes
+  // fails with "database is locked" (SQLITE_BUSY_SNAPSHOT) if another process
+  // committed in between, and no busy timeout can rescue a stale snapshot.
+  // Litestream is that process: it takes the write lock to checkpoint. EmDash
+  // writes through one connection, so serialising its transactions costs
+  // nothing.
+  async beginTransaction(connection: DatabaseConnection) {
+    await execute(connection, "BEGIN IMMEDIATE");
   }
 
   commitTransaction(connection: DatabaseConnection) {

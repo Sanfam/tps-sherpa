@@ -6,7 +6,6 @@ import { dirname } from "node:path";
 export const ANONYMOUS_NAME = "Anonymous";
 const DAY_MS = 24 * 60 * 60_000;
 const NINETY_DAYS_MS = 90 * DAY_MS;
-const CHECKPOINT_RETRIES = 5;
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 const dbPath = () => `${process.env["SITE_EMDASH_DIR"] ?? ".data"}/emdash.db`;
@@ -28,18 +27,19 @@ function sqliteDate(timestamp: number) {
   return new Date(timestamp).toISOString().slice(0, 19).replace("T", " ");
 }
 
+/**
+ * Folds the WAL back into the main file, best effort. PASSIVE never waits: a
+ * TRUNCATE here, retried, could block the event loop, and so the whole site,
+ * for about 25 seconds while Litestream held a reader. What it cannot fold
+ * now, Litestream's own checkpoint folds shortly after (owner's concession,
+ * ADR-0002).
+ */
 function checkpoint(db: DatabaseSync) {
-  for (let attempt = 0; attempt < CHECKPOINT_RETRIES; attempt++) {
-    try {
-      const result = db.prepare("PRAGMA wal_checkpoint(TRUNCATE)").get() as { busy: number } | undefined;
-      if (!result?.busy) return;
-    } catch (error) {
-      console.error("[emdash] SQLite WAL checkpoint failed:", error);
-      return;
-    }
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+  try {
+    db.prepare("PRAGMA wal_checkpoint(PASSIVE)").get();
+  } catch (error) {
+    console.error("[emdash] SQLite WAL checkpoint failed:", error);
   }
-  console.error("[emdash] SQLite WAL checkpoint remained busy after erasure");
 }
 
 function tables(db: DatabaseSync, prefix: string) {
