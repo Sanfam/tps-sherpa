@@ -134,7 +134,7 @@ The same theme covers everything the club publishes: the site, CMS club pages (`
 
 ## Colors
 
-A warm palette in two layers: brand constants that never change, and mode colours that swap by day and after hours. Dark follows the system setting (`:root:not([data-theme])` inside `prefers-color-scheme: dark`) unless `data-theme` on `<html>` sets a mode: `"light"` or `"dark"` forces it, from the header toggle (remembered in `localStorage`) or a page that pins itself, as the graphics templates pin light. Forced dark (`:root[data-theme="dark"]`) repeats the dark token list; keep the two blocks identical.
+A warm palette in two layers: brand constants that never change, and mode colours that swap by day and after hours. Dark follows the system setting (`:root:not([data-theme])` inside `prefers-color-scheme: dark`) unless `data-theme` on `<html>` sets a mode: `"light"` or `"dark"` forces it, from the header theme switch (remembered in `localStorage`) or a page that pins itself, as the graphics templates pin light. Forced dark (`:root[data-theme="dark"]`) repeats the dark token list; keep the two blocks identical.
 
 ### Primary
 - **Clubhouse Orange** (#b24a22, both modes): the fill of the single primary button on a view, with a navy border. It also appears as thin signals: link underlines, text selection, list markers and the pull-quote mark in prose. Never a badge fill, never body text, never a large surface.
@@ -226,6 +226,9 @@ Tactile, outlined, pill-shaped.
 - **Quiet:** transparent, ink text. Hover: fills ink with ground-coloured text. On the band its border and text become paper and it inverts to paper with navy text on hover.
 - **Focus:** 3px Accent Text outline, 3px offset, on every focusable element.
 - **Motion:** transforms on `cubic-bezier(0.16, 1, 0.3, 1)` over 0.25s; all motion collapses under `prefers-reduced-motion`.
+
+### Theme switch
+A `role="switch"` button in the header, labelled "Dark mode" for assistive tech and showing no text. A 52×28px pill track with a 2px ink border and a round thumb that slides from the left (light, sun) to the right (dark, moon with two stars) over 0.25s. The track is Surface by day and Band at night; the thumb is Ink, and the active icon takes Ground against it while the inactive one stays Ink on the track. No orange: that stays on the one primary action. It is hidden until its script runs, so a visitor without JavaScript sees no dead control.
 
 ### Badge (signature)
 One shield, one outline, three fills, drawn only in brand constants so it is the same in both modes. Fill cycles sky, sand, navy by index; outline is navy; glyph and stitching are navy on sky and sand, paper on navy. Glyphs are Phosphor Icons bold, vendored in `src/brand/glyphs.ts`, one per Topic slug. A linked badge lifts 4px and tilts -3deg on hover. A `bare` badge drops its caption for graphics. A new club gets a new glyph, never a new shape.
