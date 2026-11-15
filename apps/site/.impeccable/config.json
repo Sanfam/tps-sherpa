@@ -1,0 +1,107 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-font-size",
+        "value": "132px",
+        "files": [
+          "src/pages/brand/event.astro"
+        ],
+        "createdAt": "2026-11-15T04:05:04.168Z",
+        "reason": "Claude decided: fixed-pixel raster frame (1080x1080 event graphic), not the web type ramp"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "36px",
+        "files": [
+          "src/pages/brand/event.astro"
+        ],
+        "createdAt": "2026-11-15T04:05:04.288Z",
+        "reason": "Claude decided: fixed-pixel raster frame (1080x1080 event graphic), not the web type ramp"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "44px",
+        "files": [
+          "src/pages/brand/event.astro"
+        ],
+        "createdAt": "2026-11-15T04:05:04.403Z",
+        "reason": "Claude decided: fixed-pixel raster frame (1080x1080 event graphic), not the web type ramp"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "52px",
+        "files": [
+          "src/pages/brand/event.astro"
+        ],
+        "createdAt": "2026-11-15T04:05:04.522Z",
+        "reason": "Claude decided: fixed-pixel raster frame (1080x1080 event graphic), not the web type ramp"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "34px",
+        "files": [
+          "src/pages/brand/event.astro"
+        ],
+        "createdAt": "2026-11-15T04:05:04.637Z",
+        "reason": "Claude decided: fixed-pixel raster frame (1080x1080 event graphic), not the web type ramp"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "104px",
+        "files": [
+          "src/pages/brand/og.astro"
+        ],
+        "createdAt": "2026-11-15T04:05:04.753Z",
+        "reason": "Claude decided: fixed-pixel raster frame (1200x630 link preview), not the web type ramp"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "34px",
+        "files": [
+          "src/pages/brand/og.astro"
+        ],
+        "createdAt": "2026-11-15T04:05:04.868Z",
+        "reason": "Claude decided: fixed-pixel raster frame (1200x630 link preview), not the web type ramp"
+      },
+      {
+        "rule": "design-system-radius",
+        "value": "4px",
+        "files": [
+          "src/styles/theme.css"
+        ],
+        "createdAt": "2026-11-15T04:05:04.986Z",
+        "reason": "Claude decided: focus-ring corner, a browser-surface detail rather than a component shape"
+      },
+      {
+        "rule": "design-system-radius",
+        "value": "5px",
+        "files": [
+          "src/styles/theme.css"
+        ],
+        "createdAt": "2026-11-15T04:05:05.101Z",
+        "reason": "Claude decided: inline code corner in .prose, single use, documenter left it out as a one-off"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "0.8125rem",
+        "files": [
+          "src/styles/theme.css"
+        ],
+        "createdAt": "2026-11-15T04:05:05.215Z",
+        "reason": "Claude decided: mobile badge caption step, described in DESIGN.md Label row"
+      },
+      {
+        "rule": "design-system-radius",
+        "value": "10px",
+        "files": [
+          "src/pages/brand/index.astro"
+        ],
+        "createdAt": "2026-11-15T04:05:05.330Z",
+        "reason": "Claude decided: form field corners, described in DESIGN.md Shapes and Inputs"
+      }
+    ]
+  }
+}

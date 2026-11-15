@@ -13,3 +13,9 @@ content/config/roles.json
 
 # Agent worktrees (AGENTS.md): one per conversation and per task.
 .claude/worktrees/
+
+# Impeccable design-tool session files (screenshots, decision pages, hook cache)
+apps/site/.impeccable/review/
+apps/site/.impeccable/questions/
+apps/site/.impeccable/mocks/
+apps/site/.impeccable/hook.cache.json
