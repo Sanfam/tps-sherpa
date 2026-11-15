@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
@@ -175,4 +176,32 @@ test("anonymisation gives two same-locale editors separate anonymous authors and
   expect(rawBytes(path)).not.toContain("luna-original");
   expect(rawBytes(path)).not.toContain("nova-original");
   held.close();
+});
+
+test("a transaction that reads then writes keeps the write lock against another process, as Litestream writes", async () => {
+  const dir = makeDir();
+  const path = join(dir, "race.db");
+  const setup = new DatabaseSync(path);
+  setup.exec("PRAGMA journal_mode = WAL; CREATE TABLE t (x TEXT)");
+  setup.close();
+  const db = new Kysely<{ t: { x: string } }>({ dialect: createDialect({ url: `file:${path}` }) });
+  let other = "";
+  await db.transaction().execute(async (trx) => {
+    await trx.selectFrom("t").selectAll().execute();
+    // Another process tries to write mid-transaction. Under a deferred begin it
+    // succeeds and leaves this transaction's snapshot stale, so the insert
+    // below fails with "database is locked". Under BEGIN IMMEDIATE this
+    // transaction already holds the write lock, so it is the other writer that
+    // is refused.
+    other = spawnSync(process.execPath, [
+      "-e",
+      `const { DatabaseSync } = require("node:sqlite");
+       try { new DatabaseSync(${JSON.stringify(path)}).exec("INSERT INTO t VALUES ('other')"); console.log("wrote"); }
+       catch (e) { console.log(e.message); }`,
+    ], { encoding: "utf8" }).stdout.trim();
+    await trx.insertInto("t").values({ x: "mine" }).execute();
+  });
+  expect(other).toBe("database is locked");
+  expect((await db.selectFrom("t").select("x").execute()).map((r) => r.x)).toEqual(["mine"]);
+  await db.destroy();
 });

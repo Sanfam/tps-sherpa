@@ -234,10 +234,10 @@ Neither touches the site's sign-in record. To delete that, see the privacy
 policy's "until you ask Staff to delete them": until issue #74, that is by hand.
 
 The 90-day revision prune runs by itself, a minute after the site's first
-server-rendered request after a start, then daily. A failure is logged as `[emdash] Revision prune failed`. Purge,
-anonymise and prune checkpoint SQLite's WAL with `TRUNCATE`; if Litestream or a
-long-lived reader keeps the checkpoint busy, the operation logs the failure and
-Litestream retains the WAL for its normal replication cycle.
+server-rendered request after a start, then daily. A failure is logged as
+`[emdash] Revision prune failed`. Purge, anonymise and the prune then run a
+`PASSIVE` WAL checkpoint, which never blocks EmDash's writes; what it can't
+fold back yet, Litestream's own checkpoint folds shortly after.
 
 ## The site's database: replication and restore
 
