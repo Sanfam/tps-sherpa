@@ -50,7 +50,10 @@ export default defineConfig({
       // ponytail: EmDash media rendered through <Image> would break with this
       // off; nothing renders it yet. Fix the self-fetch before a page does.
       images: false,
-      database: sqlite({ url: `file:${data}/emdash.db` }),
+      database: {
+        ...sqlite({ url: `file:${data}/emdash.db` }),
+        entrypoint: fileURLToPath(new URL("./src/emdash-db.ts", import.meta.url)),
+      },
       // Uploads go to R2 when S3_BUCKET is set at build (ADR-0002); the rest of
       // its S3_* variables are read when the server starts, so no key is
       // built into the image. Without it, uploads stay on the volume, outside

@@ -50,22 +50,20 @@ Two spikes ran (`docs/research/2026-10-16-emdash-spike.md`), on EmDash 1.1.0 ins
 
 ### Decided by the owner, 2026-10-17
 
-- **Editor accounts are kept.** EmDash's user rows belong to Staff and Club Leads acting in a role, so they are not erased when someone loses the role. Edit history is pruned at **90 days by age** (ADR-0001), and **`secure_delete` is on**. This needs building:
-  - **An age-based revision prune job.** EmDash keeps 50 revisions per entry, a hard-coded count with no age option. The job deletes revisions older than 90 days straight from EmDash's `revisions` table, skipping each entry's live and draft revision as EmDash's own pruning does.
-  - **`secure_delete` on EmDash's connections,** through our own database descriptor: `{ ...sqlite({ url }), entrypoint: <ours> }`, whose `createDialect` wraps EmDash's public `emdash/db/sqlite` dialect and runs the pragma on each connection. The spike verified it on EmDash's connection, and runtime auto-migrations use the same dialect. CLI or deploy migrations do not, and the FTS5 index is not scrubbed (open item 4).
+- **Editor accounts are kept.** EmDash's user rows belong to Staff and Club Leads acting in a role, so they are not erased when someone loses the role. Edit history is pruned at **90 days by age** (ADR-0001), and **`secure_delete` is on**. Trial step 4 builds this:
+  - **An age-based revision prune job.** EmDash keeps 50 revisions per entry, a hard-coded count with no age option. The daily site timer deletes revisions older than 90 days straight from EmDash's `revisions` table, skipping each entry's live and draft revision as EmDash's own pruning does, and removes orphaned `_emdash_revision_prune_queue` rows.
+  - **`secure_delete` on EmDash's connections,** through our own database descriptor: `{ ...sqlite({ url }), entrypoint: <ours> }`, whose `createDialect` wraps EmDash's public `emdash/db/sqlite` dialect and runs the pragma on each connection. Runtime auto-migrations use the same dialect; after migrations the descriptor enables FTS5 secure-delete on every discovered search table and runs `VACUUM` when migrations changed the file. CLI or deploy migrations do not.
   - **The privacy policy names CMS accounts before Phase 5:** what an editor row holds (a snowflake-derived address, username and role), how long edit history is kept, and that EmDash's logs carry the snowflake-derived address and role changes.
 - **Erasure in the CMS: purge and anonymise.** This keeps ADR-0001's "deletes the affected revision rows at once".
   - **Purge history.** Admins get a "purge history" action. When personal data is removed from a page, it deletes that page's old revisions at once, keeping the revision the page currently points to.
   - **Anonymise on request.** An editor's erasure request strips their name and username from their EmDash `users` row, and re-points their revisions to an anonymous author.
   - **Privacy policy.** It states both before Phase 5.
-  - **What it needs built:** the purge action, the anonymise step, and an anonymous-author row in `users`.
+  - **Built in trial step 4 (2026-11-15):** `/admin/emdash/purge-history` and `/admin/emdash/anonymise` are Admin-only POST actions behind the site's live role check and same-origin CSRF check. Purge deletes all unreferenced revisions for one entry and preserves its live and draft pointers. Anonymise creates or reuses a per-editor anonymous author row, clears the editor's name, marks the EmDash `users.data` row, rewrites revision and entry authorship, and gives each anonymised byline a distinct slug. `authenticate()` returns `Anonymous` for marked snowflake-derived emails, so EmDash's `syncName` cannot restore the Discord username. The implementation updates `revisions.edited_by` when that column exists; the pinned 1.4.0 package does not yet ship migration 096.
   - **What it touches.** EmDash internals it does not document as extension points:
     - `revisions` (delete rows; update `author_id`);
     - `users` (`name`, and the snowflake-derived `email`, which also identifies the person).
-  - **To settle:**
-    - whether entries' `author_id` and bylines must also be re-pointed;
-    - how a stripped row interacts with external auth, which matches users by email;
-    - the FTS5 index (open item 4).
+  - **Settled by trial step 4:** entry `author_id` values and bylines are re-pointed to the anonymous row; external auth still matches the snowflake-derived email and supplies a placeholder name for marked rows; startup FTS5 secure-delete covers index copies.
+  - **Deleted text lingers until a WAL checkpoint (owner, 2026-11-15).** EmDash's own deletes reach the main file at the next checkpoint, which Litestream runs; until then the text sits on disk, out of any user's reach. The owner accepts this as a reasonable effort; purge, anonymise and the prune checkpoint at once.
   - Both are re-checked on every upgrade, like the prune job.
   - **Both mechanisms rest on things EmDash does not document.** The prune job writes to an internal table. A custom descriptor `entrypoint` is a public type used in an undocumented way. Both are re-checked on every EmDash upgrade, with the pin.
 - **Club scoping is EmDash's per-author ownership** *(confirmed 2026-11-14 as the barrier to use: no code of ours; Admins edit everything)*. It was chosen because no plugin can enforce per-club scoping through a documented, supported seam (note §7).
@@ -97,10 +95,10 @@ Two spikes ran (`docs/research/2026-10-16-emdash-spike.md`), on EmDash 1.1.0 ins
    - Still unverified against the real Discord. Against Better Auth 1.7.14 (the Phase 4 auth spike, 2026-11-12, mock Discord): state is signed and single-use, and Better Auth keeps it in the database, a `verification` row per sign-in start, swept by the site's daily cleanup; but the Discord provider sends no PKCE verifier.
    - **PKCE, 2026-11-14 (owner):** Discord sign-in moved to Better Auth's generic OAuth plugin, which sends an S256 challenge and the verifier, through the same sign-in call and callback path. The mock Discord refuses a sign-in without them (`apps/site/test/gate.test.ts`). Whether the real Discord checks the verifier is still unverified.
 4. **Erasure gaps.**
-   - **The FTS5 search index.** EmDash's search tables are contentful FTS5 tables with their own copy of the text. `secure_delete` does not scrub their segments, so deleted text stays in the live `%_data` rows until a merge. Candidates are FTS5's `secure-delete` option or a rebuild after deletions.
+   - **The FTS5 search index — built in trial step 4 (2026-11-15).** The custom database descriptor discovers every EmDash FTS5 virtual table through `sqlite_master` after runtime migrations and sets each table's `secure-delete` option. The focused test plants text, deletes it and scans the database bytes. The table discovery remains an undocumented EmDash internal and is re-checked on upgrade.
    - **Migrations.** CLI and deploy migrations bypass our dialect, and some copy whole content tables (`INSERT … SELECT`).
    - **Both are real. The SQLite mechanisms that close them are documented, but applying the FTS5 one depends on an EmDash internal** *(measured 2026-11-14 on SQLite 3.54.1 as bundled with Node 26, on a synthetic file with a planted string; EmDash itself was not run)*:
-     - **FTS5.** With `secure_delete` on, deleting a row from a plain FTS5 table left **2 copies** of the deleted text in the index until an `optimize` merge. With FTS5's own option set first (`INSERT INTO t(t, rank) VALUES('secure-delete', 1)`, SQLite 3.42+), it left **0**, at once. The option is stored in the table, so setting it once per search table after each migration holds. **It needs the names of EmDash's FTS5 tables, which are internal**: an upgrade that adds or renames a search table would miss it. Under the fallback clause above ("cannot be met without an undocumented EmDash internal"), whether that is acceptable is the owner's decision.
+     - **FTS5.** With `secure_delete` on, deleting a row from a plain FTS5 table left **2 copies** of the deleted text in the index until an `optimize` merge. With FTS5's own option set first (`INSERT INTO t(t, rank) VALUES('secure-delete', 1)`, SQLite 3.42+), it left **0**, at once. The trial now applies this to every discovered table after migrations.
      - **Migrations.** A copy-and-drop migration on a connection without `secure_delete` left the old copy in freed pages. It **survived a later secure erasure** of the row (1 copy left), and **`VACUUM` removed it** (0). So: run migrations only through our dialect, or `VACUUM` after every migration.
    - **Backups are already bounded:** ADR-0001 caps Litestream retention and R2 object versions at 30 days.
 
@@ -123,13 +121,12 @@ The spike ran on 1.1.0. Since then, 1.2.0, 1.3.0, 1.3.1, 1.4.0 and 1.5.0 (2026-1
 - **Revisions.**
   - The count is still a hard-coded 50 (`cleanup.ts:46`), with no age option.
   - Migration 059 adds `_emdash_revision_prune_queue`, which keys on revision ids. The age-based prune job has to keep it consistent.
-  - Migration 096 adds `revisions.edited_by`, a JSON array of user ids. The anonymise step has to rewrite it as well as `author_id`.
+  - Migration 096 adds `revisions.edited_by`, a JSON array of user ids. The anonymise step rewrites it when present; EmDash 1.4.0's installed migration set ends at 091, so the code feature-detects the column.
 - **Scoping.**
   - There is a new `content:edit_own_drafts` grant, which applies only while an entry is a draft.
   - No new seam for scoping by club was found. The hook list and RBAC were not diffed in full.
 - **Storage.** `emdash/db/sqlite` is still exported, and `secure_delete` is still off. The descriptor `entrypoint` contract was not re-verified.
 - **Not re-verified:**
-  - an FTS5 secure-delete option or rebuild;
   - `INSERT … SELECT` copies in the new migrations;
   - support for the Node adapter.
 - **Advisories.** No GitHub security advisories are published for `emdash` or `@emdash-cms/auth`.
@@ -168,4 +165,4 @@ Also required, as before:
 - restoring a revision;
 - Litestream run against EmDash's file;
 - the external-auth flow with Better Auth and the real Discord;
-- the revision prune job and the purge and anonymise steps, which are not built.
+- production execution of the revision prune job, purge action and anonymise step; their test databases pass, but they remain dependent on the undocumented internals listed above.
