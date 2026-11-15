@@ -1,11 +1,12 @@
-# Bot runbook
+# Runbook
 
 What an operator runs by hand. The decisions behind it are in ADR-0001.
 
 ## The bot's durable store: replication and restore
 
 The deployed bot starts through `apps/bot/start.sh`, the root `Dockerfile`'s
-entrypoint. It runs ADR-0001's startup contract before anything opens
+entrypoint. It runs ADR-0001's startup contract, in
+`scripts/litestream-start.sh` (shared with the site), before anything opens
 `bot.db`:
 
 - **`bot.db` present:** used as it is. Never overwritten from the replica. The
@@ -63,7 +64,8 @@ Litestream is 0.5.17, pinned with its checksums in the `Dockerfile`.
   entrypoint's marker, so that mistake shows as a crash loop with
   `Started on Railway without apps/bot/start.sh`.
 - The volume stays mounted at `/app/apps/bot/.data`.
-- Watch paths include `Dockerfile` and `.dockerignore`.
+- Watch paths include `Dockerfile`, `.dockerignore` and
+  `scripts/litestream-start.sh`.
 
 Local development does none of this: run `node apps/bot/src/serve.ts`
 directly. It neither restores nor replicates.
@@ -194,3 +196,78 @@ start refused; a bot that exited 1.2 s into a fresh replica (transaction 1
 uploaded, no snapshot yet) started normally next time and its row restored.
 With the local state deletion removed from `start.sh`, both post-restart rows
 were lost.
+
+## The site's database: replication and restore
+
+The deployed site starts through `apps/site/start.sh`, `apps/site/Dockerfile`'s
+entrypoint, which runs the same `scripts/litestream-start.sh` contract as the
+bot over EmDash's database, `$SITE_EMDASH_DIR/emdash.db` (`/data/emdash.db`):
+present is used, missing is restored and checked, and every failure refuses to
+start. Replica `site/emdash.db` in the site's bucket; retention, lifecycle rule
+and versioning exactly as for the bot, above.
+
+- **Not replicated:** the session database (`SITE_SESSION_DB`), disposable by
+  ADR-0001; losing it signs everyone out. Uploads go to their own R2 bucket
+  (below), which is their only copy.
+- **Heartbeat:** `apps/site/heartbeat.mjs`, loaded ahead of the server,
+  rewrites the file's `user_version` hourly. EmDash's own once-a-minute write
+  starts only after a request has started its runtime, so an idle site would
+  otherwise stop being snapshotted (see
+  [After a long sync outage](#after-a-long-sync-outage)).
+- **Start command:** leave it unset, or set `sh /app/apps/site/start.sh`. If
+  anything else starts the site on Railway, the gate answers every EmDash route
+  with 503 and logs `Started on Railway without apps/site/start.sh`, so no edit
+  is taken unreplicated. Public pages still serve.
+- **First deploy:** the volume already holds `emdash.db`, so the first boot logs
+  `THE REPLICA IS EMPTY` and starts a fresh replica. On a brand-new volume
+  (none to restore) the start refuses; create the file once with a one-off
+  start command, then set it back:
+  `node -e 'new (require("node:sqlite").DatabaseSync)(process.env.SITE_EMDASH_DIR + "/emdash.db").exec("PRAGMA journal_mode = WAL")'`.
+  EmDash migrates it on start, and its `users` table is empty: make the first
+  CMS request as an Admin (ADR-0002, the first-user hazard).
+- **Watch paths:** `apps/site/**` and `scripts/litestream-start.sh`.
+
+### Uploads: R2
+
+With `S3_BUCKET` set at build, EmDash stores uploads in R2 through its `s3()`
+adapter (`astro.config.mjs`); the other `S3_*` variables are read at start.
+Files are always served through `/_emdash/api/media/file/...`, behind the gate
+and Member-only: the bucket stays private, with no `r2.dev` URL or custom
+domain. The admin uploads through `media/upload-url`, a signed PUT straight to
+R2, valid for an hour, so the bucket needs CORS for the site's origin.
+
+### Restore check
+
+In the site's container (`railway ssh -s site`), with the owner's approval:
+member data never lands on a personal machine.
+
+```sh
+sh /app/apps/site/restore-check.sh                         # latest
+sh /app/apps/site/restore-check.sh 2026-11-15T00:00:00Z    # point in time, last 7 days
+```
+
+It restores to a scratch directory, never over the live file, runs a full
+integrity check, prints `integrity_check: ok` and each table's row count beside
+the live file's, and deletes the copy. To make the site restore itself: stop
+the service, delete `emdash.db`, `emdash.db-wal` and `emdash.db-shm` from the
+volume, start it, and look for `post-restore integrity check passed`.
+
+### Rehearsal, 2026-11-15
+
+Locally, Litestream 0.5.17 (darwin-arm64) against a `file` replica, the built
+site, `apps/site/start.sh` with `LITESTREAM_CONFIG` pointed at a file-replica
+copy of `litestream.yml`, and dummy keys:
+
+| Step | Result |
+|---|---|
+| File present, replica empty | `THE REPLICA IS EMPTY`, `snapshot complete`, site served |
+| Restart; heartbeat; a row written to `options` | `user_version` set at start; the row reached the replica within a second |
+| `restore-check.sh` while running | `integrity_check: ok`; all 87 tables' counts equal to the live file's |
+| File deleted, restart | `post-restore integrity check passed`; the row and all 87 tables back; site served |
+| Missing `LITESTREAM_BUCKET` | Refused, exit 1 |
+| File missing, replica empty | `no matching backup files available`, refused, no `emdash.db` created |
+| `RAILWAY_ENVIRONMENT_ID` set, started without `start.sh` | EmDash route 503 with the log line; landing page 200 |
+
+No public request started EmDash's runtime (no scheduler write in 5 minutes),
+which is why the heartbeat is ours. Not yet rehearsed: against R2, uploads to
+R2, and the built image.
