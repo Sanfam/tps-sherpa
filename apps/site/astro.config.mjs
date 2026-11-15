@@ -44,6 +44,12 @@ export default defineConfig({
     emdash({
       // EmDash's setup refuses to run in production without a configured origin.
       siteUrl: site?.origin,
+      // Astro's own image endpoint, which reads the theme's images from disk.
+      // EmDash's fetches them from the site's public origin instead, and on
+      // Railway that fetch fails silently, so the images break.
+      // ponytail: EmDash media rendered through <Image> would break with this
+      // off; nothing renders it yet. Fix the self-fetch before a page does.
+      images: false,
       database: sqlite({ url: `file:${data}/emdash.db` }),
       // ponytail: uploads on the volume, outside Litestream; R2 is step 5 of the trial.
       storage: local({ directory: `${data}/uploads`, baseUrl: "/_emdash/api/media/file" }),
