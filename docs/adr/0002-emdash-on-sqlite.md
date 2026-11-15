@@ -42,7 +42,7 @@ Two spikes ran (`docs/research/2026-10-16-emdash-spike.md`), on EmDash 1.1.0 ins
 
 - scope `identify` only, with PKCE and state bound to the browser;
 - membership and roles read with the bot token on each private CMS request, behind a short cache that also holds refusals: "each request" becomes "within the TTL";
-- Staff (holders of `Staff` or `Event Managers`, per `CONTEXT.md`) map to Admin, and Club Leads to Author;
+- holders of the `Staff` role map to Admin, and Club Leads to Author. Until Club Lead is its own guild role, holders of `Event Managers` stand in for it and map to Author (owner, 2026-11-14; was "Staff, holders of `Staff` or `Event Managers`, map to Admin");
 - a Member with no editor role is refused, and gets no row;
 - a gate in `middleware.outer`, built as an **allow-list**, decides which `/_emdash` routes Members, editors and Viewers may reach. EmDash's own credential routes (OAuth server, device flow, API tokens, OAuth clients, MCP, `setup/admin`, `preview-url`) are not on it. The spike built a deny-list instead; see open item 2.
 
@@ -55,7 +55,7 @@ Two spikes ran (`docs/research/2026-10-16-emdash-spike.md`), on EmDash 1.1.0 ins
   - **`secure_delete` on EmDash's connections,** through our own database descriptor: `{ ...sqlite({ url }), entrypoint: <ours> }`, whose `createDialect` wraps EmDash's public `emdash/db/sqlite` dialect and runs the pragma on each connection. The spike verified it on EmDash's connection, and runtime auto-migrations use the same dialect. CLI or deploy migrations do not, and the FTS5 index is not scrubbed (open item 4).
   - **The privacy policy names CMS accounts before Phase 5:** what an editor row holds (a snowflake-derived address, username and role), how long edit history is kept, and that EmDash's logs carry the snowflake-derived address and role changes.
 - **Erasure in the CMS: purge and anonymise.** This keeps ADR-0001's "deletes the affected revision rows at once".
-  - **Purge history.** Staff get a "purge history" action. When personal data is removed from a page, it deletes that page's old revisions at once, keeping the revision the page currently points to.
+  - **Purge history.** Admins get a "purge history" action. When personal data is removed from a page, it deletes that page's old revisions at once, keeping the revision the page currently points to.
   - **Anonymise on request.** An editor's erasure request strips their name and username from their EmDash `users` row, and re-points their revisions to an anonymous author.
   - **Privacy policy.** It states both before Phase 5.
   - **What it needs built:** the purge action, the anonymise step, and an anonymous-author row in `users`.
@@ -68,9 +68,9 @@ Two spikes ran (`docs/research/2026-10-16-emdash-spike.md`), on EmDash 1.1.0 ins
     - the FTS5 index (open item 4).
   - Both are re-checked on every upgrade, like the prune job.
   - **Both mechanisms rest on things EmDash does not document.** The prune job writes to an internal table. A custom descriptor `entrypoint` is a public type used in an undocumented way. Both are re-checked on every EmDash upgrade, with the pin.
-- **Club scoping is EmDash's per-author ownership** *(confirmed 2026-11-14 as the barrier to use: no code of ours; Staff as Admin edit everything)*. It was chosen because no plugin can enforce per-club scoping through a documented, supported seam (note §7).
+- **Club scoping is EmDash's per-author ownership** *(confirmed 2026-11-14 as the barrier to use: no code of ours; Admins edit everything)*. It was chosen because no plugin can enforce per-club scoping through a documented, supported seam (note §7).
   - An Author edits and publishes only their own entries.
-  - Staff reassign each migrated club page to its Club Lead, and again at every handover.
+  - Admins reassign each migrated club page to its Club Lead, and again at every handover.
   - Co-leads cannot share a page.
   - The handoff's convention still covers what ownership does not: an Author can create entries in any collection, publish without review, and read all drafts.
 
@@ -83,8 +83,8 @@ Two spikes ran (`docs/research/2026-10-16-emdash-spike.md`), on EmDash 1.1.0 ins
 ## Open items
 
 1. **Built-in auth disabled, via external auth.** Spiked, and it works for the routes tested. Still to settle:
-   - **The stale role on EmDash's public API routes.** `authenticate()` runs only on private routes, and throws before `syncRoles` writes, so the row keeps its last role. EmDash's own session then serves `search` with drafts (`content:read_drafts`) and `snapshot?drafts=true` (the full export) on that role. A removed Staff member can export everything (note §3).
-   - **The first-user hazard.** EmDash makes the first authenticated user an Admin whenever `users` is empty, not only at first setup. The deploy step must make the first CMS request as Staff, or seed the first Staff row; so must any later step that empties the table.
+   - **The stale role on EmDash's public API routes.** `authenticate()` runs only on private routes, and throws before `syncRoles` writes, so the row keeps its last role. EmDash's own session then serves `search` with drafts (`content:read_drafts`) and `snapshot?drafts=true` (the full export) on that role. A removed editor can export everything (note §3).
+   - **The first-user hazard.** EmDash makes the first authenticated user an Admin whenever `users` is empty, not only at first setup. The deploy step must make the first CMS request as an Admin, or seed the first Admin row; so must any later step that empties the table.
    - **A cache for the per-request bot-token call that also holds refusals.** With real reader sessions every Member reaches it, and without negative caching one Member can drain the bot's rate limit.
    - **Re-checking the remaining credential routes, including `preview-url`, on every EmDash upgrade.** `preview-url` mints signed URLs that need only `content:read_drafts`, check no ownership, take an uncapped expiry, and are honoured on public pages: a long-lived credential that survives role loss.
 2. **The production gate must be an allow-list.**
@@ -109,7 +109,7 @@ The spike ran on 1.1.0. Since then, 1.2.0, 1.3.0, 1.3.1, 1.4.0 and 1.5.0 (2026-1
 
 - **Item 1, unchanged.**
   - Public search still uses EmDash's own session (`astro/middleware/auth.ts:223`). `snapshot` is still on the public exact-match list (`:122`).
-  - `syncRoles` still runs only in the external-auth path, so a removed Staff member keeps their last role on these routes.
+  - `syncRoles` still runs only in the external-auth path, so a removed editor keeps their last role on these routes.
   - The first authenticated user still becomes Admin whenever `users` is empty (`:575-581`).
   - External auth has no cache option (`auth/types.ts`), so we still build the cache and its refusals.
 - **`preview-url`, unchanged.** It needs only `content:read_drafts`, checks no ownership, and takes an uncapped `expiresIn`.
@@ -158,7 +158,7 @@ Also required, as before:
 - **EmDash is young.** 1.0 shipped 2026-09-28 and releases weekly. The two-week pin is the mitigation.
 - **Our code sits on a privacy boundary.** The external-auth module and the gate read guild roles and decide who reaches the CMS. They must be reviewed as such, and re-checked against EmDash's routes on every upgrade.
 - **Some of what we rely on is not documented by EmDash.** The revision prune job, the purge and anonymise steps, and the `secure_delete` descriptor are part of every upgrade check.
-- **Ownership needs Staff work.** Imported pages and handovers are reassigned by hand, and co-leads cannot share a page.
+- **Ownership needs Admin work.** Imported pages and handovers are reassigned by hand, and co-leads cannot share a page.
 - **Recovery is the raw database file.** EmDash's JSON exports cannot be restored, so Litestream is the only recovery path.
 
 **Not yet verified:**

@@ -15,21 +15,20 @@ import { groupsFor, memberRoles } from "./auth.ts";
 const ADMIN = 50;
 const AUTHOR = 30;
 
-// Role names from the manifest, as group slugs. Staff are holders of `Staff`
-// or `Event Managers` (CONTEXT.md).
-const STAFF = ["staff", "event-managers"];
-// ponytail: the Club Lead guild role does not exist yet (CONTEXT.md); this
-// matches nothing until a role with this name is in the manifest.
-const CLUB_LEAD = "club-lead";
+// Role names from the manifest, as group slugs. In the CMS only `Staff` is
+// Admin; `Event Managers` stands in for Club Lead, which is not yet its own
+// guild role (owner, 2026-11-14).
+const ADMINS = "staff";
+const AUTHORS = "event-managers";
 
 export async function authenticate(request: Request) {
-  const { roles, discordId } = await memberRoles(request.headers);
-  if (!roles || !discordId) throw new Error("no Member session");
+  const { roles, user } = await memberRoles(request.headers);
+  if (!roles || !user) throw new Error("no Member session");
   const groups = groupsFor(roles);
-  const role = groups.some((g) => STAFF.includes(g)) ? ADMIN : groups.includes(CLUB_LEAD) ? AUTHOR : null;
+  const role = groups.includes(ADMINS) ? ADMIN : groups.includes(AUTHORS) ? AUTHOR : null;
   // A refused Member never reaches EmDash's user lookup, so leaves no row.
   if (role === null) throw new Error("no editor role");
-  // EmDash matches users by email. Both are the snowflake, the only identity
-  // the site keeps.
-  return { email: `${discordId}@discord.local`, name: discordId, role };
+  // EmDash matches users by email, the snowflake-derived address, and keeps
+  // the name in step with the Discord username.
+  return { email: user.email, name: user.name, role };
 }
