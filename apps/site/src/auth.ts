@@ -19,7 +19,7 @@ import manifest from "../fixtures/roles.json";
 
 const DISCORD_API = "https://discord.com/api/v10";
 
-const env = (name: string) => {
+export const env = (name: string) => {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is not set`);
   return value;
