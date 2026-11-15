@@ -1,0 +1,19 @@
+---
+// Public, and server-rendered: the landing page is the only prerendered page.
+import Base from "../layouts/Base.astro";
+import { renderPolicy as render } from "../policy.ts";
+// Bundled at build; the files are the Discord markdown /privacy policy sends.
+import site from "../../../../content/privacy-policy-site.md?raw";
+import bot from "../../../../content/privacy-policy.md?raw";
+
+---
+<Base title="Privacy">
+  <div class="wrap prose">
+    {[site, bot].map((policy) => <p class="policy" set:html={render(policy)} />)}
+  </div>
+</Base>
+<style>
+  .policy {
+    white-space: pre-line;
+  }
+</style>

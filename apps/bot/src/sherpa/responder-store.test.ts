@@ -190,6 +190,7 @@ describe("erasure", () => {
           tier0: join(dir, "tier0.db"),
           activity: join(dir, "activity.json"),
           policy: join(dir, "privacy-policy.md"),
+          sitePolicy: join(dir, "privacy-policy-site.md"),
         },
         (id) => dropped.push(id),
       );
@@ -218,6 +219,7 @@ it("drops the member from memory even when the durable erase fails", () => {
       tier0: join(dir, "tier0.db"),
       activity: join(dir, "activity.json"),
       policy: join(dir, "privacy-policy.md"),
+      sitePolicy: join(dir, "privacy-policy-site.md"),
     },
     (id) => dropped.push(id),
   );

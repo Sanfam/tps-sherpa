@@ -41,8 +41,10 @@ COPY apps/site/package.json apps/site/
 RUN npm ci --omit=dev -w @tps/site
 COPY apps/site apps/site
 COPY scripts/litestream-start.sh scripts/litestream-start.sh
-# The topic vocabulary the landing and brand pages import from the repo root.
+# The topic vocabulary the landing and brand pages import from the repo root,
+# and the two policies the privacy page bundles.
 COPY content/config/topics.json content/config/topics.json
+COPY content/privacy-policy.md content/privacy-policy-site.md content/
 # astro.config.mjs reads it at build time, for the domains whose forwarded
 # headers Astro trusts.
 ARG BETTER_AUTH_URL

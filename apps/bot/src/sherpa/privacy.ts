@@ -27,6 +27,8 @@ import { withResponderStore } from "./responder-store.ts";
 
 /** Discord's ceiling on an embed's description. */
 export const MAX_EMBED_DESCRIPTION = 4096;
+/** Discord's ceiling on all of a message's embeds together. */
+export const MAX_EMBEDS_TOTAL = 6000;
 
 const settingOption: APIApplicationCommandStringOption = {
   name: "setting",
@@ -79,7 +81,8 @@ export interface Deleted {
 
 /** What `/privacy` reads and changes. Real stores on temp paths in tests. */
 export interface Privacy {
-  policy: () => string;
+  /** The bot's policy, then the site's. */
+  policy: () => string[];
   settings: (memberId: string) => Preferences;
   /** `names`: kept with a processing opt-out, so others' text is redacted of them. */
   set: (memberId: string, setting: Setting, allowed: boolean, names?: string[]) => void;
@@ -100,6 +103,7 @@ export const openPrivacy = (
     tier0: string;
     activity: string;
     policy: string;
+    sitePolicy: string;
   },
   eraseFromMemory: (memberId: string) => void = () => {},
 ): Privacy => {
@@ -118,7 +122,7 @@ export const openPrivacy = (
   };
 
   return {
-    policy: () => readFileSync(paths.policy, "utf8"),
+    policy: () => [paths.policy, paths.sitePolicy].map((p) => readFileSync(p, "utf8")),
     settings: (memberId) => withDurableStore((s) => s.preferences(memberId), paths.durable),
     /** Either opt-out erases what the introductions responder holds of them. */
     set: (memberId, setting, allowed, names) => {
@@ -252,12 +256,17 @@ export const answerPrivacy = (
 
   switch (sub.name) {
     case "policy": {
-      const text = privacy.policy();
+      // Discord trims an embed's description before counting it.
+      const texts = privacy.policy().map((t) => t.trim());
       // Refused rather than cut: half a policy is a wrong one.
-      if (text.length > MAX_EMBED_DESCRIPTION)
-        throw new Error(`The privacy policy is ${text.length} characters; an embed holds ${MAX_EMBED_DESCRIPTION}.`);
+      for (const text of texts)
+        if (text.length > MAX_EMBED_DESCRIPTION)
+          throw new Error(`A privacy policy is ${text.length} characters; an embed holds ${MAX_EMBED_DESCRIPTION}.`);
+      const total = texts.reduce((n, t) => n + t.length, 0);
+      if (total > MAX_EMBEDS_TOTAL)
+        throw new Error(`The privacy policies are ${total} characters together; a message's embeds hold ${MAX_EMBEDS_TOTAL}.`);
       log(`${tag} policy`);
-      return { content: POLICY_INTRO, embeds: [{ description: text }] };
+      return { content: POLICY_INTRO, embeds: texts.map((description) => ({ description })) };
     }
     case "settings": {
       const current = privacy.settings(memberId);
