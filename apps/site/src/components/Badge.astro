@@ -1,0 +1,44 @@
+---
+// One badge from the Papa Squad badge family: the crest's thick navy outline,
+// a paper sticker edge, a stitched inner line, and the Topic's glyph.
+import { glyphs } from "../brand/glyphs.ts";
+
+interface Props {
+  slug: string;
+  label: string;
+  /** Picks the fill, so neighbouring badges differ. */
+  index: number;
+  href?: string;
+  /** Hide the label: the badge alone, for graphics. */
+  bare?: boolean;
+}
+
+const { slug, label, index, href, bare } = Astro.props;
+// Orange is kept for the action, so badges never wear it.
+const fills = [
+  { bg: "var(--sky)", fg: "var(--navy)" },
+  { bg: "var(--sand)", fg: "var(--navy)" },
+  { bg: "var(--navy)", fg: "var(--paper)" },
+];
+const { bg, fg } = fills[index % fills.length];
+const shield = "M60 6C80 6 98 10 110 17V62C110 95 89 115 60 126C31 115 10 95 10 62V17C22 10 40 6 60 6Z";
+const Tag = href ? "a" : "div";
+---
+<Tag class="badge" href={href}>
+  <svg viewBox="0 0 120 132" role="img" aria-label={bare ? label : undefined} aria-hidden={bare ? undefined : "true"}>
+    <path d={shield} fill="var(--paper)" stroke="var(--paper)" stroke-width="14" stroke-linejoin="round" />
+    <path d={shield} fill={bg} stroke="var(--navy)" stroke-width="5" stroke-linejoin="round" />
+    <path
+      d={shield}
+      fill="none"
+      stroke={fg}
+      stroke-opacity="0.55"
+      stroke-width="1.6"
+      stroke-dasharray="4 3.5"
+      transform="translate(60 66) scale(.84) translate(-60 -66)"
+      vector-effect="non-scaling-stroke"
+    />
+    <svg x="33" y="36" width="54" height="54" viewBox="0 0 256 256" fill={fg} set:html={glyphs[slug]} />
+  </svg>
+  {!bare && <span>{label}</span>}
+</Tag>

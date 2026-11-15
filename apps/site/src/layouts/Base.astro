@@ -1,0 +1,73 @@
+---
+import { Font, Image } from "astro:assets";
+import crest from "../assets/brand/icon.png";
+import "../styles/theme.css";
+
+interface Props {
+  title?: string;
+  description?: string;
+  /** Pages behind the Member gate get the members' nav. */
+  members?: boolean;
+}
+
+const {
+  title,
+  description = "A Discord community of gamer dads. We swap stories, help each other out, and play games when time allows.",
+  members = false,
+} = Astro.props;
+const fullTitle = title ? `${title} · The Papa Squad` : "The Papa Squad";
+const ogImage = Astro.site && new URL("/og.png", Astro.site).href;
+const here = Astro.url.pathname;
+---
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#dad2c6" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#142029" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    {ogImage && <meta property="og:image" content={ogImage} />}
+    {ogImage && <meta name="twitter:card" content="summary_large_image" />}
+    <Font cssVariable="--font-display" preload />
+    <Font cssVariable="--font-body" preload />
+  </head>
+  <body>
+    <Fragment set:html={`<!--
+THESIS: The Papa Squad as a members' club. The mascot is the crest, and every Topic and club wears a badge from one family. It refuses the dark, neon gaming-community page.
+OWN-WORLD: The icon's warm grey ground (#dad2c6), navy ink, orange kept for the one action, sky and sand badge fills. Shield badges have a thick navy outline, a paper sticker edge and a stitched inner line. Bricolage Grotesque display, Atkinson Hyperlegible Next body.
+STORY: A dad sees who this is for, sees his own interests in the badge wall, and joins on Discord. A Member signs in.
+FIRST VIEWPORT: Wordmark top left, sign-in top right. Huge navy "The Papa Squad", one plain line, the orange Join button. The crest is large on the right, seamless on its ground.
+FORM: The Clubhouse, safer-register lineup after two re-rolls; seed 7728625e.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+-->`} />
+    <header class="site-header">
+      <div class="wrap">
+        <a class="wordmark" href="/">
+          <Image src={crest} alt="" width={88} height={88} />
+          The Papa Squad
+        </a>
+        {
+          members ? (
+            <nav class="site-nav" aria-label="Members">
+              <a href="/members" aria-current={here === "/members" ? "page" : undefined}>Members</a>
+              <a href="/brand" aria-current={here === "/brand" ? "page" : undefined}>Brand kit</a>
+            </nav>
+          ) : (
+            <a class="site-nav" href="/auth/discord/start">Member sign in</a>
+          )
+        }
+      </div>
+    </header>
+    <main>
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <div class="wrap">The Papa Squad · a Discord community of gamer dads</div>
+    </footer>
+  </body>
+</html>

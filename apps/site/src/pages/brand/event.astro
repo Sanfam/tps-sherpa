@@ -1,0 +1,103 @@
+---
+// A 1080×1080 event graphic for posting in Discord. Member-gated like every
+// server route. Filled from the query string by the form on /brand; screenshot
+// the frame to post it.
+import { Font, Image } from "astro:assets";
+import Badge from "../../components/Badge.astro";
+import crest from "../../assets/brand/icon.png";
+import { topics } from "../../../../../content/config/topics.json";
+import "../../styles/theme.css";
+
+const q = Astro.url.searchParams;
+const title = q.get("title")?.trim() || "Game Night";
+const when = q.get("when")?.trim() || "Friday · 9pm Eastern";
+const where = q.get("where")?.trim() || "Voice: The Couch";
+const find = (slug: string | null) => topics.findIndex((t) => t.slug === slug);
+const i = find(q.get("topic")) >= 0 ? find(q.get("topic")) : find("social-activities-and-events");
+const topic = topics[i];
+---
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <title>{title} · The Papa Squad</title>
+    <Font cssVariable="--font-display" preload />
+    <Font cssVariable="--font-body" preload />
+  </head>
+  <body>
+    <div class="frame">
+      <div class="lockup">
+        <Badge slug={topic.slug} label={topic.label} index={i} bare />
+        <span>{topic.label}</span>
+      </div>
+      <h1>{title}</h1>
+      <p class="when">{when}</p>
+      <p class="where">{where}</p>
+      <footer>
+        <Image src={crest} alt="" width={160} height={160} />
+        <span>The Papa Squad</span>
+      </footer>
+    </div>
+  </body>
+</html>
+
+<style>
+  body {
+    display: block;
+    min-height: 0;
+  }
+
+  .frame {
+    width: 1080px;
+    height: 1080px;
+    padding: 96px;
+    background: var(--ground);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .lockup {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    margin-bottom: 56px;
+    font: 800 44px / 1.05 var(--display);
+    letter-spacing: -0.02em;
+  }
+
+  .lockup :global(svg) {
+    width: 240px;
+  }
+
+  h1 {
+    font-size: 132px;
+    line-height: 0.9;
+    letter-spacing: -0.04em;
+    max-width: 9em;
+  }
+
+  .when {
+    margin: 40px 0 0;
+    font: 800 52px / 1.1 var(--display);
+  }
+
+  .where {
+    margin: 12px 0 0;
+    font-size: 36px;
+  }
+
+  footer {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    font: 800 40px / 1 var(--display);
+  }
+
+  footer img {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+  }
+</style>
