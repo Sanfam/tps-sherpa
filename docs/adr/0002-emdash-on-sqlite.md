@@ -136,13 +136,13 @@ The spike ran on 1.1.0. Since then, 1.2.0, 1.3.0, 1.3.1, 1.4.0 and 1.5.0 (2026-1
 - **Advisories.** No GitHub security advisories are published for `emdash` or `@emdash-cms/auth`.
 - **Requirements and pin.**
   - The peer requirement is still `astro >=6`, and the package now needs Node `>=22.16`.
-  - Under the two-week pin, 1.4.0 becomes eligible on 2026-11-12, and 1.5.0 on 2026-11-25. 1.5.0 pins zod 4.6.7 itself, so the root `zod` override is gone.
+  - 1.5.0 pins zod 4.6.7 itself, so the root `zod` override is gone.
 
 Also required, as before:
 
 - **Uploads go to S3-compatible storage**, or a directory with its own backup, because Litestream does not cover them.
 - **Litestream replication of the site's file is rehearsed** before the first real edit.
-- **EmDash is pinned to a release at least two weeks old.** 1.2 and 1.3 shipped within 15 days of 1.1.
+- **EmDash is pinned to an exact release**, and each upgrade re-checks the gate and the internals listed here. There is no minimum release age (owner, 2026-11-15).
 
 ## Consequences
 
@@ -157,7 +157,7 @@ Also required, as before:
 **Accepted costs**
 
 - **Content is Portable Text, not markdown.** The Phase 6 Wiki.js migration needs a conversion script, since no importer exists.
-- **EmDash is young.** 1.0 shipped 2026-09-28 and releases weekly. The two-week pin is the mitigation.
+- **EmDash is young.** 1.0 shipped 2026-09-28 and releases weekly. The exact pin and the per-upgrade re-check are the mitigation.
 - **Our code sits on a privacy boundary.** The external-auth module and the gate read guild roles and decide who reaches the CMS. They must be reviewed as such, and re-checked against EmDash's routes on every upgrade.
 - **Some of what we rely on is not documented by EmDash.** The revision prune job, the purge and anonymise steps, and the `secure_delete` descriptor are part of every upgrade check.
 - **Ownership needs Admin work.** Imported pages and handovers are reassigned by hand, and co-leads cannot share a page.
