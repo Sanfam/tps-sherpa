@@ -1,0 +1,39 @@
+---
+import { safeHref } from "../safe-href.ts";
+// EmDash media as a plain <img>, for content image and gallery blocks and for
+// covers. The browser fetches it through the gate with the Member's cookie.
+// EmDash's own components hand it to Astro's image endpoint instead, whose
+// server-side fetch carries no cookie and is refused (astro.config.mjs, `images`).
+type Img = {
+  /** A block's media, as the import and EmDash's editor write it. */
+  asset?: { _ref: string; url?: string };
+  /** An image field's media, as EmDash stores it. */
+  id?: string;
+  meta?: { storageKey?: string };
+  alt?: string;
+  width?: number;
+  height?: number;
+  link?: string | { href: string };
+};
+interface Props {
+  /** A Portable Text image or gallery block. */
+  node?: Img & { _type: string; images?: Img[] };
+  /** An image field's value. */
+  image?: Img;
+}
+
+const { node, image } = Astro.props;
+const images = image ? [image] : node?._type === "gallery" ? (node.images ?? []) : node ? [node] : [];
+// EmDash's file route takes the storage key, or the media id when there is none.
+const src = (i: Img) => {
+  const key = i.meta?.storageKey ?? i.id ?? i.asset?._ref;
+  return i.asset?.url ?? (key && `/_emdash/api/media/file/${key}`);
+};
+const href = (i: Img) => safeHref(typeof i.link === "string" ? i.link : i.link?.href);
+---
+{
+  images.map((i) => {
+    const img = src(i) && <img src={src(i)} alt={i.alt ?? ""} width={i.width} height={i.height} loading="lazy" decoding="async" />;
+    return href(i) ? <a href={href(i)}>{img}</a> : img;
+  })
+}

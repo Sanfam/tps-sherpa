@@ -1,0 +1,13 @@
+---
+// The Index, at /index, where the wiki's channel-index links now point. It
+// renders the Catalog snapshot the site pulls from the bot (ADR-0001); until
+// the site has accepted one, it says the Index is unavailable rather than
+// showing an empty Catalog. Member-gated; must stay server-rendered.
+import Base from "../../layouts/Base.astro";
+---
+<Base title="Index" members>
+  <div class="wrap prose">
+    <h1>Index</h1>
+    <p>The Index is not available yet. In Discord, Papa Sherpa's <code>/find</code> points you to the Channels, Forums and Posts that match what you are into.</p>
+  </div>
+</Base>

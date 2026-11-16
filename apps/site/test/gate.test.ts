@@ -551,3 +551,54 @@ test("EmDash permanently deletes content through the site's configured SQLite di
   db.close();
   expect(emdashBytes()).not.toContain(token);
 });
+
+// The site's CMS pages (src/pages/[...slug].astro) show published content only.
+// EmDash serves drafts to a request carrying its edit-mode cookie when the
+// EmDash session's stored role is an editor's, and that stored role outlives a
+// Discord role loss (ADR-0002, item 1): an ex-editor, still a Member, would read
+// every draft on the site.
+test("CMS pages: a former editor's edit-mode cookie shows no draft", async () => {
+  const FORMER = "900000000000000009";
+  guild.set(STAFF, [MEMBER_ROLE, STAFF_ROLE]);
+  const staff = (await signIn(STAFF)).cookie;
+  const api = async (method: string, path: string, body?: unknown) => {
+    const res = await fetch(`${SITE}/_emdash/api${path}`, {
+      method,
+      headers: { cookie: staff, "content-type": "application/json", "X-EmDash-Request": "1", Origin: SITE },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    expect(res.ok, `${method} ${path}: ${res.status}`).toBe(true);
+    return ((await res.json()) as { data: { item: { id: string } } }).data;
+  };
+  const text = (t: string) => [
+    { _type: "block", _key: "b", style: "normal", markDefs: [], children: [{ _type: "span", _key: "s", text: t, marks: [] }] },
+  ];
+  await api("POST", "/content/pages", { slug: "club/unwritten", data: { title: "Unwritten", content: text("zqxstubdraftqz") } });
+  const { item } = await api("POST", "/content/pages", { slug: "club/live", data: { title: "Live", content: text("zqxlivetextqz") } });
+  await api("POST", `/content/pages/${item.id}/publish`);
+  await api("PUT", `/content/pages/${item.id}`, { data: { title: "Live", content: text("zqxpendingeditqz") } });
+
+  // An Author who opened the CMS, then lost the role in Discord but stayed a Member.
+  guild.set(FORMER, [MEMBER_ROLE, EVENT_MANAGERS_ROLE]);
+  const { cookie } = await signIn(FORMER);
+  const emdashSession = browser();
+  const me = await fetch(`${SITE}/_emdash/api/auth/me`, { headers: { cookie } });
+  expect(me.status).toBe(200);
+  emdashSession.keep(me);
+  guild.set(FORMER, [MEMBER_ROLE]);
+  await new Promise((r) => setTimeout(r, TTL_MS + 100));
+  const former = [cookie, emdashSession.cookie(), "emdash-edit-mode=true"].filter(Boolean).join("; ");
+
+  guild.set(MEMBER, [MEMBER_ROLE]);
+  const member = (await signIn(MEMBER)).cookie;
+  for (const [who, c] of [["member", member], ["former editor", former]] as const) {
+    const draft = await at("/club/unwritten", c);
+    expect(draft.status, who).toBe(404);
+    expect(await draft.text(), who).not.toContain("zqxstubdraftqz");
+    const live = await at("/club/live", c);
+    expect(live.status, who).toBe(200);
+    const body = await live.text();
+    expect(body, who).toContain("zqxlivetextqz");
+    expect(body, who).not.toContain("zqxpendingeditqz");
+  }
+}, 15_000);
