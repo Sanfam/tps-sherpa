@@ -1,0 +1,41 @@
+---
+// A published `pages` entry at its slug, which keeps the old wiki path
+// (`parenting/child/home` at /parenting/child/home). Anything else is a 404,
+// drafts and the import's stub pages included. Member-gated by the middleware,
+// so it must stay server-rendered.
+import { getEmDashEntry } from "emdash";
+import { getRequestContext, runWithContext } from "emdash/request-context";
+import { PortableText } from "emdash/ui";
+import MediaImage from "../components/MediaImage.astro";
+import Works from "../components/Works.astro";
+import Base from "../layouts/Base.astro";
+
+// Published only, edit mode and preview tokens off. EmDash serves drafts to its
+// edit-mode cookie on the role its own session stored, which outlives a Discord
+// role loss (ADR-0002, item 1); editors read drafts in the CMS instead.
+// ponytail: one page of up to 100 works, EmDash's most; follow nextCursor if a club lists more.
+const { entry, error } = await runWithContext({ ...getRequestContext(), editMode: false, preview: undefined }, () =>
+  getEmDashEntry("pages", Astro.params.slug ?? "", { references: { works: { limit: 100 } } }),
+);
+if (error) throw error;
+if (!entry) Astro.response.status = 404;
+const works = entry?.references?.["works"]?.entries ?? [];
+---
+{
+  entry ? (
+    <Base title={String(entry.data["title"])} members>
+      <div class="wrap prose">
+        <h1>{String(entry.data["title"])}</h1>
+        <PortableText value={entry.data["content"] as never} components={{ type: { image: MediaImage, gallery: MediaImage } }} />
+        {works.length > 0 && <Works works={works} />}
+      </div>
+    </Base>
+  ) : (
+    <Base title="Not found" members>
+      <div class="wrap prose">
+        <h1>Not here yet</h1>
+        <p>This page has not been written, or has moved.</p>
+      </div>
+    </Base>
+  )
+}
