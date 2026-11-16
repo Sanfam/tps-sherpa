@@ -60,6 +60,21 @@ function clearQueueRows(db: DatabaseSync, where = "", ...params: string[]) {
   ).run(...params);
 }
 
+/**
+ * Drops co-editing rooms' stored state: EmDash's `_emdash_rooms` and
+ * `_emdash_room_updates` (migration 097, 1.5.0). A room stores its entry's
+ * edits as they were typed, removed text included, until it compacts or, an
+ * hour after its last edit, EmDash's hourly cleanup drops it. A room open in
+ * this process finds its claim gone at its next write or renewal, within
+ * seconds, closes its sockets with `rejoin` and reloads from the entry.
+ */
+function dropRooms(db: DatabaseSync, roomIds: string[]) {
+  for (const id of roomIds) {
+    db.prepare("DELETE FROM _emdash_room_updates WHERE room_id = ?").run(id);
+    db.prepare("DELETE FROM _emdash_rooms WHERE room_id = ?").run(id);
+  }
+}
+
 export function purgeHistory(collection: string, entryId: string) {
   const db = openDatabase();
   let completed = false;
@@ -85,6 +100,8 @@ export function purgeHistory(collection: string, entryId: string) {
       collection,
       entryId,
     );
+    // EmDash's room ID, `{collection}:{entry ID}` (rooms/types.ts).
+    dropRooms(db, [`${collection}:${entryId}`]);
     completed = true;
   } finally {
     if (completed) checkpoint(db);
@@ -182,6 +199,13 @@ export function anonymiseEditor(email: string) {
         }
       }
     }
+    // A room's record names its uncovered editors and the entry's author by id,
+    // and the room writes them into the next revision's `author_id` and
+    // `edited_by`. The record is split into parts past 1 MB, so it is read whole.
+    const rooms = db
+      .prepare("SELECT room_id FROM _emdash_rooms GROUP BY room_id HAVING instr(group_concat(record, '' ORDER BY part), ?) > 0")
+      .all(editor.id) as { room_id: string }[];
+    dropRooms(db, rooms.map((room) => room.room_id));
     clearQueueRows(db);
     db.exec("COMMIT");
     checkpoint(db);

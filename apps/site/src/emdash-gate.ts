@@ -8,8 +8,11 @@
  * shuts EmDash's public `search` too, where EmDash itself would trust the role
  * it stored last.
  */
+import dc from "node:diagnostics_channel";
+import type { IncomingMessage, Server } from "node:http";
+import type { Duplex } from "node:stream";
 import type { MiddlewareHandler } from "astro";
-import { memberRoles } from "./auth.ts";
+import { memberRoles, rolesTtl } from "./auth.ts";
 import { ADMIN, editorRole } from "./emdash-auth.ts";
 
 // Route patterns as EmDash injects them (integration/routes.ts, 1.5.0).
@@ -42,9 +45,6 @@ export const REFUSED = [
   "/_emdash/api/visual-editing/content/[collection]/[id]/publish",
   "/_emdash/api/visual-editing/toolbar-labels",
   "/_emdash/api/admin/users/[id]/send-recovery",
-  // Co-editing (off here) mints a token for a WebSocket that EmDash upgrades on
-  // the raw HTTP server, outside every middleware and so outside this gate.
-  "/_emdash/api/content/[collection]/[id]/room",
   // With R2 it mints a signed upload URL valid for an hour, past a role loss.
   // Refused with 501, the answer on which EmDash's admin uploads through the
   // site instead, behind the live role (owner, 2026-11-15).
@@ -166,6 +166,9 @@ export const EDITORS = [
   "/_emdash/api/content/[collection]/[id]/restore",
   "/_emdash/api/content/[collection]/[id]/revisions",
   "/_emdash/api/content/[collection]/[id]/revisions/editors",
+  // Joins co-editing: mints a token for the room's WebSocket, which watchRoomSockets()
+  // below keeps on the live role.
+  "/_emdash/api/content/[collection]/[id]/room",
   "/_emdash/api/content/[collection]/[id]/schedule",
   "/_emdash/api/content/[collection]/[id]/terms/[taxonomy]",
   "/_emdash/api/content/[collection]/[id]/translations",
@@ -301,3 +304,45 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
   for (const cookie of setCookie) res.headers.append("Set-Cookie", cookie);
   return res;
 };
+
+/**
+ * Co-editing sockets. EmDash completes a room's WebSocket on the HTTP server's
+ * `upgrade` event (rooms/node/upgrades.ts), outside every middleware, and the
+ * room keeps a socket until it closes. The token it opens with is minted only
+ * through the gate above, on the live role; this keeps the socket on it. The
+ * session each upgrade under /_emdash/ carries is re-checked as a request's
+ * would be, and the socket is destroyed once it has no editor role: a demotion,
+ * a sign-out or a lost Membership drops it within the role TTL and one check.
+ *
+ * The server is found as EmDash finds it, through a response it sends. Its
+ * `emit` is wrapped rather than an `upgrade` listener added, because EmDash
+ * decides which upgrades reach a listener by counting them.
+ */
+function watchRoomSockets() {
+  const servers = new WeakSet<Server>();
+  dc.subscribe("http.server.response.finish", (message) => {
+    const { server } = message as { server?: Server };
+    if (!server || servers.has(server)) return;
+    servers.add(server);
+    const emit = server.emit;
+    server.emit = function (this: Server, event: string | symbol, ...args: unknown[]) {
+      if (event === "upgrade") watch(args[0] as IncomingMessage, args[1] as Duplex);
+      return emit.call(this, event, ...args);
+    };
+  });
+
+  function watch(request: IncomingMessage, socket: Duplex) {
+    if (!request.url?.includes("/_emdash/")) return;
+    const headers = new Headers({ cookie: request.headers.cookie ?? "" });
+    // Fails closed: an error reading the session drops the socket.
+    const check = async () => {
+      const { roles } = await memberRoles(headers).catch(() => ({ roles: null }));
+      if (!roles || editorRole(roles) === null) socket.destroy();
+    };
+    void check();
+    const timer = setInterval(check, Math.min(rolesTtl(), 30_000));
+    timer.unref();
+    socket.once("close", () => clearInterval(timer));
+  }
+}
+watchRoomSockets();

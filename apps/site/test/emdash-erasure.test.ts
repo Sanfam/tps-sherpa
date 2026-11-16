@@ -119,6 +119,54 @@ test("purge history deletes one entry's old revisions without deleting its live 
   held.close();
 });
 
+// A co-editing room stores edits as typed, so text an editor removed from the
+// entry stays in its stored updates for an hour after the last edit.
+test("purge history erases the entry's co-editing room, and only that room", async () => {
+  const dir = makeDir();
+  const { db, path } = await migratedDatabase(dir);
+  await createContentTable(db);
+  await sql`INSERT INTO ec_testpages (id) VALUES ('p1'), ('p2')`.execute(db);
+  for (const [id, text] of [["testpages:p1", "zqxroomtypedqz"], ["testpages:p2", "zqxotherroomqz"]] as const) {
+    await sql`INSERT INTO _emdash_rooms (room_id, part, record, updated_at) VALUES (${id}, 0, '{}', '2026-11-15T00:00:00.000Z')`.execute(db);
+    await sql`INSERT INTO _emdash_room_updates (room_id, seq, part, data) VALUES (${id}, 0, 0, ${Buffer.from(text)})`.execute(db);
+  }
+  await db.destroy();
+
+  const held = new DatabaseSync(path);
+  purgeHistory("testpages", "p1");
+  expect(rawBytes(path)).not.toContain("zqxroomtypedqz");
+  // Another entry's room may be open with edits not yet saved.
+  expect(held.prepare("SELECT room_id FROM _emdash_room_updates").all()).toEqual([{ room_id: "testpages:p2" }]);
+  held.close();
+});
+
+test("anonymisation erases rooms whose record names the editor, even across the record's parts", async () => {
+  const dir = makeDir();
+  const { db, path } = await migratedDatabase(dir);
+  await sql`INSERT INTO users (id, email, name, role, email_verified) VALUES ('01EDITORONE', '123@discord.local', 'luna', 30, 1)`.execute(db);
+  const rooms: [string, string[]][] = [
+    ["pages:a", ['{"editors":["01EDITORONE"],"authorId":null}']],
+    // Past 1 MB, EmDash splits the record wherever the limit falls.
+    ["pages:b", ['{"editors":["01EDITO', 'RONE"],"authorId":null}']],
+    ["pages:c", ['{"editors":["01SOMEONEELSE"],"authorId":null}']],
+  ];
+  for (const [id, parts] of rooms) {
+    for (const [part, record] of parts.entries()) {
+      await sql`INSERT INTO _emdash_rooms (room_id, part, record, updated_at) VALUES (${id}, ${part}, ${record}, '2026-11-15T00:00:00.000Z')`.execute(db);
+    }
+    await sql`INSERT INTO _emdash_room_updates (room_id, seq, part, data) VALUES (${id}, 0, 0, ${Buffer.from(`zqx${id}qz`)})`.execute(db);
+  }
+  await db.destroy();
+
+  const held = new DatabaseSync(path);
+  anonymiseEditor("123@discord.local");
+  expect(held.prepare("SELECT DISTINCT room_id FROM _emdash_rooms").all()).toEqual([{ room_id: "pages:c" }]);
+  expect(held.prepare("SELECT room_id FROM _emdash_room_updates").all()).toEqual([{ room_id: "pages:c" }]);
+  expect(rawBytes(path)).not.toContain("zqxpages:aqz");
+  expect(rawBytes(path)).not.toContain("zqxpages:bqz");
+  held.close();
+});
+
 test("anonymisation gives two same-locale editors separate anonymous authors and stays anonymous on sign-in", async () => {
   const dir = makeDir();
   const { db, path } = await migratedDatabase(dir);
