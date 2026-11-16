@@ -27,6 +27,8 @@ const OUTSIDER = "900000000000000003"; // not in the guild
 const MOVER = "900000000000000004"; // roles change while signed in
 const STAFF = "900000000000000005";
 const EVENT_MANAGER = "900000000000000006";
+const FLOODER = "900000000000000007"; // any Discord account, not in the guild
+const BURSTER = "900000000000000008"; // a signed-in Member firing many requests at once
 
 const tmp = mkdtempSync(join(tmpdir(), "site-gate-"));
 const DB = join(tmp, "sessions.db");
@@ -171,6 +173,27 @@ test("a non-member is rejected, and no user row is created", async () => {
   expect(rows("select id from account where accountId = ?", OUTSIDER)).toEqual([]);
   expect(location).toContain("error=");
   expect((await stub(cookie)).status).toBe(302);
+});
+
+test("one Discord account's flood of sign-ins stops spending the bot token; a Member still signs in", async () => {
+  guild.delete(FLOODER);
+  guild.set(MEMBER, [MEMBER_ROLE]);
+  mock.memberLookups = 0;
+  for (let i = 0; i < 30; i++) expect(await signIn(FLOODER).then((r) => r.location)).toContain("error=");
+  // Each sign-in is a guild lookup with the bot token, up to the account's budget of 20.
+  expect(mock.memberLookups).toBe(20);
+  expect((await signIn(MEMBER)).location).toMatch(/\/members$/);
+  expect(mock.memberLookups).toBe(21);
+});
+
+test("a burst of requests past the TTL re-checks roles with the bot token once", async () => {
+  guild.set(BURSTER, [MEMBER_ROLE]);
+  const { cookie } = await signIn(BURSTER);
+  await new Promise((r) => setTimeout(r, TTL_MS + 100));
+  mock.memberLookups = 0;
+  const statuses = await Promise.all(Array.from({ length: 20 }, () => stub(cookie).then((r) => r.status)));
+  expect(statuses.every((s) => s === 200)).toBe(true);
+  expect(mock.memberLookups).toBe(1);
 });
 
 test("a role change in Discord is reflected once the TTL passes", async () => {
