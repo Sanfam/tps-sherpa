@@ -1,0 +1,60 @@
+---
+// The `works` entries a club page references, in the order its editor set:
+// cover, title, creators and kind. Inside .prose, so the theme frames covers.
+import { getTermsForEntries } from "emdash";
+import { safeHref } from "../safe-href.ts";
+import MediaImage from "./MediaImage.astro";
+
+type Work = { id: string; data: Record<string, unknown> };
+interface Props {
+  works: Work[];
+}
+
+const { works } = Astro.props;
+// Referenced entries come back without their terms. Terms key on the database id.
+const dbId = (w: Work) => String(w.data["id"] ?? w.id);
+const kinds = await getTermsForEntries("works", works.map(dbId), "work_kind");
+const text = (w: Work, field: string) => (typeof w.data[field] === "string" ? (w.data[field] as string) : undefined);
+---
+<ul class="works">
+  {
+    works.map((w) => {
+      const link = safeHref(w.data["link"]);
+      const title = text(w, "title");
+      return (
+        <li>
+          {w.data["cover"] ? <MediaImage image={w.data["cover"] as never} /> : null}
+          <p class="work-title">{link ? <a href={link}>{title}</a> : title}</p>
+          {text(w, "creators") && <p>{text(w, "creators")}</p>}
+          {kinds.get(dbId(w))?.map((k) => <p class="work-kind">{k.label}</p>)}
+        </li>
+      );
+    })
+  }
+</ul>
+<style>
+  .works {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+    gap: 1.5rem 1.25rem;
+  }
+
+  .works li + li {
+    margin-top: 0;
+  }
+
+  .works p {
+    margin: 0.35em 0 0;
+    font-size: 0.9375rem;
+  }
+
+  .work-title {
+    font-weight: 700;
+  }
+
+  .work-kind {
+    color: var(--ink-soft);
+  }
+</style>

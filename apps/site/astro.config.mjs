@@ -47,8 +47,9 @@ export default defineConfig({
       // Astro's own image endpoint, which reads the theme's images from disk.
       // EmDash's fetches them from the site's public origin instead, and on
       // Railway that fetch fails silently, so the images break.
-      // ponytail: EmDash media rendered through <Image> would break with this
-      // off; nothing renders it yet. Fix the self-fetch before a page does.
+      // ponytail: EmDash media rendered through <Image> breaks with this off, so
+      // pages render it as a plain <img> (src/components/MediaImage.astro), not
+      // optimised. Fix the self-fetch if media ever needs resizing.
       images: false,
       database: {
         ...sqlite({ url: `file:${data}/emdash.db` }),
