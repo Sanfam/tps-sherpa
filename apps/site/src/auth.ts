@@ -32,11 +32,43 @@ export const env = (name: string) => {
 async function guildRoles(discordId: string): Promise<string[] | null> {
   const res = await fetch(`${DISCORD_API}/guilds/${env("DISCORD_GUILD_ID")}/members/${discordId}`, {
     headers: { Authorization: `Bot ${env("DISCORD_BOT_TOKEN")}` },
+    signal: AbortSignal.timeout(10_000),
   });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Guild member lookup failed: ${res.status}`);
   return ((await res.json()) as { roles: string[] }).roles;
 }
+
+/**
+ * A fixed-window counter: true while `key` has been seen at most `max` times
+ * in the current window. All keys reset together, so memory holds one window's.
+ */
+function limiter(max: number, windowMs: number) {
+  let counts = new Map<string, number>();
+  let resetAt = 0;
+  return (key = "") => {
+    if (Date.now() >= resetAt) {
+      counts = new Map();
+      resetAt = Date.now() + windowMs;
+    }
+    const n = (counts.get(key) ?? 0) + 1;
+    counts.set(key, n);
+    return n <= max;
+  };
+}
+
+// Sign-in limits, standing in for Better Auth's rate limiter, which keys on the
+// client IP the site does not track. A start is anonymous and writes a state
+// row, so all starts share one budget. A sign-in's guild lookup spends the bot
+// token, so each Discord account has its own budget of sign-ins, and one
+// account's flood stops there without touching anyone else's. (Role re-checks
+// are coalesced by `rechecks`, below.)
+// ponytail: in memory, per process. A restart resets the counts, and it holds
+// only while the site runs one instance. A sustained flood of starts blocks new
+// sign-ins (signed-in Users keep their sessions) until it stops; key starts on
+// a client IP once the proxy chain is known to supply one that cannot be forged.
+export const signInStarts = limiter(120, 60_000);
+const lookupsBy = limiter(20, 10 * 60_000);
 
 // A guild member without the `Member` role has joined but is not yet a Member.
 const isMember = (roles: string[] | null): roles is string[] =>
@@ -92,6 +124,7 @@ function createAuth(database: DatabaseSync) {
               });
               if (!me.ok) return null;
               const { id, username } = (await me.json()) as { id: string; username: string };
+              if (!lookupsBy(id)) return null;
               const roles = await guildRoles(id).catch(() => null);
               if (!isMember(roles)) return null;
               // `identify` has no email, and the callback fails with
@@ -115,12 +148,8 @@ function createAuth(database: DatabaseSync) {
       // Session data stays in the database; the cookie holds only the token.
       cookieCache: { enabled: false },
     },
-    // ponytail: with no IP, Better Auth's rate limiter has nothing to key on and
-    // does not run. A flood of callbacks spends the bot token's Discord rate
-    // limit, and a flood of unauthenticated /auth/discord/start requests
-    // inserts a verification row each (swept daily, so bounded by a day's
-    // flood). Add a limiter keyed on something other than IP before the site
-    // is opened to members.
+    // No IP is used or stored. Better Auth's rate limiter keys on it, so it does
+    // not run; `signInStarts` and `lookupsBy` stand in for it.
     advanced: { ipAddress: { disableIpTracking: true } },
     // A repeat sign-in would otherwise write the fresh tokens back; the update
     // hook below is the backstop.
@@ -190,6 +219,13 @@ export async function memberRoles(
   return { roles: await rolesFor(found.session), setCookie, user: { email, name } };
 }
 
+// One re-check per Discord account at a time: requests that arrive while it is
+// in flight share its answer, so a burst past the TTL spends the bot token once.
+// ponytail: each session still re-checks once per TTL, so a Member holding many
+// sessions (capped by `lookupsBy` at sign-in) spends one lookup per session per
+// TTL; cache by account, seeded at sign-in, if that is ever abused.
+const rechecks = new Map<string, Promise<string[] | null | undefined>>();
+
 async function rolesFor(session: { token: string; userId: string }): Promise<string[] | null> {
   const { auth: a, db } = auth();
   // Every Better Auth read, its internal adapter included, filters out the
@@ -204,9 +240,16 @@ async function rolesFor(session: { token: string; userId: string }): Promise<str
   const ctx = await a.$context;
   const [account] = await ctx.internalAdapter.findAccounts(session.userId);
   // ponytail: a Discord outage denies this request but keeps the session; no retry or grace period.
-  // Parallel requests past the TTL each call Discord (no in-flight coalescing); add it if a CMS page's
-  // burst of API calls ever meets a 429.
-  const roles = account ? await guildRoles(account.accountId).catch(() => undefined) : null;
+  let roles: string[] | null | undefined = null;
+  if (account) {
+    let pending = rechecks.get(account.accountId);
+    if (!pending) {
+      pending = guildRoles(account.accountId).catch(() => undefined);
+      rechecks.set(account.accountId, pending);
+      void pending.finally(() => rechecks.delete(account.accountId));
+    }
+    roles = await pending;
+  }
   if (roles === undefined) return null;
   if (!isMember(roles)) {
     await ctx.internalAdapter.deleteSession(session.token);
