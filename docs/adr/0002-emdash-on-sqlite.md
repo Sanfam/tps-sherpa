@@ -58,7 +58,7 @@ Two spikes ran (`docs/research/2026-10-16-emdash-spike.md`), on EmDash 1.1.0 ins
   - **Purge history.** Admins get a "purge history" action. When personal data is removed from a page, it deletes that page's old revisions at once, keeping the revision the page currently points to.
   - **Anonymise on request.** An editor's erasure request strips their name and username from their EmDash `users` row, and re-points their revisions to an anonymous author.
   - **Privacy policy.** It states both before Phase 5.
-  - **Built in trial step 4 (2026-11-15):** `/admin/emdash/purge-history` and `/admin/emdash/anonymise` are Admin-only POST actions behind the site's live role check and same-origin CSRF check. Purge deletes all unreferenced revisions for one entry and preserves its live and draft pointers. Anonymise creates or reuses a per-editor anonymous author row, clears the editor's name, marks the EmDash `users.data` row, rewrites revision and entry authorship, and gives each anonymised byline a distinct slug. `authenticate()` returns `Anonymous` for marked snowflake-derived emails, so EmDash's `syncName` cannot restore the Discord username. The implementation updates `revisions.edited_by` when that column exists; the pinned 1.4.0 package does not yet ship migration 096.
+  - **Built in trial step 4 (2026-11-15):** `/admin/emdash/purge-history` and `/admin/emdash/anonymise` are Admin-only POST actions behind the site's live role check and same-origin CSRF check. Purge deletes all unreferenced revisions for one entry and preserves its live and draft pointers. Anonymise creates or reuses a per-editor anonymous author row, clears the editor's name, marks the EmDash `users.data` row, rewrites revision and entry authorship, and gives each anonymised byline a distinct slug. `authenticate()` returns `Anonymous` for marked snowflake-derived emails, so EmDash's `syncName` cannot restore the Discord username. It also rewrites `revisions.edited_by`, the co-editor ids EmDash 1.5.0 records (migration 096); the code feature-detects the column.
   - **What it touches.** EmDash internals it does not document as extension points:
     - `revisions` (delete rows; update `author_id`);
     - `users` (`name`, and the snowflake-derived `email`, which also identifies the person).
@@ -89,7 +89,7 @@ Two spikes ran (`docs/research/2026-10-16-emdash-spike.md`), on EmDash 1.1.0 ins
    - **Why.** The spike's gate is a deny-list, so it fails open on an EmDash upgrade, the pattern the note rejects for plugins. It already misses `preview-url`.
    - **Who it must sort.** With the real reader session every Member passes "has a site session". The spike only issued sessions to editors. Without more, Members would reach EmDash's public APIs: search across all collections, regardless of our Access rules; media files; and comments.
    - **To do.** Decide which routes Members, editors and Viewers may reach. Design how the gate tells an editor from a Member before EmDash runs. Test it signed in against every route, on each upgrade.
-   - **Built (trial step 2, 2026-11-14), in `apps/site/src/emdash-gate.ts`.** Every route EmDash 1.4.0 injects is on one of five lists: refused to everyone, Members (uploaded files only, as the site's pages are Member-gated), Admins (setup, which EmDash leaves unauthenticated until done), editors, or left to the site's own middleware (`robots.txt`, sitemaps). Any other path under `/_emdash` or `/.well-known/` is refused. The gate tells editors from Members by the live roles on the site session, the same cache `authenticate()` reads, so a removed role shuts `search` within the TTL. Refused to everyone: the credential routes above, `preview-url` and visual editing, `snapshot` and backups, plugins, themes, importers, public comments, domains, email and dev routes. `test/emdash-gate.test.ts` reads EmDash's route list and fails on any route no list places, so an upgrade that adds one fails CI until it is placed. A separate test, with its own list of credential and export routes, requests every route as each kind of caller. **Still open for step 5:** `media/upload-url` is an editors' route. With local storage it points back through the gate. With R2 it returns a signed upload URL valid for an hour, which outlives a role loss, and refusing it breaks uploads. The owner decides when uploads move to R2.
+   - **Built (trial step 2, 2026-11-14), in `apps/site/src/emdash-gate.ts`.** Every route EmDash injects (1.4.0, re-placed for 1.5.0) is on one of five lists: refused to everyone, Members (uploaded files only, as the site's pages are Member-gated), Admins (setup, which EmDash leaves unauthenticated until done), editors, or left to the site's own middleware (`robots.txt`, sitemaps). Any other path under `/_emdash` or `/.well-known/` is refused. The gate tells editors from Members by the live roles on the site session, the same cache `authenticate()` reads, so a removed role shuts `search` within the TTL. Refused to everyone: the credential routes above, `preview-url` and visual editing, `snapshot` and backups, plugins, themes, importers, public comments, domains, email and dev routes. `test/emdash-gate.test.ts` reads EmDash's route list and fails on any route no list places, so an upgrade that adds one fails CI until it is placed. A separate test, with its own list of credential and export routes, requests every route as each kind of caller. **Still open for step 5:** `media/upload-url` is an editors' route. With local storage it points back through the gate. With R2 it returns a signed upload URL valid for an hour, which outlives a role loss, and refusing it breaks uploads. The owner decides when uploads move to R2.
 3. **OAuth hygiene.**
    - PKCE, browser-bound state, and no state written to the database: done in the spike's site sign-in.
    - Still unverified against the real Discord. Against Better Auth 1.7.14 (the Phase 4 auth spike, 2026-11-12, mock Discord): state is signed and single-use, and Better Auth keeps it in the database, a `verification` row per sign-in start, swept by the site's daily cleanup; but the Discord provider sends no PKCE verifier.
@@ -107,38 +107,42 @@ Two spikes ran (`docs/research/2026-10-16-emdash-spike.md`), on EmDash 1.1.0 ins
 The spike ran on 1.1.0. Since then, 1.2.0, 1.3.0, 1.3.1, 1.4.0 and 1.5.0 (2026-11-11) have shipped. The published tarballs were diffed. None of the open items is resolved, the work for items 1, 2 and 4 and for the prune and anonymise steps has grown, and some areas were not checked (listed below).
 
 - **Item 1, unchanged.**
-  - Public search still uses EmDash's own session (`astro/middleware/auth.ts:223`). `snapshot` is still on the public exact-match list (`:122`).
-  - `syncRoles` still runs only in the external-auth path, so a removed editor keeps their last role on these routes.
-  - The first authenticated user still becomes Admin whenever `users` is empty (`:575-581`).
-  - External auth has no cache option (`auth/types.ts`), so we still build the cache and its refusals.
-- **`preview-url`, unchanged.** It needs only `content:read_drafts`, checks no ownership, and takes an uncapped `expiresIn`.
-- **New routes.**
-  - `auth/handover` mints a 5-minute magic-link sign-in. It is injected only with built-in auth, so external auth leaves it out.
-  - `site/domain-proof` is new and public.
-  - `content/[collection]/[id]/room`, `content/[id]/revisions/editors` and `settings/domain` are new private routes.
-  - The allow-list (item 2) has to place each of them.
-- **The `middleware.outer` key is still there** (`integration/runtime.ts:547`). Whether its contract changed is not yet checked.
+  - Public search still uses EmDash's own session (`astro/middleware/auth.ts:223`, now also with a trailing slash; the gate's slash stripping already covers it). `snapshot` is still on the public exact-match list (`:122`).
+  - `syncRoles` still runs only in the external-auth path (`:615`), so a removed editor keeps their last role on these routes. An `authenticate()` that throws still gets 401 (`:547-553`); a failure after it now gets 503 instead.
+  - The first authenticated user still becomes Admin whenever `users` is empty (`:581-582`).
+  - `syncName` still writes the returned name (`:609`), which `authenticate()` sets to `Anonymous` for anonymised editors.
+  - External auth has no cache option (`auth/types.ts`, unchanged), so we still build the cache and its refusals.
+- **`preview-url`, unchanged.** It needs only `content:read_drafts`, checks no ownership, and takes an uncapped `expiresIn`. 1.5.0 only resolves a slug to the entry's id. Still refused.
+- **New routes, placed (2026-11-15, on the 1.5.0 upgrade branch).** The route list (`integration/routes.ts`) was diffed between 1.4.0 and 1.5.0: three are new to external auth.
+  - `content/[collection]/[id]/revisions/editors`: **editors.** It lists who edited an entry's revisions, on `content:read_drafts`, as the `revisions` route beside it already does.
+  - `content/[collection]/[id]/room`: **refused.** It joins co-editing, which is off (EmDash's `coEditing` defaults to `false`, `integration/runtime.ts:382`), so it can only answer "single-editor" and the admin does not call it (`api/manifest.ts:130`). With co-editing on, it mints a token for a WebSocket that EmDash completes on the raw Node server's `upgrade` event (`rooms/node/upgrades.ts`), outside every middleware and so outside the gate, and the socket keeps its access until it closes, past a role loss. Turning co-editing on needs its own decision, and its room tables (`_emdash_rooms`, `_emdash_room_updates`, migration 097) hold entry text the purge and anonymise steps do not reach.
+  - `auth/dev-bypass`: **refused**, like `setup/dev-bypass`. 1.5.0 moved it out of the built-in auth injector, so external auth now gets it; it answers 403 outside `astro dev`.
+  - `auth/handover` is still injected only with built-in auth, so external auth leaves it out.
+  - `site/domain-proof` and `settings/domain` were already in 1.4.0 and are refused: the site uses none of EmDash's domain features.
+- **The `middleware.outer` key is still there** (`integration/runtime.ts:547`), and still registered first, as `order: "pre"` ahead of all of EmDash's middleware (`integration/index.ts:400-416`, unchanged since 1.4.0).
 - **Revisions.**
-  - The count is still a hard-coded 50 (`cleanup.ts:46`), with no age option.
-  - Migration 059 adds `_emdash_revision_prune_queue`, which keys on revision ids. The age-based prune job has to keep it consistent.
-  - Migration 096 adds `revisions.edited_by`, a JSON array of user ids. The anonymise step rewrites it when present; EmDash 1.4.0's installed migration set ends at 091, so the code feature-detects the column.
+  - The count is still a hard-coded 50 (`cleanup.ts:46`), with no age option. EmDash's own pruning still skips each entry's live and draft revision (`database/repositories/revision.ts:487-488`).
+  - `_emdash_revision_prune_queue` (migration 059) is unchanged. The age-based prune job keeps it consistent.
+  - Migration 096 adds `revisions.kind` (autosave, recovery) and `revisions.edited_by`, a JSON array of co-editor ids. The anonymise step rewrites `edited_by`, now tested against 1.5.0's migrated schema.
 - **Scoping.**
   - There is a new `content:edit_own_drafts` grant, which applies only while an entry is a draft.
   - No new seam for scoping by club was found. The hook list and RBAC were not diffed in full.
-- **Storage.** `emdash/db/sqlite` is still exported, and `secure_delete` is still off. The descriptor `entrypoint` contract was not re-verified.
-- **Not re-verified:**
-  - `INSERT … SELECT` copies in the new migrations;
-  - support for the Node adapter.
+- **Storage.**
+  - `emdash/db/sqlite` is still exported and its source is unchanged, as are the descriptor adapters (`db/adapters.ts`) and the virtual module that imports the descriptor's `createDialect` from its `entrypoint` (`integration/virtual-modules.ts:135-148`). `secure_delete` is still off.
+  - `MIGRATION_NAMES` is still exported from `emdash/db`, and the ledger is still `_emdash_migrations` (`database/migrations/runner.ts:210`, `:303`).
+  - Transactions still go through Kysely's `db.transaction()` (`database/transaction.ts:67`, `:77`), so the descriptor's `BEGIN IMMEDIATE` still applies. EmDash issues no raw `BEGIN` outside trigger bodies. Kysely is still 0.29.7.
+  - Migrations 092-097 copy no content table: they add columns and tables, rewrite rows in place, and copy plugin key-value rows into `options`.
+- **Not re-verified:** support for the Node adapter beyond the site's build and tests.
 - **Advisories.** No GitHub security advisories are published for `emdash` or `@emdash-cms/auth`.
 - **Requirements and pin.**
   - The peer requirement is still `astro >=6`, and the package now needs Node `>=22.16`.
-  - Under the two-week pin, 1.4.0 becomes eligible on 2026-11-12, and 1.5.0 on 2026-11-25.
+  - 1.5.0 pins zod 4.6.7 itself, so the root `zod` override is gone.
 
 Also required, as before:
 
 - **Uploads go to S3-compatible storage**, or a directory with its own backup, because Litestream does not cover them.
 - **Litestream replication of the site's file is rehearsed** before the first real edit.
-- **EmDash is pinned to a release at least two weeks old.** 1.2 and 1.3 shipped within 15 days of 1.1.
+- **EmDash is pinned to an exact release**, and each upgrade re-checks the gate and the internals listed here. There is no minimum release age (owner, 2026-11-15).
 
 ## Consequences
 
@@ -153,7 +157,7 @@ Also required, as before:
 **Accepted costs**
 
 - **Content is Portable Text, not markdown.** The Phase 6 Wiki.js migration needs a conversion script, since no importer exists.
-- **EmDash is young.** 1.0 shipped 2026-09-28 and releases weekly. The two-week pin is the mitigation.
+- **EmDash is young.** 1.0 shipped 2026-09-28 and releases weekly. The exact pin and the per-upgrade re-check are the mitigation.
 - **Our code sits on a privacy boundary.** The external-auth module and the gate read guild roles and decide who reaches the CMS. They must be reviewed as such, and re-checked against EmDash's routes on every upgrade.
 - **Some of what we rely on is not documented by EmDash.** The revision prune job, the purge and anonymise steps, and the `secure_delete` descriptor are part of every upgrade check.
 - **Ownership needs Admin work.** Imported pages and handovers are reassigned by hand, and co-leads cannot share a page.
