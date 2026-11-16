@@ -169,7 +169,7 @@ export function anonymiseEditor(email: string) {
         editor.id,
       );
     }
-    // EmDash migration 096's optional `revisions.edited_by` JSON metadata is absent in the pinned 1.4.0 trial.
+    // EmDash migration 096 (1.5.0) adds `revisions.edited_by`, a JSON array of co-editor ids.
     if (hasColumn(db, "revisions", "edited_by")) {
       const revisions = db.prepare("SELECT id, edited_by FROM revisions WHERE edited_by IS NOT NULL").all() as { id: string; edited_by: string }[];
       const update = db.prepare("UPDATE revisions SET edited_by = ? WHERE id = ?");

@@ -19,4 +19,4 @@ export const concrete = (pattern: string) => pattern.replace(/\[\.\.\.[^\]]+\]/g
 
 /** Credentials, whole-site exports, and code from outside: refused to everyone. */
 export const NEVER =
-  /oauth|well-known|api-tokens|\/mcp|preview-url|visual-editing|send-recovery|upload-url|setup\/admin|setup\/dev-|snapshot|backups|transfer|plugin|import\/|\/dev\/|typegen|themes|core-update/;
+  /oauth|well-known|api-tokens|\/mcp|preview-url|visual-editing|send-recovery|upload-url|setup\/admin|\/dev-|\/room$|snapshot|backups|transfer|plugin|import\/|\/dev\/|typegen|themes|core-update/;

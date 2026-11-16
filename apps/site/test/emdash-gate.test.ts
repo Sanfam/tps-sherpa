@@ -35,8 +35,6 @@ test("credentials, whole-site exports and outside code are refused, whatever the
 test("routes EmDash does not inject today are refused", () => {
   for (const path of [
     "/_emdash/api/auth/handover", // built-in auth only
-    "/_emdash/api/content/pages/x1/room", // 1.5.0
-    "/_emdash/api/content/x1/revisions/editors", // 1.5.0
     "/_emdash/api/unknown",
     "/_emdash",
     "/.well-known/anything",

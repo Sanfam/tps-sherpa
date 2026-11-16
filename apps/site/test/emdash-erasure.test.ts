@@ -129,9 +129,9 @@ test("anonymisation gives two same-locale editors separate anonymous authors and
       ('editor-two', '456@discord.local', 'nova-original', 30, 1, NULL)
   `.execute(db);
   await sql`
-    INSERT INTO revisions (id, collection, entry_id, data, author_id) VALUES
-      ('r1', 'testpages', 'p1', '{}', 'editor-one'),
-      ('r2', 'testpages', 'p2', '{}', 'editor-two')
+    INSERT INTO revisions (id, collection, entry_id, data, author_id, edited_by) VALUES
+      ('r1', 'testpages', 'p1', '{}', 'editor-one', NULL),
+      ('r2', 'testpages', 'p2', '{}', 'editor-two', '["editor-two","editor-one"]')
   `.execute(db);
   await sql`
     INSERT INTO ec_testpages (id, author_id, live_revision_id) VALUES
@@ -161,6 +161,11 @@ test("anonymisation gives two same-locale editors separate anonymous authors and
   expect(held.prepare("SELECT author_id FROM revisions ORDER BY id").all()).toEqual(
     anonymous.map(({ id }) => ({ author_id: id })),
   );
+  // EmDash 1.5.0 credits every co-editor of a revision by id, and its revision
+  // history names each credited account.
+  expect(held.prepare("SELECT edited_by FROM revisions WHERE id = 'r2'").get()).toEqual({
+    edited_by: JSON.stringify([anonymous[1]?.id, anonymous[0]?.id]),
+  });
   expect(held.prepare("SELECT author_id FROM ec_testpages ORDER BY id").all()).toEqual(
     anonymous.map(({ id }) => ({ author_id: id })),
   );

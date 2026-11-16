@@ -12,7 +12,7 @@ import type { MiddlewareHandler } from "astro";
 import { memberRoles } from "./auth.ts";
 import { ADMIN, editorRole } from "./emdash-auth.ts";
 
-// Route patterns as EmDash injects them (integration/routes.ts, 1.4.0).
+// Route patterns as EmDash injects them (integration/routes.ts, 1.5.0).
 
 /** Refused to everyone, and checked first: a parameter in an allowed pattern
  * would otherwise match some of these static paths. Credential routes are here,
@@ -42,6 +42,9 @@ export const REFUSED = [
   "/_emdash/api/visual-editing/content/[collection]/[id]/publish",
   "/_emdash/api/visual-editing/toolbar-labels",
   "/_emdash/api/admin/users/[id]/send-recovery",
+  // Co-editing (off here) mints a token for a WebSocket that EmDash upgrades on
+  // the raw HTTP server, outside every middleware and so outside this gate.
+  "/_emdash/api/content/[collection]/[id]/room",
   // With R2 it mints a signed upload URL valid for an hour, past a role loss.
   // Refused with 501, the answer on which EmDash's admin uploads through the
   // site instead, behind the live role (owner, 2026-11-15).
@@ -50,6 +53,7 @@ export const REFUSED = [
   "/_emdash/api/setup/admin",
   "/_emdash/api/setup/admin/verify",
   "/_emdash/api/setup/dev-bypass",
+  "/_emdash/api/auth/dev-bypass",
   "/_emdash/api/setup/dev-reset",
   "/_emdash/api/dev/emails",
   "/_emdash/api/dev/scheduled-tasks",
@@ -161,6 +165,7 @@ export const EDITORS = [
   "/_emdash/api/content/[collection]/[id]/references/[relation]/parents",
   "/_emdash/api/content/[collection]/[id]/restore",
   "/_emdash/api/content/[collection]/[id]/revisions",
+  "/_emdash/api/content/[collection]/[id]/revisions/editors",
   "/_emdash/api/content/[collection]/[id]/schedule",
   "/_emdash/api/content/[collection]/[id]/terms/[taxonomy]",
   "/_emdash/api/content/[collection]/[id]/translations",
