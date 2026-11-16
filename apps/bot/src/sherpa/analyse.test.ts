@@ -256,6 +256,26 @@ describe("/sherpa analyse, third pass", () => {
     expect(await run(h)).toMatch(/The review failed/);
     expect(await run(h, "500000000000000003")).toMatch(/Another review is running/);
   });
+
+  it("finishes a watch's follow-up only once the gate is free, so the next one queued behind it runs", async () => {
+    const many = Array.from({ length: 450 }, (_, i) => `9${String(i).padStart(17, "0")}`);
+    let release: (value: never) => void = () => {};
+    const h = harness({
+      search: async (q) =>
+        ({ total_results: 450, doing_deep_historical_index: false, messages: many.slice(q.offset ?? 0, (q.offset ?? 0) + 25).map((id) => [msg(id, general.id)]) }) as never,
+      // One call fails fast while a sibling is still out: the run fails, the gate stays held.
+      chunk: (call) => (call === 1 ? Promise.reject(new Error("bad answer")) : call === 2 ? new Promise<never>((_, fail) => (release = fail)) : undefined),
+    });
+    const followup = { since: "2026-10-01", fresh: true, by: "9", followup: true };
+    let finished = false;
+    const first = h.analyse({ id: SUBJECT }, followup, async () => {}, "t").then(() => (finished = true));
+    await new Promise((done) => setTimeout(done, 20));
+    expect(finished).toBe(false);
+    release(new Error("late") as never);
+    await first;
+    h.advance(1);
+    expect(await h.analyse({ id: "500000000000000003" }, followup, async () => {}, "t")).not.toMatch(/Another review is running/);
+  });
 });
 
 describe("/sherpa analyse, in full view (owner, 2026-10-20)", () => {
@@ -291,5 +311,24 @@ describe("/sherpa analyse, in full view (owner, 2026-10-20)", () => {
       expect.stringContaining("couldn't be posted"),
       "Member review",
     ]);
+  });
+
+  it("says in the Post why a watch's follow-up didn't run, since nobody waits on its reply, but never while the checks fail", async () => {
+    // The watched member said nothing Sherpa may review while watched.
+    const silent = { search: async () => ({ total_results: 0, doing_deep_historical_index: false, messages: [] }) as never };
+    const followup = { since: "2026-10-01", fresh: true, by: "9", followup: true };
+    const h = harness(silent);
+    await h.analyse({ id: SUBJECT }, followup, async () => {}, "t");
+    expect(h.posted.map((p) => [p.memberId, p.content])).toEqual([
+      [SUBJECT, expect.stringMatching(/follow-up review .* didn't run\. This member has no messages/)],
+    ]);
+    // Discord's search down mid-read: the run throws, and the Post still hears of it.
+    const broken = harness({ search: async () => Promise.reject(new Error("503")) });
+    await broken.analyse({ id: SUBJECT }, followup, async () => {}, "t");
+    expect(broken.posted.map((p) => p.content)).toEqual([expect.stringMatching(/follow-up review .* didn't run\. The review failed/)]);
+    // The Forum visible to Members, say: the watch's checks have paused every write.
+    const paused = harness({ ...silent, writable: false });
+    await paused.analyse({ id: SUBJECT }, followup, async () => {}, "t");
+    expect(paused.posted).toEqual([]);
   });
 });

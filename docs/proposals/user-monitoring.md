@@ -322,3 +322,16 @@ D52-1, D52-3, D52-5, D52-7 and D52-8 are accepted as recommended.
   `GUILD_MEMBER_REMOVE`. The watch then runs to its end.
 - **A departure note that cannot post** (a locked Post, say) is retried each
   minute until the watch would have ended, then given up.
+
+## Follow-up reviews (owner, 2026-11-15)
+
+- **When a watch ends** — stopped, expired, or after the departure note — a
+  `/sherpa analyse` review of the member's messages from the day the watch started
+  posts to their Post, credited to the watch's setter. It spends a run from
+  `SHERPA_ANALYSE_DAILY_CAP`. Follow-ups queue one behind another, so watches
+  ending together each get their turn; one that cannot run (cap reached, another
+  Staff review running, nothing said in reviewable places) says why in the
+  Post — unless the watch's checks are failing, when nothing is written to the Forum at all. A queued follow-up is lost on restart.
+- **`/sherpa analyse` without `member`,** inside a member's Post in
+  `📊︱user-monitoring`, reviews that member: the Post's `monitoring_post`
+  link decides whose it is. Anywhere else it asks for a member.

@@ -10,7 +10,9 @@
  * nothing; `note` posts; `alert` posts and pings the setter alone (D52-7).
  * Sherpa adds up to 2 of the Forum's tags and never removes one (D52-5).
  * When the member leaves, the watch ends and Sherpa notes it, quoting up to 5
- * of their last messages, clipped (D52-6; owner, 2026-10-19).
+ * of their last messages, clipped (D52-6; owner, 2026-10-19). However a watch
+ * ends — stopped, expired, or by departure — a follow-up review of the
+ * member's messages since it started posts to their Post (owner, 2026-11-15).
  *
  * The only writes go to the member's own Post, resolved from
  * `monitoring_post`; the Forum is a constant. Sherpa never deletes a post.
@@ -101,7 +103,20 @@ export const openWatchStore = (path: string = DURABLE_STORE_PATH) => {
     /** Durably, so the departure note is retried until it posts, whatever the checks say meanwhile. */
     markLeft: (memberId: string, at: string): boolean =>
       db.prepare("UPDATE watch SET left_at = ? WHERE member_id = ? AND left_at IS NULL").run(at, memberId).changes === 1,
-    end: (memberId: string): boolean => db.prepare("DELETE FROM watch WHERE member_id = ?").run(memberId).changes === 1,
+    /**
+     * With `setAt`, only the watch set at that moment: work that read a watch and
+     * then waited on Discord must not end one Staff started in its place meanwhile.
+     * Two watches on one member set in the same millisecond would pass as one.
+     */
+    end: (memberId: string, setAt?: string): boolean =>
+      (setAt === undefined
+        ? db.prepare("DELETE FROM watch WHERE member_id = ?").run(memberId)
+        : db.prepare("DELETE FROM watch WHERE member_id = ? AND set_at = ?").run(memberId, setAt)
+      ).changes === 1,
+    /** Whose Post this is, for an `/sherpa analyse` run inside it without a member. */
+    memberOf: (postId: string): string | null =>
+      (db.prepare("SELECT member_id FROM monitoring_post WHERE post_id = ?").get(postId) as { member_id: string } | undefined)
+        ?.member_id ?? null,
     post: (memberId: string): string | null =>
       (db.prepare("SELECT post_id FROM monitoring_post WHERE member_id = ?").get(memberId) as { post_id: string } | undefined)
         ?.post_id ?? null,
@@ -165,6 +180,8 @@ export interface WatchDeps {
     boundary: Pick<Boundary, "observeMember">;
   };
   retrying: <T>(work: () => Promise<T>) => Promise<T>;
+  /** The review run when a watch ends (`/sherpa analyse`), over the watch's days and credited to its setter. */
+  followup: (memberId: string, by: string, since: string) => Promise<unknown>;
   /** Observation calls a day, across every watch (`SHERPA_WATCH_DAILY_CAP`). */
   cap: Pick<DailyCap, "take">;
   now: () => number;
@@ -218,6 +235,13 @@ export const createWatch = (deps: WatchDeps) => {
   const date = () => new Date(deps.now());
   const today = () => date().toISOString().slice(0, 10);
   const link = (channelId: string, messageId: string) => `https://discord.com/channels/${deps.guildId}/${channelId}/${messageId}`;
+  /** One follow-up at a time, each after the last: reviews run one at a time, so two watches ending together would refuse the second. */
+  let followups: Promise<unknown> = Promise.resolve();
+  const followUp = (watch: Watch) => {
+    followups = followups
+      .then(() => deps.followup(watch.memberId, watch.setBy, watch.setAt.slice(0, 10)))
+      .catch((error: Error) => log(`[watch] member ${watch.memberId}: the follow-up review failed: ${error.message.slice(0, 160)}`));
+  };
 
   const reload = () => {
     watched = new Set(deps.store((s) => s.watches()).map((w) => w.memberId));
@@ -411,17 +435,21 @@ export const createWatch = (deps: WatchDeps) => {
     if (!watch?.leftAt || noting.has(memberId)) return;
     // Retried until the watch would have ended, then given up: never a row past its 90 days.
     if (Date.parse(watch.expiresAt) <= deps.now()) {
-      deps.store((s) => s.end(memberId));
+      if (deps.store((s) => s.end(memberId, watch.setAt))) followUp(watch);
       reload();
       log(`[watch] member ${memberId}: the departure note never posted; the watch ended at its expiry`);
       return;
     }
+    if (!ready) return;
     noting.add(memberId);
     try {
       const postId = await ensurePost(watch);
       // A locked Post cannot be written to: no search is spent on a note that cannot post.
       if ((await deps.discord.channel(postId))?.locked) throw new Error("their Post is locked");
       const quoted = await lastWords(memberId);
+      // Staff may have started a new watch on them while this waited on Discord: then nothing has ended.
+      const still = deps.store((s) => s.watch(memberId));
+      if (still?.setAt !== watch.setAt || !still.leftAt) return;
       await port.write(
         memberId,
         [
@@ -430,7 +458,8 @@ export const createWatch = (deps: WatchDeps) => {
         ].join("\n"),
         null,
       );
-      deps.store((s) => s.end(memberId));
+      // Only the call that ended it, and only this watch: a stop meanwhile has queued its own, and a replacement runs on.
+      if (deps.store((s) => s.end(memberId, watch.setAt))) followUp(watch);
       reload();
       log(`[watch] member ${memberId}: the departure is noted, ${quoted.length} messages quoted; the watch ended`);
     } catch (error) {
@@ -475,14 +504,17 @@ export const createWatch = (deps: WatchDeps) => {
       for (const [id, buffer] of [...buffers]) if (now - buffer.firstAt >= BUFFER_MS) await each(id, () => flush(id));
       for (const watch of deps.store((s) => s.watches())) {
         if (watch.leftAt) {
-          if (ready) await noteDeparture(watch.memberId);
+          // Even while the checks fail: the note waits for them, but the watch still ends at its expiry.
+          await noteDeparture(watch.memberId);
           continue;
         }
         if (Date.parse(watch.expiresAt) > now) continue;
+        // The watch as read: one replaced while an earlier member's post was awaited is not this one, and runs on.
+        if (!deps.store((s) => s.end(watch.memberId, watch.setAt))) continue;
         buffers.delete(watch.memberId);
-        if (!deps.store((s) => s.end(watch.memberId))) continue;
         if (ready && deps.store((s) => s.post(watch.memberId)))
           await each(watch.memberId, () => port.write(watch.memberId, `Sherpa: the watch on <@${watch.memberId}> has ended.`, null));
+        followUp(watch);
         log(`[watch] member ${watch.memberId}: the watch expired`);
       }
       reload();
@@ -560,6 +592,7 @@ export const createWatch = (deps: WatchDeps) => {
         case "stop": {
           const memberId = value("member");
           if (typeof memberId !== "string") return null;
+          const stopped = deps.store((s) => s.watch(memberId));
           const ended = deps.store((s) => s.end(memberId));
           buffers.delete(memberId);
           reload();
@@ -573,8 +606,10 @@ export const createWatch = (deps: WatchDeps) => {
                 () => true,
                 (error: Error) => (log(`${tag} watch stop notice not posted: ${error.message.slice(0, 160)}`), false),
               )));
+          if (ended && stopped) followUp(stopped);
           return ended
-            ? `Done. The watch on <@${memberId}> has stopped.` + (noted ? "" : " **The stop couldn't be noted in the Post.**")
+            ? `Done. The watch on <@${memberId}> has stopped. A follow-up review is queued for their Post.` +
+                (noted ? "" : " **The stop couldn't be noted in the Post.**")
             : `<@${memberId}> isn't being watched.`;
         }
         case "start": {

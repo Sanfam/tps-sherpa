@@ -191,7 +191,7 @@ const harness = (
     optedOut?: boolean;
     /** Members' own denies, written by a sync as the real one writes them. */
     memberDenies?: Array<{ placeId: string; memberId: string }>;
-  } & Partial<Pick<Sherpa, "loadCatalog" | "loadVocabulary" | "loadActivity" | "tally" | "analyse">> = {},
+  } & Partial<Pick<Sherpa, "loadCatalog" | "loadVocabulary" | "loadActivity" | "tally" | "analyse" | "postMember">> = {},
 ) => {
   const calls: string[] = [];
   const logs: string[] = [];
@@ -227,6 +227,7 @@ const harness = (
     alerts: (work) => withAlertsStore(work, paths.durable),
     tally: opts.tally,
     ...(opts.analyse ? { analyse: opts.analyse } : {}),
+    ...(opts.postMember ? { postMember: opts.postMember } : {}),
     loadMonitored: (c) => readMonitored(c, paths.durable),
     loadDenied: (id) => readDeniedPlaces(id, paths.durable),
     askFor: (c) =>
@@ -986,6 +987,23 @@ describe("/sherpa analyse", () => {
     expect(reviewed).toEqual([]);
     expect(await run(analyse([STAFF_ROLE]))).toBe("REVIEW");
     expect(reviewed).toEqual(["500000000000000009"]);
+  });
+
+  it("without a member, reviews the member whose Post it runs in, and outside a Post reviews nobody", async () => {
+    const POST = "700000000000000001";
+    const reviewed: string[] = [];
+    const { run } = harness({
+      analyse: async (subject) => (reviewed.push(subject.id), "REVIEW"),
+      postMember: (channelId) => (channelId === POST ? "500000000000000007" : null),
+    });
+    const unscoped = (channelId: string) => {
+      const i = analyse([STAFF_ROLE]) as unknown as { data: { options: Array<{ options: unknown[] }> } };
+      i.data.options[0]!.options = [];
+      return { ...i, channel: { id: channelId, type: 11 } } as unknown as APIInteraction;
+    };
+    expect(await run(unscoped(POST))).toBe("REVIEW");
+    expect(await run(unscoped("600000000000000001"))).toMatch(/Name a `member`/);
+    expect(reviewed).toEqual(["500000000000000007"]);
   });
 
   it("puts the answer in place of its progress, not in a second message beside it", async () => {

@@ -30,6 +30,7 @@ import { latelyPlaces, renderLately } from "./lately.ts";
 import { MONITORED_COMMAND, type Monitored, answerMonitored } from "./monitored.ts";
 import { type Answer, PRIVACY_COMMAND, type Privacy, answerPrivacy } from "./privacy.ts";
 import { SHERPA_COMMAND, type TallyText, type WithSettings, answerSherpa } from "./sherpa-command.ts";
+import { WATCH_FORUM } from "./watch.ts";
 
 /** Discord's ceiling on a command option's choices. */
 const MAX_CHOICES = 25;
@@ -259,6 +260,8 @@ export interface Sherpa {
     progress: (text: string) => Promise<unknown>,
     tag: string,
   ) => Promise<Answer>;
+  /** The member whose Post in #user-monitoring this channel is, if it is one. */
+  postMember?: (channelId: string) => string | null;
   /** `/sherpa watch` (#52). Without it, the subcommands say they are unavailable. */
   watch?: (interaction: APIChatInputApplicationCommandInteraction, tag: string) => Promise<string | null>;
   /** Each holder's alert subscriptions, for `/alerts`. */
@@ -329,10 +332,13 @@ const answer = async (
         sherpa.log(`${tag} analyse refused: not the Staff role`);
         return NOT_STAFF_ROLE;
       }
-      const id = sub.options?.find((o) => o.name === "member")?.value;
+      const named = sub.options?.find((o) => o.name === "member")?.value;
+      // Without a member, inside a member's Post in #user-monitoring: that member (owner, 2026-11-15).
+      const channelId = interaction.channel?.id;
+      const id = typeof named === "string" ? named : channelId ? sherpa.postMember?.(channelId) : null;
+      if (!id) return `Name a \`member\`, or run this inside a member's Post in <#${WATCH_FORUM}>.`;
       const since = sub.options?.find((o) => o.name === "since")?.value;
       const fresh = sub.options?.find((o) => o.name === "fresh")?.value === true;
-      if (typeof id !== "string") return UNKNOWN;
       if (!sherpa.analyse) return "Reviews are unavailable right now.";
       sherpa.log(`${tag} analyse subject ${id} by ${interaction.member!.user.id}`);
       return sherpa.analyse(
