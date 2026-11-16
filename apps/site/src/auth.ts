@@ -226,6 +226,9 @@ export async function memberRoles(
 // TTL; cache by account, seeded at sign-in, if that is ever abused.
 const rechecks = new Map<string, Promise<string[] | null | undefined>>();
 
+/** How long a session's stored roles stand before they are fetched again. */
+export const rolesTtl = () => Number(process.env["ROLES_TTL_MS"] ?? 5 * 60_000);
+
 async function rolesFor(session: { token: string; userId: string }): Promise<string[] | null> {
   const { auth: a, db } = auth();
   // Every Better Auth read, its internal adapter included, filters out the
@@ -234,8 +237,7 @@ async function rolesFor(session: { token: string; userId: string }): Promise<str
     | { roleIds: string; rolesFetchedAt: number }
     | undefined;
   if (!row) return null;
-  const ttl = Number(process.env["ROLES_TTL_MS"] ?? 5 * 60_000);
-  if (Date.now() - row.rolesFetchedAt <= ttl) return JSON.parse(row.roleIds) as string[];
+  if (Date.now() - row.rolesFetchedAt <= rolesTtl()) return JSON.parse(row.roleIds) as string[];
 
   const ctx = await a.$context;
   const [account] = await ctx.internalAdapter.findAccounts(session.userId);

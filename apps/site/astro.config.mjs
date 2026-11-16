@@ -72,8 +72,10 @@ export default defineConfig({
         entrypoint: fileURLToPath(new URL("./src/emdash-auth.ts", import.meta.url)),
         config: { syncRoles: true },
       },
-      // The allow-list gate on every EmDash route, ahead of all of EmDash.
+      // The allow-list gate on every EmDash route, ahead of all of EmDash. It
+      // also keeps co-editing's sockets on the live role (owner, 2026-11-15).
       middleware: { outer: fileURLToPath(new URL("./src/emdash-gate.ts", import.meta.url)) },
+      coEditing: true,
     }),
   ],
   security: {

@@ -625,3 +625,37 @@ test("CMS pages: a former editor's edit-mode cookie shows no draft", async () =>
     expect(body, who).not.toContain("zqxpendingeditqz");
   }
 }, 15_000);
+
+// EmDash completes a room's WebSocket on the raw HTTP server, past every
+// middleware, and keeps it until it closes; the gate's watch must close it.
+test("co-editing: an editor demoted in Discord loses their open room socket within the TTL", async () => {
+  const COEDITOR = "900000000000000010";
+  guild.set(COEDITOR, [MEMBER_ROLE, STAFF_ROLE]);
+  const { cookie } = await signIn(COEDITOR);
+  const headers = { cookie, "content-type": "application/json", "X-EmDash-Request": "1", Origin: SITE };
+  const api = async (method: string, path: string, body?: unknown) => {
+    const res = await fetch(`${SITE}/_emdash/api${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    expect(res.ok, `${method} ${path}: ${res.status}`).toBe(true);
+    return ((await res.json()) as { data: any }).data;
+  };
+  const { version, commit, hash } = await api("GET", "/manifest");
+  const { item } = await api("POST", "/content/pages", { data: { title: "Co-edited", content: [] } });
+  const joined = await api("POST", `/content/pages/${item.id}/room`, { fingerprint: { version, commit, hash } });
+  expect(joined.mode).toBe("room");
+
+  // A browser sends the site's cookies with the upgrade.
+  const ws = new WebSocket(`ws://127.0.0.1:${PORT}${joined.url}?token=${joined.token}`, { headers: { cookie } } as never);
+  const closed = new Promise<void>((resolve) => ws.addEventListener("close", () => resolve()));
+  await new Promise((resolve, reject) => {
+    ws.addEventListener("message", resolve, { once: true });
+    ws.addEventListener("close", reject, { once: true });
+  });
+  // An editor who keeps the role keeps the socket past several re-checks.
+  await new Promise((r) => setTimeout(r, 3 * TTL_MS));
+  expect(ws.readyState).toBe(WebSocket.OPEN);
+
+  guild.set(COEDITOR, [MEMBER_ROLE]);
+  const dropped = await Promise.race([closed.then(() => true), new Promise((r) => setTimeout(() => r(false), 3 * TTL_MS))]);
+  ws.close();
+  expect(dropped).toBe(true);
+}, 20_000);
