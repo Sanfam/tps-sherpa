@@ -179,6 +179,7 @@ there; and the Forum is not monitored. The erasure handling (§5) keeps running.
 | The Post's history | Memory, for the call | The call |
 | `watch` row | `bot.db` | Until it expires or is stopped; at most 30 days |
 | `monitoring_post` row | `bot.db` | Until Staff unlink it, or the member leaves (D52-6) |
+| `watch_followup` row | `bot.db` | Until the follow-up review runs; dropped at 14 days, at the next minute's check (owner, 2026-11-15) |
 | Observations | The member's Post in Discord | Staff's to delete. Sherpa never deletes its posts (as responder F6) |
 
 **On `/privacy`:** under ADR-0003 O3 A, `opt-out processing` and
@@ -322,3 +323,27 @@ D52-1, D52-3, D52-5, D52-7 and D52-8 are accepted as recommended.
   `GUILD_MEMBER_REMOVE`. The watch then runs to its end.
 - **A departure note that cannot post** (a locked Post, say) is retried each
   minute until the watch would have ended, then given up.
+
+## Follow-up reviews (owner, 2026-11-15)
+
+- **When a watch ends** — stopped, expired, or after the departure note — a
+  `/sherpa analyse` review of the member's messages from the day the watch started
+  posts to their Post, credited to the watch's setter. It spends a run from
+  `SHERPA_ANALYSE_DAILY_CAP`. Follow-ups queue one behind another, so watches
+  ending together each get their turn; one that cannot run (cap reached, another
+  Staff review running, nothing said in reviewable places) says why in the
+  Post.
+- **Follow-ups are durable** (owner, 2026-11-15). A watch's end and its
+  follow-up are one write: the `watch` row is deleted and a `watch_followup`
+  row (member id, setter id, start date, when queued) stored in the same
+  transaction, before anything is posted, so no crash ends a watch and loses
+  its review. One row per member; a later end replaces one still waiting. It
+  is deleted once the review has run, so a restart still owes it. While the
+  watch's checks fail, follow-ups wait rather than run, since even a refusal
+  could not be noted in the Forum; one that has waited 14 days is dropped and
+  logged at the next minute's check. A review cut off by a crash, or by checks
+  that began failing while it ran, runs again, so it may post twice. Like
+  `watch`, the row is not erased by `/privacy delete-my-data` (ADR-0003 O3 B).
+- **`/sherpa analyse` without `member`,** inside a member's Post in
+  `📊︱user-monitoring`, reviews that member: the Post's `monitoring_post`
+  link decides whose it is. Anywhere else it asks for a member.

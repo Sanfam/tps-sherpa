@@ -137,7 +137,12 @@ export const SHERPA_COMMAND: RESTPostAPIChatInputApplicationCommandsJSONBody = {
       type: ApplicationCommandOptionType.Subcommand,
       description: "Staff role only: a model's review of one member's messages since they joined.",
       options: [
-        { name: "member", type: ApplicationCommandOptionType.User, description: "Who to review.", required: true },
+        {
+          name: "member",
+          type: ApplicationCommandOptionType.User,
+          description: "Who to review. Leave out inside a member's Post in #user-monitoring to review them.",
+          required: false,
+        },
         {
           name: "since",
           type: ApplicationCommandOptionType.String,

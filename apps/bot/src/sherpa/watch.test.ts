@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ApplicationCommandOptionType, ChannelType, type RESTPostAPIChannelMessageJSONBody } from "discord-api-types/v10";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Observation } from "../llm/moderation.ts";
 import type { Entity } from "../sync/catalog.ts";
 import { initDurableStore } from "../sync/durable-store.ts";
@@ -41,6 +41,7 @@ const harness = (
     deletedPost?: () => boolean;
     retrying?: WatchDeps["retrying"];
     take?: () => boolean;
+    followup?: WatchDeps["followup"];
   } = {},
 ) => {
   const writes: Array<{ postId: string; body: RESTPostAPIChannelMessageJSONBody }> = [];
@@ -98,6 +99,7 @@ const harness = (
     }),
     retrying: over.retrying ?? ((work) => work()),
     cap: { take: over.take ?? (() => true) },
+    followup: over.followup ?? (async () => {}),
     now: () => clock,
     log: () => {},
   };
@@ -394,6 +396,178 @@ describe("User Monitoring, after the second review", () => {
     await w.tick();
     expect(withWatchStore((s) => s.watches().length, path)).toBe(0);
     failing = false;
+  });
+
+  it("ends a departed member's watch at its expiry though the checks fail throughout, freeing its slot", async () => {
+    const h = harness();
+    await h.watch.check();
+    await h.watch.answer(start(1), "t");
+    const paused = createWatch({ ...h.deps, discord: { ...h.deps.discord, access: async () => null } });
+    await paused.check();
+    await paused.onLeave(WATCHED);
+    await paused.tick();
+    expect(withWatchStore((s) => s.watches().length, path)).toBe(1);
+    h.advance(2 * 24 * 60 * 60 * 1000);
+    await paused.tick();
+    expect(withWatchStore((s) => s.watches().length, path)).toBe(0);
+    // Nothing reached the Forum while the checks failed.
+    expect(h.writes).toEqual([]);
+  });
+
+  it("posts no departure note for a watch Staff restarted while the note was being prepared", async () => {
+    const h = harness({
+      // Staff start a new watch on them while Sherpa searches for their last words.
+      search: async () => {
+        withWatchStore(
+          (s) => s.start({ memberId: WATCHED, setBy: SETTER, setAt: "2026-10-19T00:00:05.000Z", expiresAt: "2027-01-01T00:00:00.000Z", triggers: ["y"] }),
+          path,
+        );
+        return { total_results: 0, doing_deep_historical_index: false, messages: [] } as never;
+      },
+    });
+    await h.watch.check();
+    await h.watch.answer(start(), "t");
+    await h.watch.onLeave(WATCHED);
+    expect(h.writes.map((w) => w.body.content).filter((c) => c?.includes("left the server"))).toEqual([]);
+    expect(withWatchStore((s) => s.watch(WATCHED), path)).toMatchObject({ setAt: "2026-10-19T00:00:05.000Z", leftAt: null });
+  });
+});
+
+describe("User Monitoring's follow-up review (owner, 2026-11-15)", () => {
+  it("reviews every member whose watch ends, though two end in the same minute and reviews run one at a time", async () => {
+    // As analyse.ts: a review asked for while another runs is refused.
+    let running = false;
+    const reviewed: string[][] = [];
+    const h = harness({
+      followup: async (memberId, by, since) => {
+        if (running) return;
+        running = true;
+        await new Promise((done) => setTimeout(done, 5));
+        reviewed.push([memberId, by, since]);
+        running = false;
+      },
+    });
+    await h.watch.check();
+    await h.watch.answer(start(1), "t");
+    withWatchStore(
+      (s) => s.start({ memberId: OTHER, setBy: SETTER, setAt: "2026-10-19T00:00:00.000Z", expiresAt: "2026-10-20T00:00:00.000Z", triggers: ["x"] }),
+      path,
+    );
+    h.advance(2 * 24 * 60 * 60 * 1000);
+    await h.watch.tick();
+    await vi.waitFor(() => expect(reviewed).toHaveLength(2));
+    // Each over the watch's own days, credited to whoever set it.
+    expect(reviewed.sort()).toEqual(
+      [
+        [WATCHED, SETTER, "2026-10-19"],
+        [OTHER, SETTER, "2026-10-19"],
+      ].sort(),
+    );
+  });
+
+  it("runs after a restart a follow-up the bot went down in the middle of", async () => {
+    // The bot dies mid-review: the review never comes back.
+    const h = harness({ followup: () => new Promise(() => {}) });
+    await h.watch.check();
+    await h.watch.answer(start(1), "t");
+    h.advance(2 * 24 * 60 * 60 * 1000);
+    await h.watch.tick();
+    const reviewed: string[][] = [];
+    const restarted = createWatch({ ...h.deps, followup: async (...args) => void reviewed.push(args) });
+    await restarted.check();
+    await vi.waitFor(() => expect(reviewed).toEqual([[WATCHED, SETTER, "2026-10-19"]]));
+    // Owed once: done, it is not run again.
+    await restarted.tick();
+    await new Promise((done) => setTimeout(done, 10));
+    expect(reviewed).toHaveLength(1);
+  });
+
+  it("still owes the follow-up when the bot goes down while posting that the watch ended", async () => {
+    const h = harness();
+    await h.watch.check();
+    await h.watch.answer(start(1), "t");
+    h.advance(2 * 24 * 60 * 60 * 1000);
+    // The "has ended" line never comes back: the bot dies there.
+    const dying = createWatch({ ...h.deps, followup: () => new Promise(() => {}), discord: { ...h.deps.discord, send: () => new Promise(() => {}) } });
+    await dying.check();
+    void dying.tick();
+    await new Promise((done) => setTimeout(done, 10));
+    const reviewed: string[] = [];
+    const restarted = createWatch({ ...h.deps, followup: async (memberId) => void reviewed.push(memberId) });
+    await restarted.check();
+    await vi.waitFor(() => expect(reviewed).toEqual([WATCHED]));
+  });
+
+  it("holds a follow-up while the checks fail, runs it once they pass, and drops one held 14 days", async () => {
+    let failing = false;
+    const reviewed: string[] = [];
+    const h = harness({ followup: async (memberId) => void reviewed.push(memberId) });
+    const w = createWatch({
+      ...h.deps,
+      discord: { ...h.deps.discord, access: async () => (failing ? null : { view: true, history: true, send: true, threads: true, memberVisible: false }) },
+    });
+    await w.check();
+    await w.answer(start(1), "t");
+    failing = true;
+    await w.check();
+    h.advance(2 * 24 * 60 * 60 * 1000);
+    await w.tick();
+    await new Promise((done) => setTimeout(done, 10));
+    expect(reviewed).toEqual([]);
+    failing = false;
+    await w.check();
+    await vi.waitFor(() => expect(reviewed).toEqual([WATCHED]));
+
+    // Again, but the checks fail for longer than 14 days: the row goes, unrun.
+    await w.answer(start(1), "t");
+    failing = true;
+    await w.check();
+    h.advance(2 * 24 * 60 * 60 * 1000);
+    await w.tick();
+    h.advance(15 * 24 * 60 * 60 * 1000);
+    await w.tick();
+    expect(withWatchStore((s) => s.nextFollowup(), path)).toBeNull();
+    failing = false;
+    await w.check();
+    await new Promise((done) => setTimeout(done, 10));
+    expect(reviewed).toEqual([WATCHED]);
+  });
+
+  it("leaves running, unreviewed, a watch Staff replaced while the tick that read it as expired was waiting on Discord", async () => {
+    const reviewed: string[] = [];
+    const h = harness({ followup: async (memberId) => void reviewed.push(memberId) });
+    await h.watch.check();
+    await h.watch.answer(start(1), "t");
+    withWatchStore(
+      (s) => s.start({ memberId: OTHER, setBy: SETTER, setAt: "2026-10-19T00:00:01.000Z", expiresAt: "2026-10-20T00:00:00.000Z", triggers: ["x"] }),
+      path,
+    );
+    h.advance(2 * 24 * 60 * 60 * 1000);
+    const replacedAt = new Date(h.advance(0)).toISOString();
+    // Staff start a new watch on OTHER while the first member's closing line is still being sent.
+    const w = createWatch({
+      ...h.deps,
+      discord: {
+        ...h.deps.discord,
+        send: async (postId, body) => {
+          withWatchStore(
+            (s) => s.start({ memberId: OTHER, setBy: SETTER, setAt: replacedAt, expiresAt: "2027-01-01T00:00:00.000Z", triggers: ["y"] }),
+            path,
+          );
+          // And OTHER writes under the new watch before the tick reaches them.
+          await w.onMessage(message("7", general.id, OTHER));
+          return h.deps.discord.send(postId, body);
+        },
+      },
+    });
+    await w.check();
+    await w.tick();
+    await vi.waitFor(() => expect(reviewed).toEqual([WATCHED]));
+    expect(withWatchStore((s) => s.watch(OTHER), path)?.setAt).toBe(replacedAt);
+    // Their message is still buffered for the new watch's first observation.
+    h.advance(31 * 60 * 1000);
+    await w.tick();
+    expect(h.calls).toEqual([["words 7"]]);
   });
 });
 

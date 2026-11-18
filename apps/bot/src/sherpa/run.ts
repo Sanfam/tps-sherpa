@@ -319,6 +319,8 @@ const watch = introductions
         };
       },
       retrying: (work) => retrying(work, log),
+      // `analyse` is made below; a watch only ends once the bot is running.
+      followup: (memberId, by, since) => analyse({ id: memberId }, { since, fresh: true, by, followup: true }, async () => {}, `[watch] member ${memberId} follow-up`),
       cap: dailyCap(resolve(DATA_DIR, "watch-usage.json"), watchCap, log),
       now: () => Date.now(),
       log,
@@ -405,6 +407,51 @@ const tallyDeps = async (): Promise<TallyDeps> => {
   };
 };
 
+const analyse = createAnalyse({
+  guildId,
+  // Reviews post where the watch posts; without the watch there is nowhere, so none run.
+  forum: watch?.reviews ?? { writable: () => false, last: async () => null, post: async () => "" },
+  discord: {
+    search: (query) => api.guilds.searchForMessages(guildId, query),
+    member: async (userId) => {
+      try {
+        const member = await api.guilds.getMember(guildId, userId);
+        return {
+          joinedAt: member.joined_at ?? null,
+          names: [member.user.username, member.user.global_name, member.nick].filter(
+            (n): n is string => typeof n === "string" && n.trim() !== "",
+          ),
+        };
+      } catch (error) {
+        if (notFound(error)) return null;
+        throw error;
+      }
+    },
+    message: async (channelId, messageId) => {
+      try {
+        return await api.channels.getMessage(channelId, messageId);
+      } catch (error) {
+        if (notFound(error)) return null;
+        throw error;
+      }
+    },
+    after: (channelId, afterId, limit) => api.channels.getMessages(channelId, { after: afterId, limit }),
+  },
+  session: () => {
+    const catalog = loadCatalog();
+    return {
+      catalog,
+      memberRoles: memberRoleIds(loadRoleManifest()),
+      excluded: withDurableStore((s) => s.exclusions()),
+      boundary: openBoundary(catalog, {}, ANALYSE_TIMEOUT_MS).boundary,
+    };
+  },
+  retrying: (work) => retrying(work, log),
+  cap: dailyCap(resolve(DATA_DIR, "analyse-usage.json"), analyseCap, log),
+  now: () => Date.now(),
+  log,
+});
+
 const sherpa: Sherpa = {
   guildId,
   loadCatalog,
@@ -424,50 +471,8 @@ const sherpa: Sherpa = {
   ),
   monitored: openMonitored(DURABLE_STORE_PATH),
   settings: (work) => withResponderStore(work, DURABLE_STORE_PATH),
-  analyse: createAnalyse({
-    guildId,
-    // Reviews post where the watch posts; without the watch there is nowhere, so none run.
-    forum: watch?.reviews ?? { writable: () => false, last: async () => null, post: async () => "" },
-    discord: {
-      search: (query) => api.guilds.searchForMessages(guildId, query),
-      member: async (userId) => {
-        try {
-          const member = await api.guilds.getMember(guildId, userId);
-          return {
-            joinedAt: member.joined_at ?? null,
-            names: [member.user.username, member.user.global_name, member.nick].filter(
-              (n): n is string => typeof n === "string" && n.trim() !== "",
-            ),
-          };
-        } catch (error) {
-          if (notFound(error)) return null;
-          throw error;
-        }
-      },
-      message: async (channelId, messageId) => {
-        try {
-          return await api.channels.getMessage(channelId, messageId);
-        } catch (error) {
-          if (notFound(error)) return null;
-          throw error;
-        }
-      },
-      after: (channelId, afterId, limit) => api.channels.getMessages(channelId, { after: afterId, limit }),
-    },
-    session: () => {
-      const catalog = loadCatalog();
-      return {
-        catalog,
-        memberRoles: memberRoleIds(loadRoleManifest()),
-        excluded: withDurableStore((s) => s.exclusions()),
-        boundary: openBoundary(catalog, {}, ANALYSE_TIMEOUT_MS).boundary,
-      };
-    },
-    retrying: (work) => retrying(work, log),
-    cap: dailyCap(resolve(DATA_DIR, "analyse-usage.json"), analyseCap, log),
-    now: () => Date.now(),
-    log,
-  }),
+  analyse,
+  ...(watch ? { postMember: (channelId: string) => withWatchStore((s) => s.memberOf(channelId), DURABLE_STORE_PATH) } : {}),
   alerts: (work) => withAlertsStore(work, DURABLE_STORE_PATH),
   ...(watch ? { watch: watch.answer } : {}),
   ...(responder ? { tally: async () => describeTally(await computeTally(await tallyDeps())) } : {}),

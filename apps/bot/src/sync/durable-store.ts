@@ -97,10 +97,12 @@ export interface Generation {
  * or the member has `approach` off, it is the only record that they posted
  * one (#58).
  *
- * User Monitoring's two (#52; through `sherpa/watch.ts` only): `watch`, one
+ * User Monitoring's three (#52; through `sherpa/watch.ts` only): `watch`, one
  * per member, Staff's triggers and who set it, deleted when it ends (at most
- * 90 days, D52-2); and `monitoring_post`, which Post in the Forum is the
- * member's, kept when a watch ends or they leave (D52-6).
+ * 90 days, D52-2); `monitoring_post`, which Post in the Forum is the
+ * member's, kept when a watch ends or they leave (D52-6); and
+ * `watch_followup`, the review owed for a watch that ended, ids and dates
+ * only, deleted once it runs or at 14 days (owner, 2026-11-15).
  */
 const MIGRATIONS = `
   CREATE TABLE IF NOT EXISTS heartbeat (
@@ -185,6 +187,12 @@ const MIGRATIONS = `
     member_id TEXT PRIMARY KEY,
     post_id   TEXT NOT NULL UNIQUE,
     linked_by TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS watch_followup (
+    member_id TEXT PRIMARY KEY,
+    set_by    TEXT NOT NULL,
+    since     TEXT NOT NULL,
+    queued_at TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS alert_sent (
     member_id TEXT NOT NULL,

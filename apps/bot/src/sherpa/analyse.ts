@@ -115,12 +115,44 @@ export const createAnalyse = (deps: AnalyseDeps) => {
   /** The last run on each subject, for the hourly cooldown (D51-4). In memory: a restart forgets it. */
   const last = new Map<string, number>();
 
-  return async (
+  /**
+   * `followup`: the review a watch's end runs (watch.ts), credited to its
+   * setter. Nobody waits on its reply, so a review that does not run says why
+   * in the member's Post instead.
+   */
+  const analyse = async (
     subject: { id: string; bot?: boolean },
-    request: { since: string | null; fresh: boolean; by: string },
+    request: { since: string | null; fresh: boolean; by: string; followup?: boolean },
     progress: (text: string) => Promise<unknown>,
     tag: string,
   ): Promise<Answer> => {
+    // A follow-up's failure has nobody to show it to: it becomes the reason noted in the Post.
+    const outcome = await run(subject, request, progress, tag).catch((error: Error) => {
+      if (!request.followup) throw error;
+      deps.log(`${tag} subject ${subject.id}: follow-up failed: ${error.message.slice(0, 160)}`);
+      return "The review failed.";
+    });
+    // A follow-up's queue moves on when this resolves: not while calls still hold the gate, or the next is refused.
+    if (request.followup) await inFlight;
+    if (typeof outcome === "object" && "posted" in outcome) return `Done. The review of <@${subject.id}> is posted: ${outcome.posted}`;
+    if (!request.followup) return outcome;
+    // A review that ran but couldn't post is not shown to anyone else: a follow-up has no one waiting.
+    const reason = typeof outcome === "string" ? outcome : "The review couldn't be posted here.";
+    // Never past the watch's checks: while they fail, nothing is written to the Forum.
+    if (deps.forum.writable())
+      await deps.forum
+        .post(subject.id, request.by, `Sherpa: the follow-up review of <@${subject.id}> didn't run. ${reason}`, [])
+        .catch((error: Error) => deps.log(`${tag} subject ${subject.id}: follow-up note not posted: ${error.message.slice(0, 160)}`));
+    return reason;
+  };
+  return analyse;
+
+  async function run(
+    subject: { id: string; bot?: boolean },
+    request: { since: string | null; fresh: boolean; by: string; followup?: boolean },
+    progress: (text: string) => Promise<unknown>,
+    tag: string,
+  ): Promise<Answer | { posted: string }> {
     const { since } = request;
     if (subject.bot) return "Sherpa doesn't review bots.";
     // Round-tripped, so 2026-02-30 is refused rather than read as 2 March, and 2026-99-99 rather than as no date at all.
@@ -147,8 +179,10 @@ export const createAnalyse = (deps: AnalyseDeps) => {
       if (typeof answer === "string") return answer;
       // The review posts in full view; one that cannot post is shown here rather than lost.
       try {
-        const posted = await deps.forum.post(subject.id, request.by, `Review of <@${subject.id}>, requested by <@${request.by}>.`, answer.embeds ?? []);
-        return `Done. The review of <@${subject.id}> is posted: ${posted}`;
+        const content = request.followup
+          ? `Follow-up review of <@${subject.id}> at the end of the watch set by <@${request.by}>.`
+          : `Review of <@${subject.id}>, requested by <@${request.by}>.`;
+        return { posted: await deps.forum.post(subject.id, request.by, content, answer.embeds ?? []) };
       } catch (error) {
         deps.log(`${tag} subject ${subject.id}: review not posted: ${(error as Error).message.slice(0, 160)}`);
         return { ...answer, content: "**The review couldn't be posted to the member's Post**, so it is shown only to you." };
@@ -158,7 +192,7 @@ export const createAnalyse = (deps: AnalyseDeps) => {
         running = false;
       });
     }
-  };
+  }
 
   async function review(
     memberId: string,
