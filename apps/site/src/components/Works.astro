@@ -1,7 +1,8 @@
 ---
 // The `works` entries a club page references, in the order its editor set:
-// cover, title, creators and kind. Every cover sits in the same frame; a work
-// with none shows its title there instead, so the grid stays even.
+// cover, title, creators and kind. Every cover sits whole in the same frame,
+// on a filler toned from the cover itself; a work with none shows its title
+// there instead, so the grid stays even.
 import { getTermsForEntries } from "emdash";
 import { safeHref } from "../safe-href.ts";
 import MediaImage from "./MediaImage.astro";
@@ -39,6 +40,28 @@ const text = (w: Work, field: string) => (typeof w.data[field] === "string" ? (w
     })
   }
 </ul>
+<script>
+  // The frame's filler: the cover's average colour, pulled toward grey so it
+  // sits behind the cover rather than competing with it. Covers come from the
+  // site's own origin, so the canvas can read them; any failure keeps the
+  // theme's neutral filler.
+  const tone = (img: HTMLImageElement) => {
+    try {
+      const c = document.createElement("canvas");
+      c.width = c.height = 1;
+      const ctx = c.getContext("2d", { willReadFrequently: true })!;
+      ctx.drawImage(img, 0, 0, 1, 1);
+      const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+      const grey = (r! + g! + b!) / 3;
+      const mute = (v: number) => Math.round(v * 0.55 + grey * 0.45);
+      img.closest<HTMLElement>(".cover")!.style.backgroundColor = `rgb(${mute(r!)} ${mute(g!)} ${mute(b!)})`;
+    } catch {}
+  };
+  for (const img of document.querySelectorAll<HTMLImageElement>(".works .cover img")) {
+    if (img.complete && img.naturalWidth) tone(img);
+    else img.addEventListener("load", () => tone(img), { once: true });
+  }
+</script>
 <style>
   .works {
     list-style: none;
@@ -77,7 +100,8 @@ const text = (w: Work, field: string) => (typeof w.data[field] === "string" ? (w
   .cover :global(img) {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
+    background: none;
     border: 0;
     border-radius: 0;
     box-shadow: none;
