@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeAll, expect, test } from "vitest";
+import { editedSinceImport } from "../scripts/rewrite-guard.ts";
 import { NEVER, concrete, injected } from "./emdash-routes.ts";
 import { BOT_TOKEN, GUILD_ID, guild, mock, startMock, usernames } from "./mock-discord.ts";
 
@@ -596,10 +597,15 @@ test("CMS pages: a former editor's edit-mode cookie shows no draft", async () =>
   const text = (t: string) => [
     { _type: "block", _key: "b", style: "normal", markDefs: [], children: [{ _type: "span", _key: "s", text: t, marks: [] }] },
   ];
-  await api("POST", "/content/pages", { slug: "club/unwritten", data: { title: "Unwritten", content: text("zqxstubdraftqz") } });
+  await api("POST", "/content/pages", { slug: "club/unwritten", data: { title: "zqxdrafttitleqz", content: text("zqxstubdraftqz") } });
   const { item } = await api("POST", "/content/pages", { slug: "club/live", data: { title: "Live", content: text("zqxlivetextqz") } });
   await api("POST", `/content/pages/${item.id}/publish`);
   await api("PUT", `/content/pages/${item.id}`, { data: { title: "Live", content: text("zqxpendingeditqz") } });
+  // The club's section page, its title being renamed in a draft: the nav on
+  // every Member page titles it.
+  const { item: section } = await api("POST", "/content/pages", { slug: "club/home", data: { title: "zqxsectionqz", content: [] } });
+  await api("POST", `/content/pages/${section.id}/publish`);
+  await api("PUT", `/content/pages/${section.id}`, { data: { title: "zqxpendingtitleqz", content: [] } });
 
   // An Author who opened the CMS, then lost the role in Discord but stayed a Member.
   guild.set(FORMER, [MEMBER_ROLE, EVENT_MANAGERS_ROLE]);
@@ -623,8 +629,15 @@ test("CMS pages: a former editor's edit-mode cookie shows no draft", async () =>
     const body = await live.text();
     expect(body, who).toContain("zqxlivetextqz");
     expect(body, who).not.toContain("zqxpendingeditqz");
-  }
-}, 15_000);
+    // Navigation names only published pages, by their published titles.
+    for (const path of ["/club/live", "/club/home", "/members"]) {
+      const page = await (await at(path, c)).text();
+      expect(page, `${who} ${path}`).toContain("zqxsectionqz");
+      expect(page, `${who} ${path}`).not.toContain("zqxpendingtitleqz");
+      expect(page, `${who} ${path}`).not.toContain("zqxdrafttitleqz");
+    }
+    expect(await (await at("/club/home", c)).text(), who).toContain('href="/club/live"');
+  }}, 15_000);
 
 // EmDash completes a room's WebSocket on the raw HTTP server, past every
 // middleware, and keeps it until it closes; the gate's watch must close it.
@@ -659,3 +672,48 @@ test("co-editing: an editor demoted in Discord loses their open room socket with
   ws.close();
   expect(dropped).toBe(true);
 }, 20_000);
+
+// `import-wiki.ts --rewrite` replaces an imported page's content only if no one
+// has touched it since. That rests on EmDash's revisions: an import (create,
+// then publish) leaves one, an editor's save adds one, an unpublish drafts it.
+test("wiki rewrite: an untouched import may be rewritten; an edited or unpublished page may not", async () => {
+  guild.set(STAFF, [MEMBER_ROLE, STAFF_ROLE]);
+  const staff = (await signIn(STAFF)).cookie;
+  const api = async <T,>(method: string, path: string, body?: unknown) => {
+    const res = await fetch(`${SITE}/_emdash/api${path}`, {
+      method,
+      headers: { cookie: staff, "content-type": "application/json", "X-EmDash-Request": "1", Origin: SITE },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    expect(res.ok, `${method} ${path}: ${res.status}`).toBe(true);
+    return ((await res.json()) as { data: T }).data;
+  };
+  const text = (t: string) => [
+    { _type: "block", _key: "b", style: "normal", markDefs: [], children: [{ _type: "span", _key: "s", text: t, marks: [] }] },
+  ];
+  const imported = async (slug: string) => {
+    const { item } = await api<{ item: { id: string } }>("POST", "/content/pages", {
+      slug,
+      createdAt: "2025-01-01T00:00:00.000Z",
+      data: { title: "Imported", content: text("as imported") },
+    });
+    await api("POST", `/content/pages/${item.id}/publish`, { publishedAt: "2025-01-01T00:00:00.000Z" });
+    return item.id;
+  };
+  const verdict = async (id: string) => {
+    const { item } = await api<{ item: { status: string } }>("GET", `/content/pages/${id}`);
+    const { total } = await api<{ total: number }>("GET", `/content/pages/${id}/revisions?limit=1`);
+    return editedSinceImport({ revisions: total, status: item.status, supportsRevisions: true });
+  };
+
+  const untouched = await imported("wiki/untouched");
+  expect(await verdict(untouched)).toBeNull();
+
+  const edited = await imported("wiki/edited");
+  await api("PUT", `/content/pages/${edited}`, { data: { content: text("an editor's words") } });
+  expect(await verdict(edited)).not.toBeNull();
+
+  const unpublished = await imported("wiki/unpublished");
+  await api("POST", `/content/pages/${unpublished}/unpublish`);
+  expect(await verdict(unpublished)).not.toBeNull();
+}, 15_000);
