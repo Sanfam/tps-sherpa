@@ -596,10 +596,15 @@ test("CMS pages: a former editor's edit-mode cookie shows no draft", async () =>
   const text = (t: string) => [
     { _type: "block", _key: "b", style: "normal", markDefs: [], children: [{ _type: "span", _key: "s", text: t, marks: [] }] },
   ];
-  await api("POST", "/content/pages", { slug: "club/unwritten", data: { title: "Unwritten", content: text("zqxstubdraftqz") } });
+  await api("POST", "/content/pages", { slug: "club/unwritten", data: { title: "zqxdrafttitleqz", content: text("zqxstubdraftqz") } });
   const { item } = await api("POST", "/content/pages", { slug: "club/live", data: { title: "Live", content: text("zqxlivetextqz") } });
   await api("POST", `/content/pages/${item.id}/publish`);
   await api("PUT", `/content/pages/${item.id}`, { data: { title: "Live", content: text("zqxpendingeditqz") } });
+  // The club's section page, its title being renamed in a draft: the nav on
+  // every Member page titles it.
+  const { item: section } = await api("POST", "/content/pages", { slug: "club/home", data: { title: "zqxsectionqz", content: [] } });
+  await api("POST", `/content/pages/${section.id}/publish`);
+  await api("PUT", `/content/pages/${section.id}`, { data: { title: "zqxpendingtitleqz", content: [] } });
 
   // An Author who opened the CMS, then lost the role in Discord but stayed a Member.
   guild.set(FORMER, [MEMBER_ROLE, EVENT_MANAGERS_ROLE]);
@@ -623,8 +628,15 @@ test("CMS pages: a former editor's edit-mode cookie shows no draft", async () =>
     const body = await live.text();
     expect(body, who).toContain("zqxlivetextqz");
     expect(body, who).not.toContain("zqxpendingeditqz");
-  }
-}, 15_000);
+    // Navigation names only published pages, by their published titles.
+    for (const path of ["/club/live", "/club/home", "/members"]) {
+      const page = await (await at(path, c)).text();
+      expect(page, `${who} ${path}`).toContain("zqxsectionqz");
+      expect(page, `${who} ${path}`).not.toContain("zqxpendingtitleqz");
+      expect(page, `${who} ${path}`).not.toContain("zqxdrafttitleqz");
+    }
+    expect(await (await at("/club/home", c)).text(), who).toContain('href="/club/live"');
+  }}, 15_000);
 
 // EmDash completes a room's WebSocket on the raw HTTP server, past every
 // middleware, and keeps it until it closes; the gate's watch must close it.

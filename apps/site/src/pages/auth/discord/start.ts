@@ -1,11 +1,19 @@
 import type { APIRoute } from "astro";
-import { auth, signInStarts } from "../../../auth.ts";
+import { auth, memberRoles, signInStarts } from "../../../auth.ts";
 
 // A plain link starts sign-in. Better Auth's own endpoint is a POST that
 // answers with JSON, so this turns its answer into the redirect to Discord,
 // keeping the state cookie it sets. The body is fixed: nothing from the
 // request can add a scope.
 export const GET: APIRoute = async ({ request }) => {
+  // The public landing page cannot tell a signed-in Member: its sign-in link
+  // takes them straight to /members, keeping Better Auth's session renewal.
+  const member = await memberRoles(request.headers);
+  if (member.roles) {
+    const headers = new Headers({ Location: "/members" });
+    for (const cookie of member.setCookie) headers.append("Set-Cookie", cookie);
+    return new Response(null, { status: 302, headers });
+  }
   if (!signInStarts()) return new Response("Too many sign-ins right now. Try again in a minute.", { status: 429 });
   const { auth: a, ready } = auth();
   await ready;
