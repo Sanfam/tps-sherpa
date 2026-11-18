@@ -1,6 +1,7 @@
 ---
 // The `works` entries a club page references, in the order its editor set:
-// cover, title, creators and kind. Inside .prose, so the theme frames covers.
+// cover, title, creators and kind. Every cover sits in the same frame; a work
+// with none shows its title there instead, so the grid stays even.
 import { getTermsForEntries } from "emdash";
 import { safeHref } from "../safe-href.ts";
 import MediaImage from "./MediaImage.astro";
@@ -23,7 +24,13 @@ const text = (w: Work, field: string) => (typeof w.data[field] === "string" ? (w
       const title = text(w, "title");
       return (
         <li>
-          {w.data["cover"] ? <MediaImage image={w.data["cover"] as never} /> : null}
+          <div class="cover">
+            {w.data["cover"] ? (
+              <MediaImage image={w.data["cover"] as never} />
+            ) : (
+              <span class="cover-title" aria-hidden="true">{title}</span>
+            )}
+          </div>
           <p class="work-title">{link ? <a href={link}>{title}</a> : title}</p>
           {text(w, "creators") && <p>{text(w, "creators")}</p>}
           {kinds.get(dbId(w))?.map((k) => <p class="work-kind">{k.label}</p>)}
@@ -48,6 +55,40 @@ const text = (w: Work, field: string) => (typeof w.data[field] === "string" ? (w
   .works p {
     margin: 0.35em 0 0;
     font-size: 0.9375rem;
+  }
+
+  .cover {
+    aspect-ratio: 2 / 3;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: var(--radius);
+    border: 4px solid var(--paper);
+    box-shadow: var(--lift);
+    background: var(--ground-raised);
+  }
+
+  .cover :global(a) {
+    display: contents;
+  }
+
+  .cover :global(img) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .cover-title {
+    padding: 0.75rem;
+    text-align: center;
+    font-family: var(--display);
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--ink-soft);
+    overflow-wrap: anywhere;
   }
 
   .work-title {
