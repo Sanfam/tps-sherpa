@@ -58,6 +58,8 @@ export interface IndexEntry {
   regions: string[];
   state: CatalogEntity["thread_state"];
   lastActivity: string | null;
+  /** Members' messages in about the last week; 0 when the bot does not read it. */
+  weekly: number;
 }
 
 /** A Channel or Forum, with the Threads or Posts in it the User can see. */
@@ -86,6 +88,7 @@ export const indexView = (
   catalog: readonly CatalogEntity[],
   roles: readonly string[],
   vocabulary: readonly { slug: string; label: string }[],
+  weeklyMessages: Readonly<Record<string, number>> = {},
 ): { sections: IndexSection[]; docs: SearchDoc[] } => {
   const labels = new Map(vocabulary.map((t) => [t.slug, t.label]));
   const entry = (e: CatalogEntity): IndexEntry => ({
@@ -99,6 +102,7 @@ export const indexView = (
     regions: e.region,
     state: e.thread_state,
     lastActivity: e.last_activity_at,
+    weekly: Object.hasOwn(weeklyMessages, e.id) ? weeklyMessages[e.id]! : 0,
   });
 
   const seen = catalog.filter((e) => visibleTo(e, roles));
@@ -107,8 +111,18 @@ export const indexView = (
   // A Post or Thread whose Channel or Forum the User cannot see is not shown.
   for (const e of seen) if (e.parent_id !== null) sections.get(e.parent_id)?.entries.push(entry(e));
 
-  const sorted = [...sections.values()].sort((a, b) => a.name.localeCompare(b.name));
-  for (const s of sorted) s.entries.sort((a, b) => (b.lastActivity ?? "").localeCompare(a.lastActivity ?? ""));
+  // Most active first: messages this week, then the latest message, then name.
+  // A Channel or Forum counts its own and those of the Posts and Threads shown under it.
+  const byActivity = (a: { weekly: number; lastActivity: string | null; name: string }, b: typeof a) =>
+    b.weekly - a.weekly || (b.lastActivity ?? "").localeCompare(a.lastActivity ?? "") || a.name.localeCompare(b.name);
+  for (const s of sections.values()) {
+    s.entries.sort(byActivity);
+    for (const e of s.entries) {
+      s.weekly += e.weekly;
+      if ((e.lastActivity ?? "") > (s.lastActivity ?? "")) s.lastActivity = e.lastActivity;
+    }
+  }
+  const sorted = [...sections.values()].sort(byActivity);
   const doc = (e: IndexEntry, parent: string): SearchDoc => ({
     id: e.id,
     name: e.name,

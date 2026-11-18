@@ -51,6 +51,8 @@ export interface SnapshotEnvelope {
   outcome: { complete: true } | { complete: false; failed: Array<{ id: string; reason: string }> };
   roleManifest: RoleManifestEntry[];
   catalog: CatalogEntity[];
+  /** Entity id → members' messages in about the last week. A place the bot does not read has none. */
+  weeklyMessages?: Record<string, number>;
 }
 
 /** The last snapshot the site accepted, and whether two scheduled syncs have since been missed. */
@@ -142,6 +144,15 @@ export function validateSnapshot(raw: unknown): { ok: true; snapshot: SnapshotEn
       at(`roleManifest[${i}].color`, Number.isInteger(role["color"]) ? null : "not an integer");
       at(`roleManifest[${i}].ids`, strs(role["ids"]));
     });
+
+  const weekly = raw["weeklyMessages"];
+  if (weekly !== undefined)
+    at(
+      "weeklyMessages",
+      isObject(weekly) && Object.values(weekly).every((n) => Number.isSafeInteger(n) && (n as number) >= 0)
+        ? null
+        : "not a map of counts",
+    );
 
   const catalog = raw["catalog"];
   if (!Array.isArray(catalog)) at("catalog", "not a list");

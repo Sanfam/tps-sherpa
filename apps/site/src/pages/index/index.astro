@@ -11,13 +11,14 @@ import { indexView } from "../../index-view.ts";
 import Base from "../../layouts/Base.astro";
 
 const current = currentSnapshot();
-const view = current && indexView(current.snapshot.catalog, Astro.locals.roles, topics);
+const view = current && indexView(current.snapshot.catalog, Astro.locals.roles, topics, current.snapshot.weeklyMessages);
 // Only the Topics something here carries, so no choice filters to nothing.
 const used = view ? topics.filter((t) => view.docs.some((d) => d.topics.includes(t.label))) : [];
 const day = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" });
 const moment = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" });
 const states = { open: "Open", closed: "Closed", locked: "Locked" };
 const facts = (e: { topics: string[]; tags: string[]; regions: string[] }) => [...e.topics, ...e.tags, ...e.regions].join(" · ");
+const thisWeek = (n: number) => (n > 0 ? `${n} ${n === 1 ? "message" : "messages"} this week` : "");
 const count = (n: number, type: string) => `${n} ${type === "forum" ? "Post" : "Thread"}${n === 1 ? "" : "s"}`;
 ---
 <Base title="Index" members>
@@ -54,6 +55,7 @@ const count = (n: number, type: string) => `${n} ${type === "forum" ? "Post" : "
                 <h2>
                   {s.href ? <a href={s.href}>{s.name}</a> : s.name} <span class="kind">{s.type === "forum" ? "Forum" : "Channel"}</span>
                 </h2>
+                {s.weekly > 0 && <p class="weekly">{thisWeek(s.weekly)}</p>}
                 {s.text && <p class="text">{s.text}</p>}
                 {facts(s) && <p class="facts">{facts(s)}</p>}
                 {s.entries.length > 0 && (
@@ -66,6 +68,7 @@ const count = (n: number, type: string) => `${n} ${type === "forum" ? "Post" : "
                             {e.href ? <a href={e.href}>{e.name}</a> : e.name}
                             {e.state && <span class={`state ${e.state}`}>{states[e.state]}</span>}
                             {e.lastActivity && <time datetime={e.lastActivity}>{day.format(new Date(e.lastActivity))}</time>}
+                            {e.weekly > 0 && <span class="weekly">{thisWeek(e.weekly)}</span>}
                           </p>
                           {e.text && <p class="text">{e.text}</p>}
                           {facts(e) && <p class="facts">{facts(e)}</p>}
@@ -153,9 +156,9 @@ const count = (n: number, type: string) => `${n} ${type === "forum" ? "Post" : "
 
   .index-stale {
     padding: 0.75em 1em;
-    border-left: 4px solid var(--sand);
+    border: 1px solid var(--sand);
     background: var(--surface);
-    border-radius: 0 var(--radius) var(--radius) 0;
+    border-radius: var(--radius);
   }
 
   .index-search {
@@ -194,10 +197,12 @@ const count = (n: number, type: string) => `${n} ${type === "forum" ? "Post" : "
   }
 
   h2 {
-    font-size: var(--step-2);
+    /* About 22px on a phone, where a long Channel name otherwise fills the screen. */
+    font-size: clamp(1.25rem, 1rem + 1.5vw, 1.625rem);
   }
 
   .kind,
+  .weekly,
   .facts,
   time,
   summary {
@@ -219,7 +224,8 @@ const count = (n: number, type: string) => `${n} ${type === "forum" ? "Post" : "
     overflow: hidden;
   }
 
-  .facts {
+  .facts,
+  p.weekly {
     margin: 0.25em 0 0;
   }
 
@@ -240,7 +246,6 @@ const count = (n: number, type: string) => `${n} ${type === "forum" ? "Post" : "
 
   li {
     padding: 0.6rem 0 0.6rem 1rem;
-    border-left: 3px solid var(--line);
   }
 
   li + li {
