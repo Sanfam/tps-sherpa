@@ -2,6 +2,7 @@ import { defineMiddleware } from "astro:middleware";
 import { groupsFor, memberRoles } from "./auth.ts";
 import { ADMIN, editorRole } from "./emdash-auth.ts";
 import { startRevisionPruner } from "./emdash-erasure.ts";
+import { startSnapshotPuller } from "./catalog-snapshot.ts";
 
 // Default-deny: every server-rendered route is Member-gated except these.
 const isPublic = (path: string) => path === "/" || path === "/privacy" || path.startsWith("/auth/");
@@ -11,6 +12,8 @@ const isAdminAction = (path: string) => path === "/admin/emdash/purge-history" |
 // request after a start, not at boot: a site nobody visits since its last
 // deploy prunes nothing until someone does (and takes no edits meanwhile).
 startRevisionPruner();
+// Loads the last accepted Catalog snapshot, then pulls the bot's on a timer (ADR-0001).
+startSnapshotPuller();
 
 export const onRequest = defineMiddleware(async (context, next) => {
   // Prerendered pages are public by construction; this runs for them only at build.
@@ -19,6 +22,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   let res: Response;
   if (roles && (!isAdminAction(context.url.pathname) || editorRole(roles) === ADMIN)) {
     context.locals.groups = groupsFor(roles);
+    context.locals.roles = roles;
     res = await next();
   } else {
     res = context.redirect("/");
