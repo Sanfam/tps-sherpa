@@ -2,14 +2,15 @@
  * Fills the empty fields of the CMS's `works` entries (year, link,
  * description, cover) from Open Library, in two steps with a file an editor
  * reads in between (the owner asked to "enrich the details for the missing
- * books/works"). It never changes a field that has a value.
+ * books/works"). It never changes a field that has a value, except the
+ * cover and creators in a `--standardize` plan.
  *
  * Like import-wiki.ts it goes through EmDash's REST API on a running site,
  * signed in with the site's session cookie, so each fill is an edit EmDash
  * records in the entry's revisions.
  *
  *   SITE_COOKIE='better-auth.session_token=…' node scripts/enrich-works.ts \
- *     --site <origin> --plan <out.json>
+ *     --site <origin> --plan <out.json> [--standardize]
  *   SITE_COOKIE='better-auth.session_token=…' node scripts/enrich-works.ts \
  *     --site <origin> --apply <plan.json> [--dry-run]
  *
@@ -25,14 +26,33 @@
  * works of another kind, are listed under `unmatched` with the reason;
  * nothing is guessed for them.
  *
+ * `--standardize` (the owner asked to "fix/standardize the books regardless")
+ * looks up every book-kind entry, filled or not, and also plans under
+ * `replace`, each as `from` (the value now) and `to`: Open Library's cover in
+ * place of a cover that is not already it, and the creators as Open Library
+ * spells them where a name's letters differ ("Steven King" to "Stephen
+ * King"). Year, link and description are still only filled when empty. Under
+ * `terms` it plans relabelling the `work_kind` terms the import created with
+ * lowercase labels ("video game" to "Video game"); their slugs stay.
+ *
  * Read the plan before applying it. `--apply` fills only works whose
  * confidence is `high`: change a `low` one to `high` once you have checked its
  * match, and delete a work, or one of its proposed values, to leave it out.
- * Each work is read again and only fields still empty are set; the cover is
- * uploaded to the media library as the import does. The entry is saved and
+ * Each work is read again and only fields still empty are set, and a
+ * replacement only where the field still holds its `from`; the cover is
+ * uploaded to the media library as the import does. A term is relabelled only
+ * while its label is still its `from`. The entry is saved and
  * published. An entry that is unpublished, or has unpublished changes, is
  * left alone, since publishing it would publish an editor's work in progress.
  * `--dry-run` reads the site and fetches the covers but writes nothing.
+ *
+ * Two limits of `--standardize`, both only on a re-run:
+ * - a corrected spelling ("Stephen King") no longer matches the wiki export
+ *   ("Steven King"), so a full re-import of the wiki would create a second
+ *   work; fix the export first if one is ever needed;
+ * - EmDash deduplicates uploads, so a replaced cover can keep its old file
+ *   name, and a later standardize plan may propose it again. Delete it from
+ *   the plan; applying it would only save the same image.
  */
 import { realpathSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
@@ -40,7 +60,10 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { connect, coverField, fetchImage, inRepository, uploadMedia } from "./emdash-api.ts";
 import { workKey } from "./wiki-works.ts";
-import { empty, fillable, firstParagraph, people, pickMatch, type Doc, type Entry, type Proposed } from "./enrichment.ts";
+import {
+  empty, fillable, firstParagraph, people, pickMatch, replaceable, respelled,
+  type Doc, type Entry, type Proposed, type Replace,
+} from "./enrichment.ts";
 
 // Names the script and nothing about who runs it.
 const USER_AGENT = "works-enrich-script/1.0 (catalog metadata lookups; about 1 request a second)";
@@ -53,11 +76,12 @@ const { values: args } = parseArgs({
     site: { type: "string" },
     plan: { type: "string" },
     apply: { type: "string" },
+    standardize: { type: "boolean", default: false },
     "dry-run": { type: "boolean", default: false },
   },
 });
-if (!args.site || !args.plan === !args.apply || (args["dry-run"] && !args.apply)) {
-  throw new Error("usage: --site <origin> (--plan <out.json> | --apply <plan.json> [--dry-run])");
+if (!args.site || !args.plan === !args.apply || (args["dry-run"] && !args.apply) || (args.standardize && !args.plan)) {
+  throw new Error("usage: --site <origin> (--plan <out.json> [--standardize] | --apply <plan.json> [--dry-run])");
 }
 const cookie = process.env["SITE_COOKIE"];
 if (!cookie) throw new Error("SITE_COOKIE is not set");
@@ -72,8 +96,15 @@ type Planned = {
   confidence: "high" | "low";
   match: { key: string; title: string; authors: string[]; editions?: number };
   propose: Proposed;
+  replace?: Replace;
 };
-type Plan = { site: string; works: Planned[]; unmatched: { id: string; title: string; creators?: string; reason: string }[] };
+type Relabel = { slug: string; from: string; to: string };
+type Plan = {
+  site: string;
+  works: Planned[];
+  unmatched: { id: string; title: string; creators?: string; reason: string }[];
+  terms?: Relabel[];
+};
 
 let lastRequest = 0;
 /** A GET to Open Library, at most one a second. */
@@ -101,7 +132,7 @@ async function plan(out: string) {
     if (!title) continue;
     const creators = w.data?.creators || undefined;
     const missing = FIELDS.filter((f) => empty(w.data?.[f]));
-    if (!missing.length) continue;
+    if (!missing.length && !args.standardize) continue;
     const unmatched = (reason: string) => result.unmatched.push({ id: w.id, title, ...(creators && { creators }), reason });
     const { terms } = await api<{ terms: { slug: string; label: string }[] }>("GET", `/content/works/${w.id}/terms/work_kind`);
     if (!terms.some((t) => t.slug === "book" || t.label === "book")) {
@@ -121,13 +152,26 @@ async function plan(out: string) {
       const propose: Proposed = {};
       if (missing.includes("year") && doc.first_publish_year) propose.year = doc.first_publish_year;
       if (missing.includes("link")) propose.link = `${OPEN_LIBRARY}${doc.key}`;
+      const replace: Replace = {};
       let coverId = doc.cover_i;
-      if (missing.includes("description") || (missing.includes("cover") && !coverId)) {
+      if (missing.includes("description") || ((missing.includes("cover") || args.standardize) && !coverId)) {
         const work = await openLibrary<{ description?: string | { value?: string }; covers?: number[] }>(`${OPEN_LIBRARY}${doc.key}.json`);
         if (missing.includes("description")) propose.description = firstParagraph(work.description);
         coverId ??= work.covers?.find((c) => c > 0);
       }
-      if (missing.includes("cover") && coverId) propose.cover = `https://covers.openlibrary.org/b/id/${coverId}-L.jpg`;
+      if (coverId) {
+        const url = `https://covers.openlibrary.org/b/id/${coverId}-L.jpg`;
+        const cover = w.data?.["cover"] as { id?: string; src?: string; filename?: string } | undefined;
+        if (missing.includes("cover")) propose.cover = url;
+        // A cover uploaded from this URL keeps its file name: it is Open Library's already.
+        else if (args.standardize && cover?.filename !== basename(new URL(url).pathname)) {
+          replace.cover = { from: { id: cover?.id, src: cover?.src }, to: url };
+        }
+      }
+      const spelled = args.standardize && creators ? respelled(creators, doc.author_name ?? []) : undefined;
+      if (spelled) replace.creators = { from: creators!, to: spelled };
+      const replacing = Object.keys(replace).length > 0;
+      if (args.standardize && !replacing && !Object.keys(propose).length) continue;
       result.works.push({
         id: w.id,
         title,
@@ -135,10 +179,19 @@ async function plan(out: string) {
         confidence: match.confidence,
         match: { key: doc.key, title: doc.subtitle ? `${doc.title}: ${doc.subtitle}` : doc.title, authors: doc.author_name ?? [], editions: doc.edition_count },
         propose,
+        ...(replacing && { replace }),
       });
     } catch (e) {
       unmatched(`lookup failed: ${(e as Error).message}`);
     }
+  }
+  if (args.standardize) {
+    // The import created the kinds with lowercase labels ("video game"); the slugs stay as they are.
+    const { terms } = await api<{ terms: { slug: string; label: string }[] }>("GET", "/taxonomies/work_kind/terms");
+    result.terms = terms.flatMap((t) => {
+      const to = t.label.charAt(0).toUpperCase() + t.label.slice(1);
+      return t.label === t.label.toLowerCase() && to !== t.label ? [{ slug: t.slug, from: t.label, to }] : [];
+    });
   }
   writeFileSync(file, `${JSON.stringify(result, null, 2)}\n`);
   const low = result.works.filter((w) => w.confidence === "low").length;
@@ -148,7 +201,20 @@ async function plan(out: string) {
 async function apply(from: string) {
   const given = JSON.parse(readFileSync(from, "utf8")) as Plan;
   if (given.site !== site) throw new Error(`the plan was made for ${given.site}, not ${site}`);
-  const report = { filled: [] as string[], skipped: [] as string[], failed: [] as string[], warnings: [] as string[] };
+  const report = {
+    relabelled: [] as string[], filled: [] as string[], skipped: [] as string[], failed: [] as string[], warnings: [] as string[],
+  };
+  for (const t of given.terms ?? []) {
+    if (typeof t.to !== "string" || !t.to.trim()) throw new Error(`work_kind ${t.slug}: the new label is not text`);
+    const path = `/taxonomies/work_kind/terms/${encodeURIComponent(t.slug)}`;
+    const { term } = await api<{ term: { label: string } }>("GET", path);
+    if (term.label !== t.from) {
+      report.skipped.push(`work_kind ${t.slug}: the label is now "${term.label}", not "${t.from}"`);
+      continue;
+    }
+    if (!args["dry-run"]) await api("PUT", path, { label: t.to });
+    report.relabelled.push(`work_kind ${t.slug}: ${t.from} → ${t.to}`);
+  }
   for (const w of given.works) {
     if (w.confidence !== "high") continue;
     const p: Proposed = w.propose;
@@ -157,6 +223,9 @@ async function apply(from: string) {
       if (url !== undefined && new URL(url).protocol !== "https:") throw new Error(`"${w.title}": not an https URL: ${url}`);
     }
     if (p.description !== undefined && typeof p.description !== "string") throw new Error(`"${w.title}": description is not text`);
+    const r: Replace = w.replace ?? {};
+    if (r.cover && new URL(r.cover.to).protocol !== "https:") throw new Error(`"${w.title}": not an https URL: ${r.cover.to}`);
+    if (r.creators && (typeof r.creators.to !== "string" || !r.creators.to.trim())) throw new Error(`"${w.title}": creators is not text`);
 
     const { item, _rev } = await api<{ item: Entry; _rev: string }>("GET", `/content/works/${encodeURIComponent(w.id)}`);
     // The plan was made for this title and these creators: an entry renamed since gets nothing.
@@ -169,18 +238,20 @@ async function apply(from: string) {
       report.skipped.push(`${w.title}: ${verdict.skip}`);
       continue;
     }
+    // A replaced field an editor has changed since the plan keeps the editor's value.
+    const replacing = replaceable(item, r);
     const data: Record<string, unknown> = {};
-    for (const field of verdict.fill) {
-      if (field !== "cover") {
-        data[field] = p[field];
-        continue;
-      }
+    for (const field of verdict.fill) if (field !== "cover") data[field] = p[field];
+    if (replacing.includes("creators")) data["creators"] = r.creators!.to;
+    const cover = verdict.fill.includes("cover") ? p.cover : replacing.includes("cover") ? r.cover!.to : undefined;
+    if (cover) {
+      const creators = (data["creators"] as string | undefined) ?? w.creators;
       try {
-        const { bytes, type } = await fetchImage(p.cover!);
-        if (args["dry-run"]) data["cover"] = p.cover;
+        const { bytes, type } = await fetchImage(cover);
+        if (args["dry-run"]) data["cover"] = cover;
         else {
-          const m = await uploadMedia(api, bytes, basename(new URL(p.cover!).pathname), type);
-          data["cover"] = coverField(m, `${w.title}${w.creators ? ` by ${w.creators}` : ""} (book cover)`);
+          const m = await uploadMedia(api, bytes, basename(new URL(cover).pathname), type);
+          data["cover"] = coverField(m, `${w.title}${creators ? ` by ${creators}` : ""} (book cover)`);
         }
       } catch (e) {
         report.warnings.push(`${w.title}: cover not fetched (${(e as Error).message})`);
@@ -188,7 +259,7 @@ async function apply(from: string) {
     }
     const fields = Object.keys(data);
     if (!fields.length) {
-      report.skipped.push(`${w.title}: no proposed field is empty`);
+      report.skipped.push(`${w.title}: nothing proposed is still empty or still holds its planned value`);
       continue;
     }
     if (args["dry-run"]) {
