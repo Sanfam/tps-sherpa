@@ -9,6 +9,7 @@
  *
  *   SITE_COOKIE='better-auth.session_token=…' node scripts/import-wiki.ts \
  *     --export <dir> --site <origin> [--owners <file>] [--allow-missing-draft] [--dry-run]
+ *     [--rewrite <slug> ...] [--force]
  *
  * `--site` is https, or http on a loopback host only, since the cookie goes to it.
  *
@@ -39,6 +40,13 @@
  * never creates a second entry for a slug, and never rewrites an existing
  * entry's content, so edits made in the CMS since are kept, and so is a
  * failed image in an entry already created.
+ *
+ * `--rewrite <slug>` (repeatable) is the exception: it replaces the content of
+ * those existing pages with a fresh conversion of the export, as a new
+ * revision, and touches nothing else (title, tags, works, other pages, stubs).
+ * It refuses a page edited or unpublished since the import
+ * (`rewrite-guard.ts`), unless `--force` is given. A rewritten page has two
+ * revisions, so rewriting it again needs `--force` too.
  */
 import { execFileSync } from "node:child_process";
 import { lookup, type LookupAddress } from "node:dns";
@@ -48,6 +56,7 @@ import { BlockList, isIP } from "node:net";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 import { markdownToPortableText, restructure, type Block } from "./markdown-to-portable-text.ts";
+import { editedSinceImport } from "./rewrite-guard.ts";
 import { extractBookList, extractSchedule, extractTableWorks, workKey, type Work } from "./wiki-works.ts";
 
 // The stale generated channel index, replaced by the Catalog (owner, 2026-11-14);
@@ -70,8 +79,11 @@ const { values: args } = parseArgs({
     owners: { type: "string" },
     "allow-missing-draft": { type: "boolean", default: false },
     "dry-run": { type: "boolean", default: false },
+    rewrite: { type: "string", multiple: true, default: [] },
+    force: { type: "boolean", default: false },
   },
 });
+const rewrite = args.rewrite!;
 if (!args.export || !args.site) {
   throw new Error("usage: --export <dir> --site <origin> [--owners <file>] [--allow-missing-draft] [--dry-run]");
 }
@@ -150,8 +162,10 @@ for (const p of pages) {
   }
 }
 
+for (const slug of rewrite) if (!paths.has(slug)) throw new Error(`--rewrite: not a page in the export: ${slug}`);
+
 const missingDrafts = DRAFTS.filter((d) => !paths.has(d));
-if (missingDrafts.length && !args["allow-missing-draft"]) {
+if (missingDrafts.length && !args["allow-missing-draft"] && !rewrite.length) {
   throw new Error(`not in the export: ${missingDrafts.join(", ")}. Pass --allow-missing-draft to import without it.`);
 }
 
@@ -180,6 +194,9 @@ const report = {
   drafts: 0,
   /** Slugs that already existed: owner and status reconciled, content left alone. */
   existing: [] as string[],
+  /** Pages whose content `--rewrite` replaced, and those it refused, with why. */
+  rewritten: [] as string[],
+  refusedRewrites: [] as string[],
   /** Draft pages made for links to pages the wiki never had. */
   stubs: [] as string[],
   works: { created: [] as string[], existing: 0, published: 0 },
@@ -541,7 +558,7 @@ const PAGE_FIELDS: Field[] = [
   { slug: "works", label: "Works", type: "reference", validation: { targetCollection: "works", multiple: true } },
 ];
 type Collection = {
-  item: { fields?: { slug: string; type: string; required: boolean; unique: boolean; validation: Record<string, unknown> | null }[] };
+  item: { supports?: string[]; fields?: { slug: string; type: string; required: boolean; unique: boolean; validation: Record<string, unknown> | null }[] };
 };
 // The only fields every imported entry fills. A required field outside these
 // may be left empty; a unique field the import writes may repeat (two works
@@ -685,11 +702,47 @@ async function ensureWork(listed: Work) {
   return item.id;
 }
 
+const keepsRevisions =
+  args["dry-run"] || !rewrite.length || ((await find<Collection>("/schema/collections/pages"))?.item.supports?.includes("revisions") ?? false);
+for (const slug of rewrite) if (!args["dry-run"] && !existing.has(slug)) throw new Error(`--rewrite: no entry for ${slug}`);
+
 for (const page of pages) {
   const { path, created, tags } = page.meta;
   const draft = DRAFTS.includes(path);
   const owner = owners[path] && ownerIds.get(owners[path]);
   const entry = existing.get(path);
+  if (rewrite.length) {
+    if (!rewrite.includes(path)) continue;
+    // The `_rev` read with the state the guard judges: any save after it,
+    // even during the uploads below, makes EmDash refuse the write.
+    let rev = "";
+    if (!args["dry-run"]) {
+      const { item, _rev } = await api<{ item: { status: string; draftRevisionId?: string | null; liveRevisionId?: string | null }; _rev: string }>(
+        "GET",
+        `/content/pages/${entry!.id}`,
+      );
+      rev = _rev;
+      // Publishing promotes the whole draft, so an editor's pending draft is never published for them.
+      if (item.draftRevisionId && item.draftRevisionId !== item.liveRevisionId) {
+        report.refusedRewrites.push(`${path}: an editor has an unpublished draft`);
+        continue;
+      }
+      const { total } = await api<{ total: number }>("GET", `/content/pages/${entry!.id}/revisions?limit=1`);
+      const why = editedSinceImport({ revisions: total, status: item.status, supportsRevisions: keepsRevisions });
+      if (why && !args.force) {
+        report.refusedRewrites.push(`${path}: ${why}`);
+        continue;
+      }
+    }
+    const shaped = prepared.get(path)!;
+    report.warnings.push(...shaped.warnings.map((w) => `${path}: ${w}`));
+    const content = await resolveMedia(shaped.blocks, page.file);
+    report.rewritten.push(args["dry-run"] ? `${path} (dry run: not checked against the site)` : path);
+    if (args["dry-run"]) continue;
+    const saved = await api<{ _rev: string }>("PUT", `/content/pages/${entry!.id}`, { data: { content }, _rev: rev });
+    if (!draft) await api("POST", `/content/pages/${entry!.id}/publish`, { _rev: saved._rev });
+    continue;
+  }
   if (entry) {
     report.existing.push(path);
     if (owner && entry.authorId !== owner) {
@@ -729,7 +782,7 @@ for (const page of pages) {
 }
 
 // A draft stub for each page the wiki linked to but never had, left unpublished.
-for (const path of [...unwritten].sort()) {
+for (const path of rewrite.length ? [] : [...unwritten].sort()) {
   if (existing.has(path)) continue;
   const title = path.split("/").pop()!.replace(/[-_]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase());
   report.stubs.push(path);

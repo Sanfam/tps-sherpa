@@ -238,7 +238,8 @@ a:hover {
 
 .site-nav {
   display: flex;
-  gap: 1.25rem;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -248,7 +249,7 @@ a:hover {
 }
 
 .site-nav a:hover,
-.site-nav a[aria-current="page"] {
+.site-nav a[aria-current] {
   text-decoration: underline;
   text-decoration-color: var(--orange);
   text-decoration-thickness: 2px;
@@ -485,4 +486,25 @@ a.badge:hover svg {
   background: var(--ground-raised);
   padding: 0.1em 0.35em;
   border-radius: 5px;
+}
+
+/* A CMS page's way up: its published ancestors, above the title. After the
+   prose rules, which it overrides inside .prose. */
+ol.crumbs {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+.crumbs li + li {
+  margin-top: 0;
+}
+
+.crumbs li + li::before {
+  content: "/" / "";
+  margin-right: 0.5rem;
 }

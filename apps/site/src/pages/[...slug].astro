@@ -9,6 +9,7 @@ import { PortableText } from "emdash/ui";
 import MediaImage from "../components/MediaImage.astro";
 import Works from "../components/Works.astro";
 import Base from "../layouts/Base.astro";
+import { childrenOf, placeOf, publishedPages, trail } from "../nav.ts";
 
 // Published only, edit mode and preview tokens off. EmDash serves drafts to its
 // edit-mode cookie on the role its own session stored, which outlives a Discord
@@ -20,14 +21,34 @@ const { entry, error } = await runWithContext({ ...getRequestContext(), editMode
 if (error) throw error;
 if (!entry) Astro.response.status = 404;
 const works = entry?.references?.["works"]?.entries ?? [];
+// Its way up and its published pages below it (src/nav.ts).
+const pages = await publishedPages();
+const place = entry ? placeOf(entry.id) : "";
+const up = entry ? trail(pages, place) : [];
+const below = entry ? childrenOf(pages, place) : [];
 ---
 {
   entry ? (
     <Base title={String(entry.data["title"])} members>
       <div class="wrap prose">
+        {up.length > 0 && (
+          <nav aria-label="Breadcrumb">
+            <ol class="crumbs">
+              {up.map((p) => <li><a href={pages.get(p)!.href}>{pages.get(p)!.title}</a></li>)}
+            </ol>
+          </nav>
+        )}
         <h1>{String(entry.data["title"])}</h1>
         <PortableText value={entry.data["content"] as never} components={{ type: { image: MediaImage, gallery: MediaImage } }} />
         {works.length > 0 && <Works works={works} />}
+        {below.length > 0 && (
+          <nav aria-labelledby="in-this-section">
+            <h2 id="in-this-section">In this section</h2>
+            <ul>
+              {below.map((p) => <li><a href={pages.get(p)!.href}>{pages.get(p)!.title}</a></li>)}
+            </ul>
+          </nav>
+        )}
       </div>
     </Base>
   ) : (

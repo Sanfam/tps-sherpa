@@ -21,6 +21,9 @@ export default defineConfig({
   // Absolute URLs for link-preview cards.
   site: site?.origin,
   adapter: node({ mode: "standalone" }),
+  // EmDash's admin links a page to /pages/<slug> while the collection has no
+  // URL pattern; pages are served at their slug.
+  redirects: { "/pages/[...slug]": { status: 301, destination: "/[...slug]" } },
   // The Clubhouse theme's two faces, downloaded at build and self-hosted.
   fonts: [
     {
