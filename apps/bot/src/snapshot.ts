@@ -40,11 +40,13 @@ export const startSnapshotServer = (): Server => {
       }
       res.writeHead(200, { "Content-Type": "application/json", ETag: etag }).end(body);
     } catch (error) {
-      console.error("[snapshot] Could not read the durable store:", error);
+      // Name and code only: a parse error's message can quote a stored row, which may be member text.
+      const { name, code } = error as { name?: string; code?: string };
+      console.error(`[snapshot] Could not read the durable store: ${name ?? "error"}${code ? ` (${code})` : ""}`);
       res.writeHead(500, { "Content-Type": "text/plain" }).end("Snapshot unavailable.");
     }
   });
-  const port = Number(process.env["SNAPSHOT_PORT"] ?? 8081);
+  const port = Number(process.env["SNAPSHOT_PORT"] || 8081);
   // A listen failure must not take Sherpa down with it: the site keeps its last snapshot.
   server.on("error", (error) => console.error("[snapshot] SNAPSHOT ENDPOINT DOWN:", error));
   server.listen(port, "::");

@@ -76,6 +76,9 @@ type Check = (value: unknown) => string | null;
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const str: Check = (v) => (typeof v === "string" ? null : "not a string");
 const strOrNull: Check = (v) => (v === null || typeof v === "string" ? null : "not a string or null");
+// The Index formats it as a date, and an unparseable one would fail every render.
+const dateOrNull: Check = (v) =>
+  v === null || (typeof v === "string" && !Number.isNaN(Date.parse(v))) ? null : "not a date or null";
 const strs: Check = (v) => (Array.isArray(v) && v.every((s) => typeof s === "string") ? null : "not a list of strings");
 const intOrNull: Check = (v) => (v === null || Number.isInteger(v) ? null : "not an integer or null");
 const oneOf =
@@ -100,7 +103,7 @@ const ENTITY: Record<Exclude<keyof CatalogEntity, Optional>, Check> = {
   topics_version: intOrNull,
   thread_state: oneOf("open", "closed", "locked", null),
   last_message_id: strOrNull,
-  last_activity_at: strOrNull,
+  last_activity_at: dateOrNull,
   summary_generated: strOrNull,
   summary_override: strOrNull,
 };
@@ -184,8 +187,8 @@ export function currentSnapshot(): SnapshotView | null {
   return accepted && { snapshot: accepted, stale: isStale(accepted) };
 }
 
-/** Logs `content` and posts it to Staff. Never throws. */
-async function alertStaff(content: string) {
+/** Logs `content` and posts it to Staff; whether Discord took it. Never throws. */
+async function alertStaff(content: string): Promise<boolean> {
   console.error(`[snapshot] ${content}`);
   try {
     const res = await fetch(`https://discord.com/api/v10/channels/${STAFF_CHANNEL}/messages`, {
@@ -195,8 +198,10 @@ async function alertStaff(content: string) {
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) console.error(`[snapshot] Staff alert failed: ${res.status}`);
+    return res.ok;
   } catch (error) {
     console.error("[snapshot] Staff alert failed:", error);
+    return false;
   }
 }
 
@@ -218,6 +223,8 @@ function load() {
 function accept(snapshot: SnapshotEnvelope, etag: string | null) {
   accepted = snapshot;
   acceptedEtag = etag;
+  // A problem that comes back after a good snapshot is news again.
+  alertedReasons.clear();
   const path = snapshotPath();
   const temp = `${path}.${process.pid}.tmp`;
   try {
@@ -234,9 +241,10 @@ async function reject(problems: string[]) {
   const more = problems.length > MAX_PROBLEMS ? `; and ${problems.length - MAX_PROBLEMS} more` : "";
   const reason = `${shown}${more}`;
   if (alertedReasons.has(reason)) return;
-  alertedReasons.add(reason);
   const kept = accepted ? `keeps the one generated ${accepted.generatedAt}` : "has none yet, so it shows as unavailable";
-  await alertStaff(`Site: rejected a Catalog snapshot from the bot; the Index ${kept}. Problems: ${reason}.`);
+  // Marked only once Discord has it, so an alert lost to an outage goes again on the next pull.
+  if (await alertStaff(`Site: rejected a Catalog snapshot from the bot; the Index ${kept}. Problems: ${reason}.`))
+    alertedReasons.add(reason);
 }
 
 /** Fetches the bot's snapshot and accepts or rejects it. A failed fetch keeps what is served. */
@@ -268,12 +276,11 @@ async function tick() {
   const url = process.env["BOT_SNAPSHOT_URL"];
   if (url) await pull(url);
   const stale = accepted !== null && isStale(accepted);
-  if (accepted && stale && !staleAlerted) {
-    await alertStaff(
-      `Site: the Catalog snapshot was generated ${accepted.generatedAt} and two scheduled syncs have since been missed, so the Index marks it out of date.`,
+  if (!stale) staleAlerted = false;
+  else if (!staleAlerted)
+    staleAlerted = await alertStaff(
+      `Site: the Catalog snapshot was generated ${accepted!.generatedAt} and two scheduled syncs have since been missed, so the Index marks it out of date.`,
     );
-  }
-  staleAlerted = stale;
 }
 
 /** One pull and staleness check. A call while one runs shares it, so two never overlap. */

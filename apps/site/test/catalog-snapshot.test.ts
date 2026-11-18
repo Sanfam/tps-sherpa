@@ -17,6 +17,8 @@ const SIX_HOURS = 6 * HOUR;
 // What the bot serves; tests change it between pulls.
 let served: { body: unknown; etag: string };
 let alerts: string[];
+// Discord answering 503 to the Staff channel, as in an outage.
+let discordDown: boolean;
 let dir: string;
 
 /** The module with fresh process state, as after a restart. */
@@ -60,6 +62,7 @@ const envelope = (generatedAt: string, catalog: unknown[], outcome: unknown = { 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "catalog-snapshot-"));
   alerts = [];
+  discordDown = false;
   vi.stubEnv("SITE_SNAPSHOT_PATH", join(dir, "catalog-snapshot.json"));
   vi.stubEnv("BOT_SNAPSHOT_URL", BOT_URL);
   vi.stubEnv("DISCORD_BOT_TOKEN", "test-bot-token");
@@ -70,6 +73,7 @@ beforeEach(() => {
       if (headers.get("If-None-Match") === served.etag) return new Response(null, { status: 304 });
       return new Response(JSON.stringify(served.body), { headers: { ETag: served.etag } });
     }
+    if (input === STAFF_MESSAGES && discordDown) return new Response(null, { status: 503 });
     if (input === STAFF_MESSAGES && headers.get("Authorization") === "Bot test-bot-token") {
       const { content, allowed_mentions } = JSON.parse(String(init.body));
       expect(allowed_mentions).toEqual({ parse: [] });
@@ -180,4 +184,28 @@ test("two missed syncs mark the snapshot stale and alert Staff once, until a fre
   await pullOnce();
   await pullOnce();
   expect(alerts).toHaveLength(2);
+});
+
+test("an alert Discord drops during an outage still reaches Staff once Discord is back", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  const start = Date.parse("2026-11-17T00:00:00.000Z");
+  vi.setSystemTime(start);
+  const { pullOnce } = await site();
+  served = { body: envelope(new Date(start).toISOString(), [entity("1100000000000000001")]), etag: '"g1"' };
+  await pullOnce();
+
+  // The bot stops syncing, and Discord is down just as the snapshot goes stale.
+  vi.setSystemTime(start + 2 * SIX_HOURS + HOUR + 60_000);
+  discordDown = true;
+  await pullOnce();
+  // The bot then serves a broken generation while Discord is still down.
+  served = { body: envelope(new Date().toISOString(), [entity("1100000000000000001", { type: "nope" as never })]), etag: '"b1"' };
+  await pullOnce();
+  expect(alerts).toHaveLength(0);
+
+  discordDown = false;
+  await pullOnce();
+  await pullOnce();
+  expect(alerts.filter((a) => a.includes("out of date"))).toHaveLength(1);
+  expect(alerts.filter((a) => a.includes("rejected"))).toHaveLength(1);
 });
