@@ -465,6 +465,74 @@ describe("User Monitoring's follow-up review (owner, 2026-11-15)", () => {
     );
   });
 
+  it("runs after a restart a follow-up the bot went down in the middle of", async () => {
+    // The bot dies mid-review: the review never comes back.
+    const h = harness({ followup: () => new Promise(() => {}) });
+    await h.watch.check();
+    await h.watch.answer(start(1), "t");
+    h.advance(2 * 24 * 60 * 60 * 1000);
+    await h.watch.tick();
+    const reviewed: string[][] = [];
+    const restarted = createWatch({ ...h.deps, followup: async (...args) => void reviewed.push(args) });
+    await restarted.check();
+    await vi.waitFor(() => expect(reviewed).toEqual([[WATCHED, SETTER, "2026-10-19"]]));
+    // Owed once: done, it is not run again.
+    await restarted.tick();
+    await new Promise((done) => setTimeout(done, 10));
+    expect(reviewed).toHaveLength(1);
+  });
+
+  it("still owes the follow-up when the bot goes down while posting that the watch ended", async () => {
+    const h = harness();
+    await h.watch.check();
+    await h.watch.answer(start(1), "t");
+    h.advance(2 * 24 * 60 * 60 * 1000);
+    // The "has ended" line never comes back: the bot dies there.
+    const dying = createWatch({ ...h.deps, followup: () => new Promise(() => {}), discord: { ...h.deps.discord, send: () => new Promise(() => {}) } });
+    await dying.check();
+    void dying.tick();
+    await new Promise((done) => setTimeout(done, 10));
+    const reviewed: string[] = [];
+    const restarted = createWatch({ ...h.deps, followup: async (memberId) => void reviewed.push(memberId) });
+    await restarted.check();
+    await vi.waitFor(() => expect(reviewed).toEqual([WATCHED]));
+  });
+
+  it("holds a follow-up while the checks fail, runs it once they pass, and drops one held 14 days", async () => {
+    let failing = false;
+    const reviewed: string[] = [];
+    const h = harness({ followup: async (memberId) => void reviewed.push(memberId) });
+    const w = createWatch({
+      ...h.deps,
+      discord: { ...h.deps.discord, access: async () => (failing ? null : { view: true, history: true, send: true, threads: true, memberVisible: false }) },
+    });
+    await w.check();
+    await w.answer(start(1), "t");
+    failing = true;
+    await w.check();
+    h.advance(2 * 24 * 60 * 60 * 1000);
+    await w.tick();
+    await new Promise((done) => setTimeout(done, 10));
+    expect(reviewed).toEqual([]);
+    failing = false;
+    await w.check();
+    await vi.waitFor(() => expect(reviewed).toEqual([WATCHED]));
+
+    // Again, but the checks fail for longer than 14 days: the row goes, unrun.
+    await w.answer(start(1), "t");
+    failing = true;
+    await w.check();
+    h.advance(2 * 24 * 60 * 60 * 1000);
+    await w.tick();
+    h.advance(15 * 24 * 60 * 60 * 1000);
+    await w.tick();
+    expect(withWatchStore((s) => s.nextFollowup(), path)).toBeNull();
+    failing = false;
+    await w.check();
+    await new Promise((done) => setTimeout(done, 10));
+    expect(reviewed).toEqual([WATCHED]);
+  });
+
   it("leaves running, unreviewed, a watch Staff replaced while the tick that read it as expired was waiting on Discord", async () => {
     const reviewed: string[] = [];
     const h = harness({ followup: async (memberId) => void reviewed.push(memberId) });
