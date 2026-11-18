@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeAll, expect, test } from "vitest";
+import { editedSinceImport } from "../scripts/rewrite-guard.ts";
 import { NEVER, concrete, injected } from "./emdash-routes.ts";
 import { BOT_TOKEN, GUILD_ID, guild, mock, startMock, usernames } from "./mock-discord.ts";
 
@@ -659,3 +660,48 @@ test("co-editing: an editor demoted in Discord loses their open room socket with
   ws.close();
   expect(dropped).toBe(true);
 }, 20_000);
+
+// `import-wiki.ts --rewrite` replaces an imported page's content only if no one
+// has touched it since. That rests on EmDash's revisions: an import (create,
+// then publish) leaves one, an editor's save adds one, an unpublish drafts it.
+test("wiki rewrite: an untouched import may be rewritten; an edited or unpublished page may not", async () => {
+  guild.set(STAFF, [MEMBER_ROLE, STAFF_ROLE]);
+  const staff = (await signIn(STAFF)).cookie;
+  const api = async <T,>(method: string, path: string, body?: unknown) => {
+    const res = await fetch(`${SITE}/_emdash/api${path}`, {
+      method,
+      headers: { cookie: staff, "content-type": "application/json", "X-EmDash-Request": "1", Origin: SITE },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    expect(res.ok, `${method} ${path}: ${res.status}`).toBe(true);
+    return ((await res.json()) as { data: T }).data;
+  };
+  const text = (t: string) => [
+    { _type: "block", _key: "b", style: "normal", markDefs: [], children: [{ _type: "span", _key: "s", text: t, marks: [] }] },
+  ];
+  const imported = async (slug: string) => {
+    const { item } = await api<{ item: { id: string } }>("POST", "/content/pages", {
+      slug,
+      createdAt: "2025-01-01T00:00:00.000Z",
+      data: { title: "Imported", content: text("as imported") },
+    });
+    await api("POST", `/content/pages/${item.id}/publish`, { publishedAt: "2025-01-01T00:00:00.000Z" });
+    return item.id;
+  };
+  const verdict = async (id: string) => {
+    const { item } = await api<{ item: { status: string } }>("GET", `/content/pages/${id}`);
+    const { total } = await api<{ total: number }>("GET", `/content/pages/${id}/revisions?limit=1`);
+    return editedSinceImport({ revisions: total, status: item.status, supportsRevisions: true });
+  };
+
+  const untouched = await imported("wiki/untouched");
+  expect(await verdict(untouched)).toBeNull();
+
+  const edited = await imported("wiki/edited");
+  await api("PUT", `/content/pages/${edited}`, { data: { content: text("an editor's words") } });
+  expect(await verdict(edited)).not.toBeNull();
+
+  const unpublished = await imported("wiki/unpublished");
+  await api("POST", `/content/pages/${unpublished}/unpublish`);
+  expect(await verdict(unpublished)).not.toBeNull();
+}, 15_000);
