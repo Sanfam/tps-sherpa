@@ -50,8 +50,10 @@ const text = (w: Work, field: string) => (typeof w.data[field] === "string" ? (w
       const c = document.createElement("canvas");
       c.width = c.height = 1;
       const ctx = c.getContext("2d", { willReadFrequently: true })!;
+      ctx.imageSmoothingQuality = "high";
       ctx.drawImage(img, 0, 0, 1, 1);
-      const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+      const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+      if (a! < 128) return; // mostly transparent: its colour would read as black
       const grey = (r! + g! + b!) / 3;
       const mute = (v: number) => Math.round(v * 0.55 + grey * 0.45);
       img.closest<HTMLElement>(".cover")!.style.backgroundColor = `rgb(${mute(r!)} ${mute(g!)} ${mute(b!)})`;
