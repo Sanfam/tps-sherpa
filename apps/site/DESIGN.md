@@ -234,7 +234,7 @@ A `role="switch"` button in the header, labelled "Dark mode" for assistive tech 
 One shield, one outline, three fills, drawn only in brand constants so it is the same in both modes. Fill cycles sky, sand, navy by index; outline is navy; glyph and stitching are navy on sky and sand, paper on navy. Glyphs are Phosphor Icons bold, vendored in `src/brand/glyphs.ts`, one per Topic slug. A linked badge lifts 4px and tilts -3deg on hover. A `bare` badge drops its caption for graphics. A new club gets a new glyph, never a new shape.
 
 ### Navigation
-Header: crest wordmark (44px circle crest, display 800) left; right side is either a bold "Member sign in" link or, behind the gate, a text nav. Nav links are 700 and unadorned; hover and current page get the 2px orange underline. Footer: hairline rule, soft ink at 0.9375rem.
+Header: crest wordmark (44px circle crest, display 800) left; right side is either a bold "Member sign in" link or, behind the gate, a text nav. Nav links are 700 and unadorned; hover and current page (or section) get the 2px orange underline. Behind the gate the nav is the CMS's own sections (the root `home` and each `<section>/home` page, by title), then Index and Brand kit; the wordmark goes to /members. A CMS page carries its published ancestors as a soft-ink breadcrumb (`.crumbs`, slash-separated) above its title, and its published child pages as a prose list headed "In this section". Footer: hairline rule, soft ink at 0.9375rem.
 
 ### Inputs / Fields
 Surface fill, 2px ink border, 10px corners, min height 3rem, labels in bold above, soft-ink placeholder. Focus uses the global Accent Text ring.
