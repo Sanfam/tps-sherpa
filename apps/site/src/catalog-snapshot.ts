@@ -176,8 +176,10 @@ let started = false;
 let inFlight: Promise<void> | undefined;
 let failing = false;
 let staleAlerted = false;
-// ponytail: one entry per distinct reason, never cleared; a restart clears it.
+// ponytail: one entry per distinct reason, cleared by a good snapshot or a restart.
 const alertedReasons = new Set<string>();
+// Whether Staff alerts are failing to post, so a lasting outage logs once, not every minute.
+let alertsFailing = false;
 
 const isStale = (s: SnapshotEnvelope, now = Date.now()) =>
   now - Date.parse(s.generatedAt) > 2 * s.syncEveryMs + STALE_GRACE_MS;
@@ -187,9 +189,14 @@ export function currentSnapshot(): SnapshotView | null {
   return accepted && { snapshot: accepted, stale: isStale(accepted) };
 }
 
-/** Logs `content` and posts it to Staff; whether Discord took it. Never throws. */
+/**
+ * Logs `content` and posts it to Staff; whether Discord took it. Never throws.
+ * At least once: a reply lost after Discord accepted the post (a timeout) is
+ * a failure, so the next pull may post it again.
+ */
 async function alertStaff(content: string): Promise<boolean> {
-  console.error(`[snapshot] ${content}`);
+  if (!alertsFailing) console.error(`[snapshot] ${content}`);
+  let failure: unknown;
   try {
     const res = await fetch(`https://discord.com/api/v10/channels/${STAFF_CHANNEL}/messages`, {
       method: "POST",
@@ -197,12 +204,17 @@ async function alertStaff(content: string): Promise<boolean> {
       body: JSON.stringify({ content, allowed_mentions: { parse: [] } }),
       signal: AbortSignal.timeout(10_000),
     });
-    if (!res.ok) console.error(`[snapshot] Staff alert failed: ${res.status}`);
-    return res.ok;
+    if (res.ok) {
+      alertsFailing = false;
+      return true;
+    }
+    failure = `status ${res.status}`;
   } catch (error) {
-    console.error("[snapshot] Staff alert failed:", error);
-    return false;
+    failure = error;
   }
+  if (!alertsFailing) console.error("[snapshot] Staff alert failed; retrying each pull, logged once:", failure);
+  alertsFailing = true;
+  return false;
 }
 
 /** Reads the file the last accepted snapshot was written to. A bad file is not served. */

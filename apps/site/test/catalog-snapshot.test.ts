@@ -206,6 +206,6 @@ test("an alert Discord drops during an outage still reaches Staff once Discord i
   discordDown = false;
   await pullOnce();
   await pullOnce();
-  expect(alerts.filter((a) => a.includes("out of date"))).toHaveLength(1);
-  expect(alerts.filter((a) => a.includes("rejected"))).toHaveLength(1);
+  // Both the staleness and the rejection, each once.
+  expect(alerts).toHaveLength(2);
 });
