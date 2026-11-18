@@ -197,6 +197,15 @@ uploaded, no snapshot yet) started normally next time and its row restored.
 With the local state deletion removed from `start.sh`, both post-restart rows
 were lost.
 
+## The Catalog snapshot endpoint
+
+The bot serves `GET /snapshot` on the private network at port 8081
+(`SNAPSHOT_PORT`), bound to `::` for Railway's IPv6-only private networking.
+It is deliberately not `PORT`: the bot service must never get a public domain.
+The site reads it from `BOT_SNAPSHOT_URL`, e.g.
+`http://<bot-service>.railway.internal:8081/snapshot`. Before the first sync it
+answers 503; an unreadable store is logged as `[snapshot]` and answers 500.
+
 ## Erasure in the CMS: purge history and anonymise
 
 Both are Admin actions (holders of `Staff`), checked against the live role, and
@@ -250,7 +259,10 @@ and versioning exactly as for the bot, above.
 
 - **Not replicated:** the session database (`SITE_SESSION_DB`), disposable by
   ADR-0001; losing it signs everyone out. Uploads go to their own R2 bucket
-  (below), which is their only copy.
+  (below), which is their only copy. Nor is the last accepted Catalog
+  snapshot, `$SITE_EMDASH_DIR/catalog-snapshot.json` (or `SITE_SNAPSHOT_PATH`),
+  a cache the site pulls again from `BOT_SNAPSHOT_URL` within a minute of
+  starting. Unset, the site does not pull, and says so in its log.
 - **Heartbeat:** `apps/site/heartbeat.mjs`, loaded ahead of the server,
   rewrites the file's `user_version` hourly. EmDash's own once-a-minute write
   starts only after a request has started its runtime, so an idle site would

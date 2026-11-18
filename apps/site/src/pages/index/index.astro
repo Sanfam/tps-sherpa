@@ -3,11 +3,275 @@
 // renders the Catalog snapshot the site pulls from the bot (ADR-0001); until
 // the site has accepted one, it says the Index is unavailable rather than
 // showing an empty Catalog. Member-gated; must stay server-rendered.
+// Everything shown, and the search data, comes from `indexView`, which keeps
+// only what the User can see in Discord.
+import { topics } from "../../../../../content/config/topics.json";
+import { currentSnapshot } from "../../catalog-snapshot.ts";
+import { indexView } from "../../index-view.ts";
 import Base from "../../layouts/Base.astro";
+
+const current = currentSnapshot();
+const view = current && indexView(current.snapshot.catalog, Astro.locals.roles, topics);
+// Only the Topics something here carries, so no choice filters to nothing.
+const used = view ? topics.filter((t) => view.docs.some((d) => d.topics.includes(t.label))) : [];
+const day = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" });
+const moment = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" });
+const states = { open: "Open", closed: "Closed", locked: "Locked" };
+const facts = (e: { topics: string[]; tags: string[]; regions: string[] }) => [...e.topics, ...e.tags, ...e.regions].join(" · ");
+const count = (n: number, type: string) => `${n} ${type === "forum" ? "Post" : "Thread"}${n === 1 ? "" : "s"}`;
 ---
 <Base title="Index" members>
-  <div class="wrap prose">
+  <div class="wrap index">
     <h1>Index</h1>
-    <p>The Index is not available yet. In Discord, Papa Sherpa's <code>/find</code> points you to the Channels, Forums and Posts that match what you are into.</p>
+    {
+      !current || !view ? (
+        <p>The Index is not available yet. In Discord, Papa Sherpa's <code>/find</code> points you to the Channels, Forums and Posts that match what you are into.</p>
+      ) : (
+        <>
+          <p class="index-updated">
+            Updated <time datetime={current.snapshot.generatedAt}>{moment.format(new Date(current.snapshot.generatedAt))} UTC</time>
+          </p>
+          {current.stale && (
+            <p class="index-stale">This Index may be out of date: the site has missed recent syncs from Discord, so it shows the last one it accepted.</p>
+          )}
+          <form class="index-search" role="search" hidden>
+            <label>
+              Search
+              <input type="search" name="q" autocomplete="off" />
+            </label>
+            <label>
+              Topic
+              <select name="topic">
+                <option value="">All Topics</option>
+                {used.map((t) => <option value={t.label}>{t.label}</option>)}
+              </select>
+            </label>
+          </form>
+          <p class="index-count" aria-live="polite"></p>
+          <div id="index" data-docs={JSON.stringify(view.docs)}>
+            {view.sections.map((s) => (
+              <section data-id={s.id}>
+                <h2>
+                  {s.href ? <a href={s.href}>{s.name}</a> : s.name} <span class="kind">{s.type === "forum" ? "Forum" : "Channel"}</span>
+                </h2>
+                {s.text && <p class="text">{s.text}</p>}
+                {facts(s) && <p class="facts">{facts(s)}</p>}
+                {s.entries.length > 0 && (
+                  <details open={s.entries.length <= 8}>
+                    <summary>{count(s.entries.length, s.type)}</summary>
+                    <ul>
+                      {s.entries.map((e) => (
+                        <li data-id={e.id}>
+                          <p class="head">
+                            {e.href ? <a href={e.href}>{e.name}</a> : e.name}
+                            {e.state && <span class={`state ${e.state}`}>{states[e.state]}</span>}
+                            {e.lastActivity && <time datetime={e.lastActivity}>{day.format(new Date(e.lastActivity))}</time>}
+                          </p>
+                          {e.text && <p class="text">{e.text}</p>}
+                          {facts(e) && <p class="facts">{facts(e)}</p>}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </section>
+            ))}
+          </div>
+        </>
+      )
+    }
   </div>
 </Base>
+
+<script>
+  // Search and the Topic filter hide what does not match, in place. Without
+  // this script the page is the full list, and the form stays hidden.
+  import MiniSearch from "minisearch";
+  import type { SearchDoc } from "../../index-view.ts";
+
+  const root = document.getElementById("index");
+  const form = document.querySelector<HTMLFormElement>(".index-search");
+  if (root && form) {
+    const query = form.elements.namedItem("q") as HTMLInputElement;
+    const topic = form.elements.namedItem("topic") as HTMLSelectElement;
+    const status = document.querySelector(".index-count")!;
+    const docs: SearchDoc[] = JSON.parse(root.dataset.docs!);
+    const search = new MiniSearch<SearchDoc>({
+      fields: ["name", "parent", "text", "topics", "tags", "regions"],
+      searchOptions: { prefix: true, fuzzy: 0.2, combineWith: "AND", boost: { name: 3 } },
+    });
+    search.addAll(docs);
+    const topicsOf = new Map(docs.map((d) => [d.id, d.topics]));
+    const sections = [...root.querySelectorAll<HTMLElement>("section[data-id]")];
+    const collapsed = new Map([...root.querySelectorAll("details")].map((d) => [d, d.open]));
+
+    const apply = () => {
+      const q = query.value.trim();
+      const t = topic.value;
+      let hits: Set<string> | null = null;
+      if (q || t) {
+        const ids = q ? search.search(q).map((r) => r.id as string) : docs.map((d) => d.id);
+        hits = new Set(t ? ids.filter((id) => topicsOf.get(id)?.includes(t)) : ids);
+      }
+      for (const s of sections) {
+        let shown = 0;
+        for (const li of s.querySelectorAll<HTMLElement>("li[data-id]")) {
+          li.hidden = hits !== null && !hits.has(li.dataset.id!);
+          if (!li.hidden) shown++;
+        }
+        const details = s.querySelector("details");
+        if (details) {
+          details.hidden = shown === 0;
+          details.open = hits ? true : collapsed.get(details)!;
+        }
+        s.hidden = hits !== null && !hits.has(s.dataset.id!) && shown === 0;
+      }
+      status.textContent =
+        hits === null ? "" : hits.size === 0 ? "Nothing in the Index matches." : `${hits.size} ${hits.size === 1 ? "match" : "matches"}`;
+    };
+
+    form.hidden = false;
+    form.addEventListener("input", apply);
+    form.addEventListener("submit", (e) => e.preventDefault());
+  }
+</script>
+
+<style>
+  .index {
+    max-width: var(--measure);
+    padding-block: 2rem 4rem;
+  }
+
+  h1 {
+    font-size: var(--step-3);
+  }
+
+  .index-updated,
+  .index-count {
+    color: var(--ink-soft);
+  }
+
+  .index-stale {
+    padding: 0.75em 1em;
+    border-left: 4px solid var(--sand);
+    background: var(--surface);
+    border-radius: 0 var(--radius) var(--radius) 0;
+  }
+
+  .index-search {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.25rem;
+    font-weight: 700;
+  }
+
+  .index-search[hidden] {
+    display: none;
+  }
+
+  .index-search label {
+    display: grid;
+    gap: 0.25rem;
+  }
+
+  .index-search :is(input, select) {
+    font: inherit;
+    font-weight: 400;
+    color: inherit;
+    background: var(--surface);
+    border: 2px solid var(--line);
+    border-radius: 8px;
+    padding: 0.4em 0.6em;
+  }
+
+  .index-search input {
+    min-width: min(20rem, 80vw);
+  }
+
+  section {
+    padding-block: 1.25rem;
+    border-top: 2px dashed var(--line);
+  }
+
+  h2 {
+    font-size: var(--step-2);
+  }
+
+  .kind,
+  .facts,
+  time,
+  summary {
+    color: var(--ink-soft);
+    font-size: 0.9375rem;
+  }
+
+  .kind {
+    font: 400 0.9375rem var(--body);
+    letter-spacing: 0;
+  }
+
+  .text {
+    margin: 0.35em 0 0;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    overflow: hidden;
+  }
+
+  .facts {
+    margin: 0.25em 0 0;
+  }
+
+  details {
+    margin-top: 0.75rem;
+  }
+
+  summary {
+    cursor: pointer;
+    font-weight: 700;
+  }
+
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0 0;
+  }
+
+  li {
+    padding: 0.6rem 0 0.6rem 1rem;
+    border-left: 3px solid var(--line);
+  }
+
+  li + li {
+    margin-top: 0.25rem;
+  }
+
+  .head {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.75rem;
+    font-weight: 700;
+  }
+
+  .state {
+    font-size: 0.8125rem;
+    padding: 0 0.5em;
+    border-radius: 999px;
+    border: 1.5px solid currentColor;
+  }
+
+  .state.open {
+    color: var(--ink);
+  }
+
+  .state:not(.open) {
+    color: var(--ink-soft);
+  }
+
+  time {
+    font-weight: 400;
+  }
+</style>

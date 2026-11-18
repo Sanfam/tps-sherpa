@@ -20,10 +20,14 @@
  * deploy that changes them needs no separate step. That runs beside the
  * gateway: a failure is logged loudly and the commands already registered keep
  * working.
+ *
+ * The Catalog snapshot the site polls is served on a private port, never
+ * `PORT` (snapshot.ts).
  */
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { startSnapshotServer } from "./snapshot.ts";
 import { openDurableStore, withDurableStore } from "./sync/durable-store.ts";
 
 // ponytail: a fixed cadence; a config knob when someone needs another one.
@@ -72,6 +76,8 @@ if (import.meta.main) {
 
   // The startup contract: a missing or uninitialised store stops the bot here.
   openDurableStore().close();
+
+  startSnapshotServer();
 
   // Hourly, whether or not the pipeline works: a store that never changes is
   // never snapshotted, and the bucket's lifecycle rule would then delete the
