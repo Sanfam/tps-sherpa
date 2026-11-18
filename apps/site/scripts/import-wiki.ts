@@ -713,9 +713,22 @@ for (const page of pages) {
   const entry = existing.get(path);
   if (rewrite.length) {
     if (!rewrite.includes(path)) continue;
+    // The `_rev` read with the state the guard judges: any save after it,
+    // even during the uploads below, makes EmDash refuse the write.
+    let rev = "";
     if (!args["dry-run"]) {
+      const { item, _rev } = await api<{ item: { status: string; draftRevisionId?: string | null; liveRevisionId?: string | null }; _rev: string }>(
+        "GET",
+        `/content/pages/${entry!.id}`,
+      );
+      rev = _rev;
+      // Publishing promotes the whole draft, so an editor's pending draft is never published for them.
+      if (item.draftRevisionId && item.draftRevisionId !== item.liveRevisionId) {
+        report.refusedRewrites.push(`${path}: an editor has an unpublished draft`);
+        continue;
+      }
       const { total } = await api<{ total: number }>("GET", `/content/pages/${entry!.id}/revisions?limit=1`);
-      const why = editedSinceImport({ revisions: total, status: entry!.status, supportsRevisions: keepsRevisions });
+      const why = editedSinceImport({ revisions: total, status: item.status, supportsRevisions: keepsRevisions });
       if (why && !args.force) {
         report.refusedRewrites.push(`${path}: ${why}`);
         continue;
@@ -724,11 +737,9 @@ for (const page of pages) {
     const shaped = prepared.get(path)!;
     report.warnings.push(...shaped.warnings.map((w) => `${path}: ${w}`));
     const content = await resolveMedia(shaped.blocks, page.file);
-    report.rewritten.push(path);
+    report.rewritten.push(args["dry-run"] ? `${path} (dry run: not checked against the site)` : path);
     if (args["dry-run"]) continue;
-    // `_rev` makes EmDash refuse the write if anyone saved since the check.
-    const { _rev } = await api<{ _rev: string }>("GET", `/content/pages/${entry!.id}`);
-    const saved = await api<{ _rev: string }>("PUT", `/content/pages/${entry!.id}`, { data: { content }, _rev });
+    const saved = await api<{ _rev: string }>("PUT", `/content/pages/${entry!.id}`, { data: { content }, _rev: rev });
     if (!draft) await api("POST", `/content/pages/${entry!.id}/publish`, { _rev: saved._rev });
     continue;
   }
