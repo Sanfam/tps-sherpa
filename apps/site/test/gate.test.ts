@@ -3,7 +3,8 @@
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import type { Server } from "node:http";
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -13,7 +14,13 @@ import { NEVER, concrete, injected } from "./emdash-routes.ts";
 import { BOT_TOKEN, GUILD_ID, guild, mock, startMock, usernames } from "./mock-discord.ts";
 
 const SITE_DIR = join(import.meta.dirname, "..");
-const PORT = 4329;
+// A free port from the OS, so suites running at once (two worktrees) never collide.
+const PORT = await new Promise<number>((resolve) => {
+  const probe = createServer().listen(0, "127.0.0.1", () => {
+    const { port } = probe.address() as AddressInfo;
+    probe.close(() => resolve(port));
+  });
+});
 const SITE = `http://127.0.0.1:${PORT}`;
 const TTL_MS = 1000;
 
