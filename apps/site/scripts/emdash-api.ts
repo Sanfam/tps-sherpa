@@ -124,7 +124,9 @@ export function fetchImage(url: string, hops = 0): Promise<{ bytes: Buffer; type
     const host = u.hostname.replace(/^\[|\]$/g, "");
     // An address literal skips the lookup.
     if (isIP(host) && isBlocked(host)) return fail(new Error(`refused address ${host}`));
-    const req = get(u, { lookup: publicLookup as never, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }, (res) => {
+    // Wikimedia refuses requests without a User-Agent.
+    const headers = { "User-Agent": "tps-sherpa-site-import" };
+    const req = get(u, { headers, lookup: publicLookup as never, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }, (res) => {
       const status = res.statusCode ?? 0;
       if (status >= 300 && status < 400 && res.headers.location) {
         res.resume();
