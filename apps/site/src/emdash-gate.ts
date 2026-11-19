@@ -6,22 +6,27 @@
  *
  * Roles are the live ones on the site session (memberRoles), so a removed role
  * shuts EmDash's public `search` too, where EmDash itself would trust the role
- * it stored last.
+ * it stored last. A request carrying an EmDash API token is held to its
+ * holder's live roles instead (tokenRole, below).
  */
+import { createHash } from "node:crypto";
 import dc from "node:diagnostics_channel";
 import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
+import { DatabaseSync } from "node:sqlite";
 import type { MiddlewareHandler } from "astro";
-import { memberRoles, rolesTtl } from "./auth.ts";
+import { liveRoles, memberRoles, rolesTtl } from "./auth.ts";
 import { ADMIN, editorRole } from "./emdash-auth.ts";
+import { dbPath } from "./emdash-erasure.ts";
 
 // Route patterns as EmDash injects them (integration/routes.ts, 1.5.0).
 
 /** Refused to everyone, and checked first: a parameter in an allowed pattern
  * would otherwise match some of these static paths. Credential routes are here,
- * because every credential must come from the site session. */
+ * because every credential must come from the site session or an API token
+ * the gate holds to its holder's live roles. */
 export const REFUSED = [
-  // EmDash's OAuth server, device flow, API tokens, OAuth clients and MCP.
+  // EmDash's OAuth server, device flow, OAuth clients and plugins' MCP.
   "/.well-known/oauth-authorization-server/_emdash",
   "/.well-known/oauth-protected-resource",
   "/_emdash/.well-known/auth",
@@ -33,11 +38,8 @@ export const REFUSED = [
   "/_emdash/api/oauth/token",
   "/_emdash/api/oauth/token/refresh",
   "/_emdash/api/oauth/token/revoke",
-  "/_emdash/api/admin/api-tokens",
-  "/_emdash/api/admin/api-tokens/[id]",
   "/_emdash/api/admin/oauth-clients",
   "/_emdash/api/admin/oauth-clients/[id]",
-  "/_emdash/api/mcp",
   "/_emdash/api/admin/plugins/[id]/mcp",
   // Signed URLs and tokens that outlive the role (ADR-0002, item 1).
   "/_emdash/api/content/[collection]/[id]/preview-url",
@@ -121,6 +123,14 @@ export const MEMBER = ["/_emdash/api/media/file/[...key]"];
 
 /** Admins on the live role: EmDash's setup is unauthenticated until done. */
 export const ADMINS = ["/_emdash/api/setup", "/_emdash/api/setup/status"];
+
+/** Admins on the live role, through the site session only: their own EmDash
+ * API tokens. No token reaches them, so no token mints another (owner, 2026-11-18). */
+export const TOKENS = ["/_emdash/api/admin/api-tokens", "/_emdash/api/admin/api-tokens/[id]"];
+
+/** EmDash's MCP endpoint, which EmDash serves to bearer tokens only: here, to
+ * an API token whose holder's live role still allows it (owner, 2026-11-18). */
+export const MCP = ["/_emdash/api/mcp"];
 
 /** Admins and Authors on the live role; EmDash's own permissions decide the rest. */
 export const EDITORS = [
@@ -253,7 +263,17 @@ const matcher = (patterns: string[]) => {
 const isRefused = matcher(REFUSED);
 const isMember = matcher(MEMBER);
 const isAdmin = matcher(ADMINS);
+const isTokens = matcher(TOKENS);
+const isMcp = matcher(MCP);
 const isEditor = matcher(EDITORS);
+
+const normalise = (rawPath: string) => {
+  try {
+    return decodeURIComponent(rawPath).toLowerCase().replace(/\/+/g, "/").replace(/(.)\/$/, "$1");
+  } catch {
+    return null;
+  }
+};
 
 /**
  * Who may reach a path: "site" for a path the gate leaves to the site, or the
@@ -262,22 +282,90 @@ const isEditor = matcher(EDITORS);
  * spelling of a refused route cannot slip past its pattern; a spelling that is
  * not a route at all is refused.
  */
-export function place(rawPath: string): "site" | "member" | "editor" | "admin" | null {
-  let path: string;
-  try {
-    path = decodeURIComponent(rawPath).toLowerCase().replace(/\/+/g, "/").replace(/(.)\/$/, "$1");
-  } catch {
-    return null;
-  }
+export function place(rawPath: string): "site" | "member" | "editor" | "admin" | "tokens" | "mcp" | null {
+  const path = normalise(rawPath);
+  if (path === null) return null;
   if (!(path === "/_emdash" || path.startsWith("/_emdash/") || path.startsWith("/.well-known/"))) return "site";
   if (isRefused(path)) return null;
   if (isMember(path)) return "member";
   if (isAdmin(path)) return "admin";
+  if (isTokens(path)) return "tokens";
+  if (isMcp(path)) return "mcp";
   if (isEditor(path)) return "editor";
   return null;
 }
 
+// Editors' routes EmDash serves without reading a token's scopes (PUBLIC_API_EXACT,
+// astro/middleware/auth.ts), so no token reaches them; nor uploaded files, for
+// the same reason.
+const isPublicToEmDash = matcher(["/_emdash/api/search", "/_emdash/api/search/suggest", "/_emdash/api/auth/mode"]);
+
 const isUploadUrl = (path: string) => path.toLowerCase().replace(/\/+$/, "") === "/_emdash/api/media/upload-url";
+
+// The live EmDash role of a token holder's Discord account, kept for the role
+// TTL and dropped at its end, refusals and failed lookups too, and shared by
+// requests while a lookup is in flight: a client's burst spends the bot token
+// once per TTL. Only the role level is kept, never the account's role IDs. A
+// Discord outage refuses the account's tokens for a TTL.
+const holders = new Map<string, Promise<number | null>>();
+function liveLevel(discordId: string) {
+  let level = holders.get(discordId);
+  if (!level) {
+    const entry = (level = liveRoles(discordId).then((roles) => roles && editorRole(roles)).catch(() => null));
+    holders.set(discordId, entry);
+    setTimeout(() => holders.get(discordId) === entry && holders.delete(discordId), rolesTtl()).unref();
+  }
+  return level;
+}
+
+/**
+ * The live EmDash role of an API token's holder, or null when they may not use
+ * it now; undefined for a bearer EmDash would not take as an API token (an
+ * OAuth token, say) or one it does not know.
+ *
+ * EmDash resolves a token to its `users` row and acts on the role stored there
+ * (astro/middleware/auth.ts, handleBearerAuth), which only a session request
+ * brings up to date. So the token is looked up as EmDash looks it up, by the
+ * SHA-256 of the whole token (auth/api-tokens.ts), read-only, and its holder's
+ * Discord account, the snowflake in their address, must still be a Member with
+ * a live editor role at least the stored one. Expiry and revocation are
+ * EmDash's to refuse.
+ *
+ * A token with the `admin` scope, a transfer scope or an `mcp:tools` scope is
+ * refused. Through MCP the first two start whole-site exports and imports,
+ * which the gate refuses on EmDash's own routes (Litestream is the backup), and
+ * the last runs plugins' tools, plugin code the gate refuses everywhere else.
+ */
+async function tokenRole(token: string) {
+  if (!token.startsWith("ec_pat_")) return undefined;
+  let holder: { email: string; role: number; scopes: string[] } | undefined;
+  try {
+    const db = new DatabaseSync(dbPath(), { readOnly: true });
+    try {
+      const row = db
+        .prepare("SELECT u.email, u.role, t.scopes FROM _emdash_api_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ?")
+        .get(createHash("sha256").update(token).digest("base64url")) as { email: string; role: number; scopes: string } | undefined;
+      holder = row && { ...row, scopes: JSON.parse(row.scopes) as string[] };
+    } finally {
+      db.close();
+    }
+  } catch {
+    return undefined;
+  }
+  if (!holder) return undefined;
+  if (holder.scopes.some((scope) => scope === "admin" || scope.startsWith("transfer:") || scope.startsWith("mcp:tools"))) return null;
+  const discordId = /^(\d+)@discord\.local$/.exec(holder.email)?.[1];
+  const role = discordId ? await liveLevel(discordId) : null;
+  return role !== null && role >= holder.role ? role : null;
+}
+
+/** The bearer token a request carries, read as EmDash reads it; EmDash takes
+ * one over the session whenever it is sent (handleBearerAuth), so the gate
+ * holds such a request to the token alone. */
+export function bearerToken(headers: Headers) {
+  const header = headers.get("Authorization");
+  return header?.startsWith("Bearer ") && header.length > 7 ? header.slice(7) : null;
+}
 
 export const onRequest: MiddlewareHandler = async (context, next) => {
   const need = place(context.url.pathname);
@@ -295,10 +383,26 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
     return new Response(null, { status: 503 });
   }
 
+  const token = bearerToken(context.request.headers);
+  if (token !== null) {
+    // MCP and the editors' routes on which EmDash enforces the token's scopes,
+    // only. EmDash tells its API routes by exact, case-sensitive prefixes, so a
+    // spelling Astro still routes (`/_EMDASH/api/...`) would reach an EmDash
+    // route without its reading the token. A token's path, as sent, must
+    // already be in its one spelling.
+    const path = new URL(context.request.url).pathname;
+    if (!(need === "mcp" || need === "editor") || normalise(path) !== path || isPublicToEmDash(path)) return refuse();
+    const role = await tokenRole(token);
+    if (role === undefined) return new Response(null, { status: 401 });
+    return role !== null ? next() : new Response(null, { status: 403 });
+  }
+  if (need === "mcp") return refuse();
+
   const { roles, setCookie } = await memberRoles(context.request.headers);
   const role = roles && editorRole(roles);
   const allowed =
-    roles !== null && (need === "member" || (need === "editor" && role !== null) || (need === "admin" && role === ADMIN));
+    roles !== null &&
+    (need === "member" || (need === "editor" && role !== null) || ((need === "admin" || need === "tokens") && role === ADMIN));
   const res = allowed ? await next() : refuse();
   // Better Auth's renewal of the session cookie, as the site's middleware does.
   for (const cookie of setCookie) res.headers.append("Set-Cookie", cookie);

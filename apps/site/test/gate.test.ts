@@ -1,6 +1,7 @@
 // The Phase 4 mechanical gate, end to end: the built site against a mock
 // Discord, on a fresh session database.
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
@@ -491,7 +492,7 @@ test("gate: each kind of caller reaches only the routes placed for it", async ()
     ["GET", "/_emdash/api/search?q=x", ["author", "admin"]],
     ["GET", "/_emdash/api/setup/status", ["admin"]],
     ["GET", "/_emdash/api/snapshot", []],
-    ["GET", "/_emdash/api/admin/api-tokens", []],
+    ["GET", "/_emdash/api/admin/api-tokens", ["admin"]],
     ["POST", "/_emdash/api/content/pages/x1/preview-url", []],
     ["POST", "/_emdash/api/mcp", []],
     ["GET", "/.well-known/oauth-protected-resource", []],
@@ -534,6 +535,105 @@ test("gate: each kind of caller reaches only the routes placed for it", async ()
     const res = await at("/_emdash/admin", cookie);
     const home = res.status === 302 && res.headers.get("location") === "/";
     expect(home, `${who}: ${res.status} ${res.headers.get("location")}`).toBe(who === "viewer" || who === "member");
+  }
+}, 20_000);
+
+// An Admin connects a machine client (Claude Code) to EmDash's MCP with an API
+// token made in the CMS (owner, 2026-11-18). EmDash acts on the role stored on
+// the token's holder, which a Discord role loss does not touch.
+const TOKEN_ADMIN = "900000000000000011";
+async function apiToken(cookie: string, scopes: string[]) {
+  const res = await fetch(`${SITE}/_emdash/api/admin/api-tokens`, {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json", "X-EmDash-Request": "1", Origin: SITE },
+    body: JSON.stringify({ name: "claude-code", scopes }),
+  });
+  expect(res.status).toBe(201);
+  return ((await res.json()) as { data: { token: string } }).data.token;
+}
+const mcp = (token: string, cookie = "") =>
+  fetch(`${SITE}/_emdash/api/mcp`, {
+    method: "POST",
+    redirect: "manual",
+    headers: {
+      authorization: `Bearer ${token}`,
+      cookie,
+      "content-type": "application/json",
+      accept: "application/json, text/event-stream",
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+  });
+
+test("MCP: an Admin's API token works while they hold Staff, and stops within the TTL once it is removed", async () => {
+  guild.set(TOKEN_ADMIN, [MEMBER_ROLE, STAFF_ROLE]);
+  const token = await apiToken((await signIn(TOKEN_ADMIN)).cookie, ["content:read"]);
+
+  // A client's burst spends the bot token once.
+  mock.memberLookups = 0;
+  const burst = await Promise.all(Array.from({ length: 10 }, () => mcp(token)));
+  expect(burst.map((r) => r.status)).toEqual(Array(10).fill(200));
+  expect(await burst[0]!.text()).toContain("content_list");
+  expect(mock.memberLookups).toBe(1);
+
+  guild.set(TOKEN_ADMIN, [MEMBER_ROLE]);
+  await new Promise((r) => setTimeout(r, TTL_MS + 100));
+  expect((await mcp(token)).status).toBe(403);
+  // EmDash takes the token over a session, so another Admin's cookie beside it changes nothing.
+  guild.set(STAFF, [MEMBER_ROLE, STAFF_ROLE]);
+  expect((await mcp(token, (await signIn(STAFF)).cookie)).status).toBe(403);
+}, 10_000);
+
+test("MCP: an OAuth access token, or an API token with a scope past the gate's refusals, is refused", async () => {
+  // Another Admin: the one above is refused, and cached so, for a TTL.
+  const ADMIN_TWO = "900000000000000012";
+  guild.set(ADMIN_TWO, [MEMBER_ROLE, STAFF_ROLE]);
+  const cookie = (await signIn(ADMIN_TWO)).cookie;
+  expect((await mcp(await apiToken(cookie, ["content:read"]))).status).toBe(200);
+  // Whole-site exports over MCP: `transfer:export` itself, and `admin`, which
+  // grants it. Plugins' MCP tools: `mcp:tools`.
+  for (const scope of ["transfer:export", "admin", "mcp:tools"]) {
+    expect((await mcp(await apiToken(cookie, [scope]))).status, scope).toBe(403);
+  }
+
+  // An access token as EmDash's OAuth server would have issued one, planted
+  // because that server is refused: EmDash itself would accept it.
+  const raw = "ec_oat_zqxplantedaccesstokenqz";
+  const rw = new DatabaseSync(join(tmp, "emdash.db"));
+  const { id } = rw.prepare("select id from users where email = ?").get(`${ADMIN_TWO}@discord.local`) as { id: string };
+  rw.prepare("insert into _emdash_oauth_tokens (token_hash, token_type, user_id, scopes, expires_at) values (?, 'access', ?, ?, ?)").run(
+    createHash("sha256").update(raw).digest("base64url"),
+    id,
+    JSON.stringify(["content:read"]),
+    new Date(Date.now() + 3_600_000).toISOString(),
+  );
+  rw.close();
+  expect((await mcp(raw)).status).toBe(401);
+});
+
+// On uploaded files and search EmDash reads no token and checks no scope, so
+// a token made for settings alone would read Member-only files and content.
+test("API tokens: a token reaches no route EmDash serves without checking its scopes", async () => {
+  const ADMIN_THREE = "900000000000000013";
+  guild.set(ADMIN_THREE, [MEMBER_ROLE, STAFF_ROLE]);
+  const token = await apiToken((await signIn(ADMIN_THREE)).cookie, ["settings:read"]);
+  mkdirSync(join(tmp, "uploads"), { recursive: true });
+  writeFileSync(join(tmp, "uploads", "token-test.txt"), "zqxuploadqz");
+  const get = (path: string) => fetch(`${SITE}${path}`, { redirect: "manual", headers: { authorization: `Bearer ${token}` } });
+  expect((await get("/_emdash/api/settings")).status).toBe(200); // the token works where EmDash checks its scope
+  // EmDash tells its API routes by exact, case-sensitive prefixes; a spelling
+  // Astro still routes could reach its admin manifest past the token's scopes.
+  expect((await get("/_emdash/api/manifest")).status).toBe(403); // EmDash: the scope is missing
+  for (const path of [
+    "/_emdash/api/media/file/token-test.txt",
+    "/_emdash/api/search?q=live",
+    "/_emdash/api/search/suggest?q=li",
+    "/%5femdash/api/manifest",
+    "/_EMDASH/api/manifest",
+    "/_emdash//api/manifest",
+  ]) {
+    const res = await get(path);
+    expect(res.status, path).toBe(404);
+    expect(await res.text(), path).not.toContain("zqxuploadqz");
   }
 });
 

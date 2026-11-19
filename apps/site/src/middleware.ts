@@ -1,6 +1,7 @@
 import { defineMiddleware } from "astro:middleware";
 import { groupsFor, memberRoles } from "./auth.ts";
 import { ADMIN, editorRole } from "./emdash-auth.ts";
+import { bearerToken, place } from "./emdash-gate.ts";
 import { startRevisionPruner } from "./emdash-erasure.ts";
 import { startSnapshotPuller } from "./catalog-snapshot.ts";
 
@@ -18,6 +19,9 @@ startSnapshotPuller();
 export const onRequest = defineMiddleware(async (context, next) => {
   // Prerendered pages are public by construction; this runs for them only at build.
   if (context.isPrerendered || isPublic(context.url.pathname)) return next();
+  // An EmDash API token's request carries no session. The gate, ahead of all
+  // of EmDash, has already held it to its holder's live roles.
+  if (place(context.url.pathname) !== "site" && bearerToken(context.request.headers) !== null) return next();
   const { roles, setCookie } = await memberRoles(context.request.headers);
   let res: Response;
   if (roles && (!isAdminAction(context.url.pathname) || editorRole(roles) === ADMIN)) {

@@ -17,6 +17,8 @@ export const unread = injectors.reduce((n, fn) => n + (fn.match(/pattern:/g)?.le
 /** A path for a pattern, with every parameter filled. */
 export const concrete = (pattern: string) => pattern.replace(/\[\.\.\.[^\]]+\]/g, "a/b").replace(/\[[^\]]+\]/g, "x1");
 
-/** Credentials, whole-site exports, and code from outside: refused to everyone. */
+/** Credentials, whole-site exports, and code from outside: refused to everyone.
+ * Not API tokens and MCP: an Admin's session reaches the one, a token on its
+ * holder's live role the other (owner, 2026-11-18); gate.test.ts holds both. */
 export const NEVER =
-  /oauth|well-known|api-tokens|\/mcp|preview-url|visual-editing|send-recovery|upload-url|setup\/admin|\/dev-|snapshot|backups|transfer|plugin|import\/|\/dev\/|typegen|themes|core-update/;
+  /oauth|well-known|preview-url|visual-editing|send-recovery|upload-url|setup\/admin|\/dev-|snapshot|backups|transfer|plugin|import\/|\/dev\/|typegen|themes|core-update/;
