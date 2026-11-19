@@ -9,7 +9,7 @@
  *
  *   SITE_COOKIE='better-auth.session_token=…' node scripts/import-wiki.ts \
  *     --export <dir> --site <origin> [--owners <file>] [--allow-missing-draft] [--dry-run]
- *     [--rewrite <slug> ...] [--force]
+ *     [--rewrite <slug> ...] [--force] [--stage]
  *
  * `--site` is https, or http on a loopback host only, since the cookie goes to it.
  *
@@ -47,6 +47,17 @@
  * It refuses a page edited or unpublished since the import
  * (`rewrite-guard.ts`), unless `--force` is given. A rewritten page has two
  * revisions, so rewriting it again needs `--force` too.
+ *
+ * `--stage` stages pages for Staff review and never publishes a page or
+ * changes a live one: new pages are created unpublished, a re-run neither
+ * publishes nor reassigns existing ones, and `--rewrite` saves a pending draft
+ * revision (with the page's full works list) that leaves live content
+ * untouched. It also lets `--rewrite` fill an untouched unpublished stub. A
+ * work the run creates is still published, since it shows only through a page
+ * that references it and only the staged drafts do; an existing unpublished
+ * work is left as it is, since a live page may already reference it.
+ * A page's `kind` front matter (one of WORK_KINDS, default "book") is the kind
+ * of the works extracted from it.
  */
 import { readFileSync, readdirSync, realpathSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
@@ -76,11 +87,12 @@ const { values: args } = parseArgs({
     "dry-run": { type: "boolean", default: false },
     rewrite: { type: "string", multiple: true, default: [] },
     force: { type: "boolean", default: false },
+    stage: { type: "boolean", default: false },
   },
 });
 const rewrite = args.rewrite!;
 if (!args.export || !args.site) {
-  throw new Error("usage: --export <dir> --site <origin> [--owners <file>] [--allow-missing-draft] [--dry-run]");
+  throw new Error("usage: --export <dir> --site <origin> [--owners <file>] [--allow-missing-draft] [--dry-run] [--rewrite <slug> ...] [--force] [--stage]; a page's `kind` front matter is its works' kind");
 }
 const cookie = process.env["SITE_COOKIE"];
 if (!cookie && !args["dry-run"]) throw new Error("SITE_COOKIE is not set");
@@ -101,7 +113,8 @@ function readPage(file: string) {
       const i = line.indexOf(": ");
       return [line.slice(0, i), JSON.parse(line.slice(i + 2))];
     }),
-  ) as { title: string; path: string; created: string; tags?: string[]; source?: string };
+  ) as { title: string; path: string; created: string; tags?: string[]; source?: string; kind?: string };
+  if (meta.kind !== undefined && !WORK_KINDS.includes(meta.kind)) throw new Error(`${meta.path}: unknown kind "${meta.kind}"`);
   return { file, meta, body };
 }
 
@@ -517,7 +530,7 @@ const firstByTitle = new Map<string, string>();
 const reportedPairs = new Set<string>();
 
 /** The works entry for a book, created and published the first time it is seen. */
-async function ensureWork(listed: Work) {
+async function ensureWork(listed: Work, kind: string) {
   const key = workKey(listed.title, listed.creators);
   const work = mergedWorks.get(key) ?? listed;
   const titleKey = workKey(work.title);
@@ -529,9 +542,12 @@ async function ensureWork(listed: Work) {
   }
   const known = workIds.get(key);
   if (known) {
-    if (unpublishedWorks.delete(known)) {
+    // A live page may already reference this draft work; publishing it would change that page unreviewed.
+    if (!args.stage && unpublishedWorks.delete(known)) {
       await api("POST", `/content/works/${known}/publish`);
       report.works.published++;
+    } else if (args.stage && unpublishedWorks.delete(known)) {
+      report.warnings.push(`works: "${work.title}" is unpublished, so it will not show on a staged page until someone publishes it`);
     }
     if (!report.works.created.includes(work.title)) report.works.existing++;
     return known;
@@ -558,7 +574,7 @@ async function ensureWork(listed: Work) {
       ...(work.link && { link: work.link }),
       ...(work.description && { description: work.description }),
     },
-    taxonomies: { work_kind: [kinds.get("book")] },
+    taxonomies: { work_kind: [kinds.get(kind)] },
   });
   await api("POST", `/content/works/${item.id}/publish`);
   workIds.set(key, item.id);
@@ -580,7 +596,10 @@ for (const page of pages) {
     // even during the uploads below, makes EmDash refuse the write.
     let rev = "";
     if (!args["dry-run"]) {
-      const { item, _rev } = await api<{ item: { status: string; draftRevisionId?: string | null; liveRevisionId?: string | null }; _rev: string }>(
+      const { item, _rev } = await api<{
+        item: { status: string; draftRevisionId?: string | null; liveRevisionId?: string | null; data?: { content?: unknown } };
+        _rev: string;
+      }>(
         "GET",
         `/content/pages/${entry!.id}`,
       );
@@ -591,7 +610,10 @@ for (const page of pages) {
         continue;
       }
       const { total } = await api<{ total: number }>("GET", `/content/pages/${entry!.id}/revisions?limit=1`);
-      const why = editedSinceImport({ revisions: total, status: item.status, supportsRevisions: keepsRevisions });
+      const why = editedSinceImport({ revisions: total, status: item.status, supportsRevisions: keepsRevisions,
+        stage: args.stage,
+        content: item.data?.content,
+      });
       if (why && !args.force) {
         report.refusedRewrites.push(`${path}: ${why}`);
         continue;
@@ -601,18 +623,32 @@ for (const page of pages) {
     report.warnings.push(...shaped.warnings.map((w) => `${path}: ${w}`));
     const content = await resolveMedia(shaped.blocks, page.file);
     report.rewritten.push(args["dry-run"] ? `${path} (dry run: not checked against the site)` : path);
+    // Staging also sends the page's works, as the create path does; the PUT is a pending draft revision.
+    const works: string[] = [];
+    if (args.stage) {
+      for (const work of shaped.works) {
+        const id = await ensureWork(work, page.meta.kind ?? "book");
+        if (!works.includes(id)) works.push(id);
+      }
+    }
     if (args["dry-run"]) continue;
-    const saved = await api<{ _rev: string }>("PUT", `/content/pages/${entry!.id}`, { data: { content }, _rev: rev });
-    if (!draft) await api("POST", `/content/pages/${entry!.id}/publish`, { _rev: saved._rev });
+    const saved = await api<{ _rev: string }>("PUT", `/content/pages/${entry!.id}`, {
+      data: { content },
+      // The full list, even empty, so the draft replaces the live page's works rather than keeping them.
+      ...(args.stage && { references: { works } }),
+      _rev: rev,
+    });
+    if (!draft && !args.stage) await api("POST", `/content/pages/${entry!.id}/publish`, { _rev: saved._rev });
     continue;
   }
   if (entry) {
     report.existing.push(path);
-    if (owner && entry.authorId !== owner) {
+    // Ownership takes effect at once, so staging leaves an existing page's owner alone.
+    if (owner && !args.stage && entry.authorId !== owner) {
       await api("PUT", `/content/pages/${entry.id}`, { authorId: owner });
       report.reassigned++;
     }
-    if (!draft && entry.status !== "published") {
+    if (!draft && !args.stage && entry.status !== "published") {
       await api("POST", `/content/pages/${entry.id}/publish`, { publishedAt: created });
       report.published++;
     }
@@ -624,12 +660,12 @@ for (const page of pages) {
   const content = await resolveMedia(shaped.blocks, page.file);
   const works: string[] = [];
   for (const work of shaped.works) {
-    const id = await ensureWork(work);
+    const id = await ensureWork(work, page.meta.kind ?? "book");
     if (!works.includes(id)) works.push(id);
   }
   const tagSlugs = tags?.length && !args["dry-run"] ? await ensureTerms("tag", tags) : new Map<string, string>();
   report.pages++;
-  report[draft ? "drafts" : "published"]++;
+  report[draft || args.stage ? "drafts" : "published"]++;
   if (owner && owner !== me.id) report.reassigned++;
   if (args["dry-run"]) continue;
 
@@ -641,7 +677,7 @@ for (const page of pages) {
     ...(works.length && { references: { works } }),
   });
   if (owner && owner !== me.id) await api("PUT", `/content/pages/${item.id}`, { authorId: owner });
-  if (!draft) await api("POST", `/content/pages/${item.id}/publish`, { publishedAt: created });
+  if (!draft && !args.stage) await api("POST", `/content/pages/${item.id}/publish`, { publishedAt: created });
 }
 
 // A draft stub for each page the wiki linked to but never had, left unpublished.

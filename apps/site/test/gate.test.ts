@@ -1,6 +1,7 @@
 // The Phase 4 mechanical gate, end to end: the built site against a mock
 // Discord, on a fresh session database.
-import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { execFile, execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { promisify } from "node:util";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
@@ -676,10 +677,11 @@ test("co-editing: an editor demoted in Discord loses their open room socket with
 // `import-wiki.ts --rewrite` replaces an imported page's content only if no one
 // has touched it since. That rests on EmDash's revisions: an import (create,
 // then publish) leaves one, an editor's save adds one, an unpublish drafts it.
-test("wiki rewrite: an untouched import may be rewritten; an edited or unpublished page may not", async () => {
+/** EmDash's REST API as a signed-in Staff member, as the import scripts call it. */
+async function staffApi() {
   guild.set(STAFF, [MEMBER_ROLE, STAFF_ROLE]);
   const staff = (await signIn(STAFF)).cookie;
-  const api = async <T,>(method: string, path: string, body?: unknown) => {
+  return async <T,>(method: string, path: string, body?: unknown) => {
     const res = await fetch(`${SITE}/_emdash/api${path}`, {
       method,
       headers: { cookie: staff, "content-type": "application/json", "X-EmDash-Request": "1", Origin: SITE },
@@ -688,9 +690,13 @@ test("wiki rewrite: an untouched import may be rewritten; an edited or unpublish
     expect(res.ok, `${method} ${path}: ${res.status}`).toBe(true);
     return ((await res.json()) as { data: T }).data;
   };
-  const text = (t: string) => [
-    { _type: "block", _key: "b", style: "normal", markDefs: [], children: [{ _type: "span", _key: "s", text: t, marks: [] }] },
-  ];
+}
+const text = (t: string, key = "b") => [
+  { _type: "block", _key: key, style: "normal", markDefs: [], children: [{ _type: "span", _key: "s", text: t, marks: [] }] },
+];
+
+test("wiki rewrite: an untouched import may be rewritten; an edited or unpublished page may not", async () => {
+  const api = await staffApi();
   const imported = async (slug: string) => {
     const { item } = await api<{ item: { id: string } }>("POST", "/content/pages", {
       slug,
@@ -717,3 +723,92 @@ test("wiki rewrite: an untouched import may be rewritten; an edited or unpublish
   await api("POST", `/content/pages/${unpublished}/unpublish`);
   expect(await verdict(unpublished)).not.toBeNull();
 }, 15_000);
+
+// `--rewrite --stage` fills the draft stubs the import made for pages the wiki
+// linked but never had. A stub an editor has since written in is theirs.
+test("wiki stage: an untouched stub may be filled; a stub an editor wrote in may not", async () => {
+  const api = await staffApi();
+  // As import-wiki.ts makes a stub: created, never published.
+  const stub = async (slug: string) => {
+    const { item } = await api<{ item: { id: string } }>("POST", "/content/pages", {
+      data: { title: "Stub", content: text("This page is still to be written.", "stub") },
+      slug,
+    });
+    return item.id;
+  };
+  const verdict = async (id: string) => {
+    const { item } = await api<{ item: { status: string; data?: { content?: unknown } } }>("GET", `/content/pages/${id}`);
+    const { total } = await api<{ total: number }>("GET", `/content/pages/${id}/revisions?limit=1`);
+    return editedSinceImport({ revisions: total, status: item.status, supportsRevisions: true, stage: true, content: item.data?.content });
+  };
+
+  expect(await verdict(await stub("wiki/stub-untouched"))).toBeNull();
+
+  const written = await stub("wiki/stub-written");
+  await api("PUT", `/content/pages/${written}`, { data: { content: text("an editor's words") } });
+  expect(await verdict(written)).not.toBeNull();
+
+  // An editor who saves the stub text back unchanged still made a revision.
+  const resaved = await stub("wiki/stub-resaved");
+  await api("PUT", `/content/pages/${resaved}`, { data: { content: text("This page is still to be written.", "stub") } });
+  expect(await verdict(resaved)).not.toBeNull();
+}, 15_000);
+
+// Community drafts go in with `import-wiki.ts --stage` for Staff to review: a
+// page that is live must stay exactly as it is until Staff publish the draft.
+test("wiki stage: the importer publishes no page, leaves the live one as it was, and kinds its works", async () => {
+  const api = await staffApi();
+  const cookie = (await signIn(STAFF)).cookie;
+  await fetch(`${SITE}/_emdash/api/auth/me`, { headers: { cookie } }); // a first CMS visit makes the editor
+  type Item = { id: string; status: string; liveRevisionId: string | null; draftRevisionId: string | null };
+  const page = async (id: string) => (await api<{ item: Item }>("GET", `/content/pages/${id}`)).item;
+
+  const { item: live } = await api<{ item: { id: string } }>("POST", "/content/pages", {
+    slug: "staged/live",
+    data: { title: "Live", content: text("what members read today") },
+  });
+  await api("POST", `/content/pages/${live.id}/publish`);
+  const before = await page(live.id);
+  const { item: stub } = await api<{ item: { id: string } }>("POST", "/content/pages", {
+    slug: "staged/stub",
+    data: { title: "Stub", content: text("This page is still to be written.", "stub") },
+  });
+
+  const dir = mkdtempSync(join(tmpdir(), "staged-export-"));
+  const write = (path: string, kind: string, body: string) => {
+    mkdirSync(join(dir, "pages", path, ".."), { recursive: true });
+    const head = [`title: "${path}"`, `path: "${path}"`, `created: "2026-11-18T00:00:00.000Z"`, `kind: "${kind}"`].join("\n");
+    writeFileSync(join(dir, "pages", `${path}.md`), `---\n${head}\n---\n\n# ${path}\n\n${body}\n`);
+  };
+  const films = "| Film |\n|---|\n| Galaxy Quest by Dean Parisot |\n";
+  write("staged/live", "movie", `A community draft.\n\n${films}`);
+  write("staged/stub", "movie", "A filled stub.");
+  write("staged/new", "movie", films);
+  const run = (...args: string[]) =>
+    promisify(execFile)(process.execPath, ["scripts/import-wiki.ts", "--site", SITE, "--export", dir, "--stage", "--allow-missing-draft", ...args], {
+      cwd: SITE_DIR,
+      env: { ...prodEnv, SITE_COOKIE: cookie },
+    });
+  try {
+    await run();
+    await run("--rewrite", "staged/live", "--rewrite", "staged/stub");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  const after = await page(live.id);
+  expect(after.status).toBe("published");
+  expect(after.liveRevisionId).toBe(before.liveRevisionId);
+  expect(after.draftRevisionId).not.toBeNull(); // the draft waits for Staff
+  expect(after.draftRevisionId).not.toBe(after.liveRevisionId);
+  const filled = await page(stub.id);
+  expect(filled.status).toBe("draft");
+  expect(filled.draftRevisionId).not.toBeNull();
+  const { items } = await api<{ items: { slug: string; status: string }[] }>("GET", "/content/pages?limit=100");
+  expect(items.find((p) => p.slug === "staged/new")?.status).toBe("draft");
+
+  const { items: works } = await api<{ items: { id: string; data: { title: string } }[] }>("GET", "/content/works?limit=100");
+  const film = works.find((w) => w.data.title === "Galaxy Quest")!;
+  const { terms } = await api<{ terms: { label: string }[] }>("GET", `/content/works/${film.id}/terms/work_kind`);
+  expect(terms.map((t) => t.label)).toEqual(["movie"]);
+}, 60_000);

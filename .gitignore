@@ -24,3 +24,6 @@ apps/site/.impeccable/hook.cache.json
 # Wiki import owner maps (scripts/import-wiki.ts): page path to member address.
 # Keep them outside the repository; this catches one dropped in by mistake.
 wiki-owners*.json
+
+# Community-drafted pages staged for review (scripts/import-wiki.ts --stage).
+.content-drafts/
