@@ -85,6 +85,7 @@ test("creators are respelled only where a name's letters differ from Open Librar
   expect(respelled("Steven King", ["Stephen King"])).toBe("Stephen King");
   expect(respelled("J. R. R. Tolkien", ["J.R.R. Tolkien"])).toBeUndefined();
   expect(respelled("Gabriel Garcia Marquez", ["Gabriel García Márquez"])).toBeUndefined();
+  expect(respelled("Iain M. Banks", ["Iain Banks"])).toBeUndefined(); // the name he wrote SF under
   // "King, Stephen" reads as two people, and only one is an author: no safe respelling.
   expect(respelled("King, Stephen", ["Stephen King"])).toBeUndefined();
 });
