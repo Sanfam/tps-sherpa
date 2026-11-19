@@ -73,6 +73,12 @@ and the routing rules.
 
 Issues live in this repo's GitHub Issues, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
+### CMS content
+
+To change content already in the CMS, follow "Changing CMS content: the
+preferred strategy" in `docs/runbook.md`: MCP for targeted edits, offline plans
+checked by eye for bulk ones, the reviewed scripts for uploads.
+
 ### Domain docs
 
 Single-context: `CONTEXT.md` at the root, ADRs in `docs/adr/`. See `docs/agents/domain.md`.

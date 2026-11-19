@@ -248,6 +248,82 @@ server-rendered request after a start, then daily. A failure is logged as
 `PASSIVE` WAL checkpoint, which never blocks EmDash's writes; what it can't
 fold back yet, Litestream's own checkpoint folds shortly after.
 
+## Changing CMS content: the preferred strategy
+
+How to change content already in the CMS (works, pages, terms), whether it is
+one field or a hundred entries. Owner's preferred strategy, 2026-11-18, after
+standardising the book club's works. Pick the narrowest step that does the job.
+
+**1. Targeted edits go through EmDash's MCP server.** A field, a label, a few
+entries. Claude Code reaches the CMS as `papa-cms` with an EmDash API token
+(setup below). Read with `content_get`; write with `content_update`, passing the
+`_rev` it returned; then `content_publish` with the `_rev` the update returned,
+since an update to a published entry only stages a draft. A `CONFLICT` means
+someone saved in between: read again. An `ENTRY_LOCKED` names who has the entry
+open: ask before using `overrideLock`. Terms: `taxonomy_update_term`.
+
+**2. Plan bulk changes offline, from a read-only copy of the live data.** Read
+what you need straight from the database, read-only, into a scratch file outside
+the repository:
+
+```sh
+railway ssh -s site -- node -e '
+  const { DatabaseSync } = require("node:sqlite");
+  const db = new DatabaseSync("/data/emdash.db", { readOnly: true });
+  console.log(JSON.stringify(db.prepare("select id, title, creators from ec_works where deleted_at is null").all()));
+' > /path/outside/repo/works.json
+```
+
+Then run the repository's own decision code against it, not a new copy of it:
+for works, `pickMatch` and `respelled` in `apps/site/scripts/enrichment.ts`.
+Write the result in the script's plan format (`enrich-works.ts --plan`), outside
+the repository. Plans and dumps hold editors' text, and some titles name members.
+
+**3. Check anything visual or external by eye before it is applied.** Open
+Library's main cover for a work can be a foreign edition (Wizard's First Rule's
+is German), a film tie-in, an audiobook square or a library scan stamped
+"DISCARDED". Render every proposed image as a contact sheet (an HTML grid,
+screenshotted with headless Chrome), look at it, and swap a bad one for an
+English print edition's cover (`/works/<key>/editions.json`). A matching rule
+that passes its tests can still be wrong about a name: "Iain M. Banks" is not a
+misspelling of "Iain Banks".
+
+**4. Bulk writes with uploads go through the reviewed scripts, run by the
+owner.** Covers and page images need uploading; MCP's `media_upload` takes each
+file as base64 through the agent, which is only practical for one or two.
+`import-wiki.ts` and `enrich-works.ts` upload properly. `enrich-works.ts --apply`
+and `import-wiki.ts --rewrite` guard their content writes with `_rev`; the
+import's first run and `enrich-works.ts`'s term relabels do not, so run those
+when no one is editing. The owner runs them from `apps/site` with their own session cookie,
+`--dry-run` first. The agent prepares and checks the plan file, then verifies the
+result afterwards over MCP.
+
+**Never:** write EmDash's tables directly (it skips EmDash's permissions and
+revisions); make a session by writing to the session table; read the API token
+out of Claude Code's config to hand to a script; put a plan, a dump or a
+member-named slug in the repository.
+
+### Setting up the MCP connection
+
+1. In the CMS: Settings → API Tokens (Admins only). Name it for the client.
+   Scopes: `content:read`, `content:write`, `media:read`, `schema:read`, and
+   `media:write` or `taxonomies:manage` if the work needs them. Never Admin, a
+   Transfer scope or MCP Tools: the gate refuses those tokens (ADR-0002). Expiry
+   30 days. Copy it; it is shown once.
+2. In your own terminal, never a chat: `read -rs EMDASH_MCP_TOKEN && export
+   EMDASH_MCP_TOKEN`, then
+
+   ```sh
+   claude mcp add --transport http papa-cms https://sherpa.omgod.com/_emdash/api/mcp \
+     --header "Authorization: Bearer $EMDASH_MCP_TOKEN"
+   ```
+
+   The URL must be exactly that: the gate refuses any other spelling of a
+   token request's path.
+3. Restart Claude Code. The token works only while its holder is a Member whose
+   live Discord role is at least their CMS role. Revoke it on the same page when
+   the work is done.
+
 ## The site's database: replication and restore
 
 The deployed site starts through `apps/site/start.sh`, `apps/site/Dockerfile`'s

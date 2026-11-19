@@ -90,6 +90,9 @@ export function respelled(creators: string, authors: string[]): string | undefin
     const matches = [...new Set(authors)].filter((a) => samePerson(name, a));
     if (matches.length !== 1) return undefined;
     if (letters(matches[0]!) === letters(name)) continue;
+    // Open Library dropping a word the entry has ("Iain M. Banks" as "Iain Banks") is not a misspelling.
+    const ours = words(name);
+    if (words(matches[0]!).every((w) => ours.includes(w))) continue;
     parts[i] = parts[i]!.replace(name, matches[0]!);
     changed = true;
   }
