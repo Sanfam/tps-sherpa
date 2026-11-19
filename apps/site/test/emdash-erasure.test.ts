@@ -231,6 +231,28 @@ test("anonymisation gives two same-locale editors separate anonymous authors and
   held.close();
 });
 
+// An API token outlives anything done to its holder's name; only the token row's deletion ends it.
+test("anonymisation revokes the editor's API tokens, and no one else's", async () => {
+  const dir = makeDir();
+  const { db } = await migratedDatabase(dir);
+  await sql`
+    INSERT INTO users (id, email, name, role, email_verified) VALUES
+      ('editor-one', '123@discord.local', 'luna', 50, 1),
+      ('editor-two', '456@discord.local', 'nova', 50, 1)
+  `.execute(db);
+  await sql`
+    INSERT INTO _emdash_api_tokens (id, name, token_hash, prefix, user_id, scopes) VALUES
+      ('t1', 'claude-code', 'hash-one', 'ec_pat_aaaa', 'editor-one', '["content:read"]'),
+      ('t2', 'claude-code', 'hash-two', 'ec_pat_bbbb', 'editor-two', '["content:read"]')
+  `.execute(db);
+  await db.destroy();
+
+  anonymiseEditor("123@discord.local");
+  const held = new DatabaseSync(join(dir, "emdash.db"));
+  expect(held.prepare("SELECT id FROM _emdash_api_tokens").all()).toEqual([{ id: "t2" }]);
+  held.close();
+});
+
 test("a transaction that reads then writes keeps the write lock against another process, as Litestream writes", async () => {
   const dir = makeDir();
   const path = join(dir, "race.db");

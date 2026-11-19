@@ -56,8 +56,8 @@
  * work the run creates is still published, since it shows only through a page
  * that references it and only the staged drafts do; an existing unpublished
  * work is left as it is, since a live page may already reference it.
- * A page's `kind` front matter (one of WORK_KINDS, default "book") is the kind
- * of the works extracted from it.
+ * A page's `kind` front matter (one of WORK_KINDS in any case, default "Book")
+ * is the kind of the works extracted from it.
  */
 import { readFileSync, readdirSync, realpathSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
@@ -71,7 +71,7 @@ import { extractBookList, extractSchedule, extractTableWorks, workKey, type Work
 // links to it go to the Index's placeholder path (owner, 2026-11-15).
 const EXCLUDED = ["papasquad/threads-and-channels"];
 const INDEX_PATH = "/index";
-const WORK_KINDS = ["book", "movie", "show", "video game", "board game", "other"];
+const WORK_KINDS = ["Book", "Movie", "Show", "Video game", "Board game", "Other"];
 // Unpublished on the wiki; migrates as a draft (owner, 2026-11-14).
 const DRAFTS = ["entertainment/Need4ReadBookClub/Voting"];
 const ADMIN = 50;
@@ -114,7 +114,11 @@ function readPage(file: string) {
       return [line.slice(0, i), JSON.parse(line.slice(i + 2))];
     }),
   ) as { title: string; path: string; created: string; tags?: string[]; source?: string; kind?: string };
-  if (meta.kind !== undefined && !WORK_KINDS.includes(meta.kind)) throw new Error(`${meta.path}: unknown kind "${meta.kind}"`);
+  if (meta.kind !== undefined) {
+    const label = WORK_KINDS.find((k) => k.toLowerCase() === meta.kind!.toLowerCase());
+    if (!label) throw new Error(`${meta.path}: unknown kind "${meta.kind}"`);
+    meta.kind = label;
+  }
   return { file, meta, body };
 }
 
@@ -402,14 +406,17 @@ for (const email of new Set(Object.values(owners))) {
 }
 if (refused.length) throw new Error(`owners refused for: ${refused.join(", ")}`);
 
-/** Terms by label, creating the missing ones; returns label → slug. */
+/** Terms by label in any case (the first import made the kinds lowercase),
+ * creating the missing ones; returns label → slug. */
 async function ensureTerms(taxonomy: string, labels: string[]) {
   const { terms } = await api<{ terms: { slug: string; label: string }[] }>("GET", `/taxonomies/${taxonomy}/terms`);
-  const slugs = new Map(terms.map((t) => [t.label, t.slug]));
+  const known = new Map(terms.map((t) => [t.label.toLowerCase(), t.slug]));
+  const slugs = new Map<string, string>();
   for (const label of labels) {
-    if (slugs.has(label)) continue;
-    const { term } = await api<{ term: { slug: string } }>("POST", `/taxonomies/${taxonomy}/terms`, { label });
-    slugs.set(label, term.slug);
+    let slug = known.get(label.toLowerCase());
+    slug ??= (await api<{ term: { slug: string } }>("POST", `/taxonomies/${taxonomy}/terms`, { label })).term.slug;
+    known.set(label.toLowerCase(), slug);
+    slugs.set(label, slug);
   }
   return slugs;
 }
@@ -627,7 +634,7 @@ for (const page of pages) {
     const works: string[] = [];
     if (args.stage) {
       for (const work of shaped.works) {
-        const id = await ensureWork(work, page.meta.kind ?? "book");
+        const id = await ensureWork(work, page.meta.kind ?? "Book");
         if (!works.includes(id)) works.push(id);
       }
     }
@@ -660,7 +667,7 @@ for (const page of pages) {
   const content = await resolveMedia(shaped.blocks, page.file);
   const works: string[] = [];
   for (const work of shaped.works) {
-    const id = await ensureWork(work, page.meta.kind ?? "book");
+    const id = await ensureWork(work, page.meta.kind ?? "Book");
     if (!works.includes(id)) works.push(id);
   }
   const tagSlugs = tags?.length && !args["dry-run"] ? await ensureTerms("tag", tags) : new Map<string, string>();

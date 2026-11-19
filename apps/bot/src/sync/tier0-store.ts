@@ -12,7 +12,7 @@
  * removes the names left without one — so it has no retention of its own, and
  * a member with processing off, whose messages are never stored, has none.
  */
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -261,4 +261,33 @@ export const openTier0 = (path: string) => {
 
     close: () => db.close(),
   };
+};
+
+/**
+ * Per Entity, how much is held: every message, members' messages, and the
+ * span all of them were written over. Counts and times only, for the Index's
+ * activity order. Read-only and outside `openTier0`, so the snapshot endpoint
+ * neither creates the cache nor takes a write lock on it; a missing cache has
+ * no activity. WAL readers do not wait on capture's writes.
+ */
+export const readActivity = (
+  path: string,
+): Array<{ entityId: string; held: number; members: number; oldest: string | null; newest: string | null }> => {
+  if (!existsSync(path)) return [];
+  const db = new DatabaseSync(path, { readOnly: true });
+  try {
+    db.exec("PRAGMA busy_timeout = 1000;");
+    return (
+      db
+        .prepare(
+          `SELECT entity_id, COUNT(*) AS held, SUM(author_is_bot = 0) AS members,
+                  MIN(created_at) AS oldest,
+                  MAX(created_at) AS newest
+             FROM message GROUP BY entity_id`,
+        )
+        .all() as Array<{ entity_id: string; held: number; members: number; oldest: string | null; newest: string | null }>
+    ).map((r) => ({ entityId: r.entity_id, held: r.held, members: r.members, oldest: r.oldest, newest: r.newest }));
+  } finally {
+    db.close();
+  }
 };

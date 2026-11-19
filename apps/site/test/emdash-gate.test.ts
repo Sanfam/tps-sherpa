@@ -1,10 +1,10 @@
 // The gate's placement of every EmDash route. Over HTTP, gate.test.ts checks
 // that the hook is wired and each kind of caller gets the right answer.
 import { expect, test } from "vitest";
-import { ADMINS, EDITORS, MEMBER, REFUSED, SITE, place } from "../src/emdash-gate.ts";
+import { ADMINS, EDITORS, MCP, MEMBER, REFUSED, SITE, TOKENS, place } from "../src/emdash-gate.ts";
 import { NEVER, concrete, injected, unread } from "./emdash-routes.ts";
 
-const lists = { refused: REFUSED, member: MEMBER, admin: ADMINS, editor: EDITORS, site: SITE } as const;
+const lists = { refused: REFUSED, member: MEMBER, admin: ADMINS, tokens: TOKENS, mcp: MCP, editor: EDITORS, site: SITE } as const;
 const listed = Object.entries(lists).flatMap(([need, patterns]) => patterns.map((p) => [p, need] as const));
 
 test("EmDash's routes were read, all of them", () => {
@@ -49,7 +49,7 @@ test("other spellings of a refused route are refused", () => {
     "/_EMDASH/api/content/pages/x1/preview-url",
     "/_emdash/api/content/pages/x1%2Fpreview-url",
     "/_emdash//api/content/pages/x1/preview-url",
-    "/_emdash/api/%6Dcp",
+    "/_emdash/api/%73napshot",
     "/_emdash/api/content/%E0%A4%A",
   ]) {
     expect(place(path), path).toBeNull();

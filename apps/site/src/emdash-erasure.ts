@@ -8,7 +8,7 @@ const DAY_MS = 24 * 60 * 60_000;
 const NINETY_DAYS_MS = 90 * DAY_MS;
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-const dbPath = () => `${process.env["SITE_EMDASH_DIR"] ?? ".data"}/emdash.db`;
+export const dbPath = () => `${process.env["SITE_EMDASH_DIR"] ?? ".data"}/emdash.db`;
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
 const tableName = (collection: string) => {
   if (!IDENTIFIER.test(collection)) throw new Error("invalid collection");
@@ -146,7 +146,7 @@ export function anonymiseEditor(email: string) {
   const db = openDatabase();
   try {
     db.exec("BEGIN IMMEDIATE");
-    // EmDash internals `users`, `revisions.author_id`, `ec_*.author_id`, and `_emdash_bylines.user_id` are not extension points.
+    // EmDash internals `users`, `revisions.author_id`, `ec_*.author_id`, `_emdash_bylines.user_id` and `_emdash_api_tokens` are not extension points.
     const editor = db.prepare("SELECT id, name, data FROM users WHERE email = ?").get(email) as
       | { id: string; name: string | null; data: string | null }
       | undefined;
@@ -206,6 +206,8 @@ export function anonymiseEditor(email: string) {
       .prepare("SELECT room_id FROM _emdash_rooms GROUP BY room_id HAVING instr(group_concat(record, '' ORDER BY part), ?) > 0")
       .all(editor.id) as { room_id: string }[];
     dropRooms(db, rooms.map((room) => room.room_id));
+    // Their EmDash API tokens, each of which would go on acting as them.
+    db.prepare("DELETE FROM _emdash_api_tokens WHERE user_id = ?").run(editor.id);
     clearQueueRows(db);
     db.exec("COMMIT");
     checkpoint(db);

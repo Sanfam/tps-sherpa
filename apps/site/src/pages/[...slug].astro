@@ -6,8 +6,10 @@
 import { getEmDashEntry } from "emdash";
 import { getRequestContext, runWithContext } from "emdash/request-context";
 import { PortableText } from "emdash/ui";
+import Heading from "../components/Heading.astro";
 import MediaImage from "../components/MediaImage.astro";
 import Works from "../components/Works.astro";
+import { withHeadingAnchors } from "../heading-ids.ts";
 import Base from "../layouts/Base.astro";
 import { childrenOf, placeOf, publishedPages, trail } from "../nav.ts";
 
@@ -39,7 +41,7 @@ const below = entry ? childrenOf(pages, place) : [];
           </nav>
         )}
         <h1>{String(entry.data["title"])}</h1>
-        <PortableText value={entry.data["content"] as never} components={{ type: { image: MediaImage, gallery: MediaImage } }} />
+        <PortableText value={withHeadingAnchors(entry.data["content"]) as never} components={{ block: Heading, type: { image: MediaImage, gallery: MediaImage } }} />
         {works.length > 0 && <Works works={works} />}
         {below.length > 0 && (
           <nav aria-labelledby="in-this-section">

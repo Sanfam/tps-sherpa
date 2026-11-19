@@ -3,7 +3,7 @@
 // and blurb into a club's works and publishes them; a wrong "empty" overwrites
 // an editor's text or publishes their unfinished draft.
 import { expect, test } from "vitest";
-import { fillable, firstParagraph, pickMatch, type Doc, type Entry } from "../scripts/enrichment.ts";
+import { fillable, firstParagraph, pickMatch, replaceable, respelled, type Doc, type Entry } from "../scripts/enrichment.ts";
 
 // What search.json returned for "the hobbit" (2026-11-17), the graphic-novel
 // adaptation moved first: it shares the title and credits Tolkien too.
@@ -77,4 +77,34 @@ test("an Open Library description gives its first paragraph, without the source 
       "A reluctant [hobbit](https://example.org/h) joins a quest for dragon-guarded gold. ([source][1])\r\n\r\nMore about the book.\r\n\r\n----------\r\n[1]: https://example.org/source",
   };
   expect(firstParagraph(description)).toBe("A reluctant hobbit joins a quest for dragon-guarded gold.");
+});
+
+// A standardize plan replaces set values, so a wrong "differs" writes someone
+// else's name into a club's creators, or churns them over punctuation.
+test("creators are respelled only where a name's letters differ from Open Library's", () => {
+  expect(respelled("Steven King", ["Stephen King"])).toBe("Stephen King");
+  expect(respelled("J. R. R. Tolkien", ["J.R.R. Tolkien"])).toBeUndefined();
+  expect(respelled("Gabriel Garcia Marquez", ["Gabriel García Márquez"])).toBeUndefined();
+  expect(respelled("Iain M. Banks", ["Iain Banks"])).toBeUndefined(); // the name he wrote SF under
+  // "King, Stephen" reads as two people, and only one is an author: no safe respelling.
+  expect(respelled("King, Stephen", ["Stephen King"])).toBeUndefined();
+});
+
+test("co-authors keep the entry's order and separators, and Open Library's extra credits are not added", () => {
+  const authors = ["Terry Pratchett", "Neil Gaiman"];
+  expect(respelled("Niel Gaiman and Terry Pratchett", authors)).toBe("Neil Gaiman and Terry Pratchett");
+  expect(respelled("Neil Gaiman & Terry Pratchett", authors)).toBeUndefined();
+  expect(respelled("Homer", ["Homer", "Robert Fagles"])).toBeUndefined();
+});
+
+test("a planned replacement is dropped once an editor has changed the field since the plan", () => {
+  const cover = { provider: "local", id: "m1", src: "/_emdash/api/media/file/m1.jpg" };
+  const entry: Entry = { ...published, data: { creators: "Steven King", cover } };
+  const replace = {
+    creators: { from: "Steven King", to: "Stephen King" },
+    cover: { from: { id: "m1", src: cover.src }, to: "https://covers.openlibrary.org/b/id/1-L.jpg" },
+  };
+  expect(replaceable(entry, replace)).toEqual(["creators", "cover"]);
+  const edited: Entry = { ...entry, data: { creators: "Stephen King", cover: { ...cover, id: "m2", src: "/_emdash/api/media/file/m2.jpg" } } };
+  expect(replaceable(edited, replace)).toEqual([]);
 });

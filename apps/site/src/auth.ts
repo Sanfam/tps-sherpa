@@ -229,6 +229,16 @@ const rechecks = new Map<string, Promise<string[] | null | undefined>>();
 /** How long a session's stored roles stand before they are fetched again. */
 export const rolesTtl = () => Number(process.env["ROLES_TTL_MS"] ?? 5 * 60_000);
 
+/**
+ * A Discord account's live role IDs while it is a Member, or null; throws when
+ * the lookup fails. Uncached: for an EmDash API token's holder, who sends no
+ * session, the gate keeps what it needs from this (emdash-gate.ts, liveLevel).
+ */
+export async function liveRoles(discordId: string) {
+  const roles = await guildRoles(discordId);
+  return isMember(roles) ? roles : null;
+}
+
 async function rolesFor(session: { token: string; userId: string }): Promise<string[] | null> {
   const { auth: a, db } = auth();
   // Every Better Auth read, its internal adapter included, filters out the

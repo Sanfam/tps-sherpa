@@ -1,7 +1,8 @@
 /**
  * The decisions enrich-works.ts makes, kept apart from its I/O: which Open
- * Library work a `works` entry is, what of its description to take, and which
- * of the entry's fields are still empty to fill.
+ * Library work a `works` entry is, what of its description to take, which of
+ * the entry's fields are still empty to fill, how Open Library spells its
+ * creators, and which planned replacements still find the value they replace.
  */
 
 /** A hit from Open Library's search.json, with the fields the script asks for. */
@@ -64,8 +65,39 @@ function samePerson(a: string, b: string) {
   return surname && x[0]![0] === y[0]![0];
 }
 
+const SEPARATOR = /\s*(?:[,;&]|\band\b|\bwith\b)\s*/i;
 /** The people an entry's creators field names: "A and B", "A & B", "A, B". */
-export const people = (creators: string) => creators.split(/\s*(?:[,;&]|\band\b|\bwith\b)\s*/i).filter((p) => p.trim());
+export const people = (creators: string) => creators.split(SEPARATOR).filter((p) => p.trim());
+
+/** A name's letters alone, so case, spacing, punctuation and accents never count as a difference. */
+const letters = (s: string) => words(s).join("");
+
+/**
+ * The entry's creators as Open Library spells them for the matched work, or
+ * nothing when they already agree. Each person keeps their place and the
+ * separators the entry uses ("A & B", "A and B"), so a different order is no
+ * difference. A person is respelled only where the letters differ ("Steven
+ * King" for "Stephen King", not "J. R. R." for "J.R.R."), and nothing is
+ * proposed unless each person is exactly one of the work's authors, so
+ * Open Library's translators and illustrators are never added and no one is dropped.
+ */
+export function respelled(creators: string, authors: string[]): string | undefined {
+  const parts = creators.split(new RegExp(`(${SEPARATOR.source})`, "i"));
+  let changed = false;
+  for (let i = 0; i < parts.length; i += 2) {
+    const name = parts[i]!.trim();
+    if (!name) continue;
+    const matches = [...new Set(authors)].filter((a) => samePerson(name, a));
+    if (matches.length !== 1) return undefined;
+    if (letters(matches[0]!) === letters(name)) continue;
+    // Open Library dropping a word the entry has ("Iain M. Banks" as "Iain Banks") is not a misspelling.
+    const ours = words(name);
+    if (words(matches[0]!).every((w) => ours.includes(w))) continue;
+    parts[i] = parts[i]!.replace(name, matches[0]!);
+    changed = true;
+  }
+  return changed ? parts.join("") : undefined;
+}
 
 /**
  * The Open Library work a book entry is, from the hits for its title. A hit
@@ -121,6 +153,11 @@ export function firstParagraph(description: string | { value?: string } | undefi
 }
 
 export type Proposed = { year?: number; link?: string; description?: string; cover?: string };
+/** Values a standardize plan replaces even though they are set, each with the value it found. */
+export type Replace = {
+  creators?: { from: string; to: string };
+  cover?: { from: { id?: string; src?: string }; to: string };
+};
 export type Entry = {
   status: string;
   data: Record<string, unknown>;
@@ -148,4 +185,18 @@ export function fillable(entry: Entry, proposed: Proposed): { fill: (keyof Propo
     (field) => proposed[field] !== undefined && empty(entry.data[field]),
   );
   return { fill };
+}
+
+/**
+ * The planned replacements whose field still holds the value the plan found:
+ * one an editor changed since is theirs, and is left alone. A cover is the
+ * same while its media id and URL are.
+ */
+export function replaceable(entry: Entry, replace: Replace): (keyof Replace)[] {
+  const cover = entry.data["cover"] as { id?: string; src?: string } | undefined;
+  return (Object.keys(replace) as (keyof Replace)[]).filter((field) =>
+    field === "cover"
+      ? replace.cover !== undefined && cover?.id === replace.cover.from.id && cover?.src === replace.cover.from.src
+      : replace.creators !== undefined && entry.data["creators"] === replace.creators.from,
+  );
 }
