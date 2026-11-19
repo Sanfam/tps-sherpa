@@ -1,0 +1,6 @@
+---
+import { Block } from "emdash/ui";
+// EmDash's block component, with the heading's `anchor` (src/heading-ids.ts) as its id.
+const { node } = Astro.props;
+---
+<Block {...Astro.props} id={node.anchor}><slot /></Block>
