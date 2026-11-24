@@ -1,8 +1,8 @@
 declare namespace App {
   interface Locals {
-    /** The User's group slugs, for Access; empty for a Viewer. Never rendered back to anyone. */
+    /** The User's group slugs, for Access; empty for a Viewer. Never rendered to anyone else. */
     groups: string[];
-    /** The User's live Discord role IDs, for Index visibility; empty for a Viewer. Never rendered back to anyone. */
+    /** The User's live Discord role IDs, for Index visibility; empty for a Viewer. Shown only to that User, by name, on /account. */
     roles: string[];
     /**
      * The signed-in User, on every server-rendered page; absent for a Viewer.

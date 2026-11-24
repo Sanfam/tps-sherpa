@@ -299,7 +299,7 @@ test("the landing page shows a signed-in Member their current Discord name and a
   avatars.delete(DAD);
 });
 
-test("the account page shows a Member who they are signed in as, and none of their roles", async () => {
+test("the account page shows a Member who they are signed in as, and their own roles by name", async () => {
   const FLIGHT_SIM_ROLE = "300000000000000004";
   guild.set(DAD, [MEMBER_ROLE, AMBASSADOR_ROLE, FLIGHT_SIM_ROLE]);
   displayNames.set(DAD, "Fixture Dad");
@@ -319,10 +319,10 @@ test("the account page shows a Member who they are signed in as, and none of the
   expect(body).toContain(`@fixture-${DAD}`);
   const ends = new Date(body.match(/<time datetime="([^"]+)"/)![1]!);
   expect(ends.getTime()).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60_000);
-  // Role data is member data: never rendered back, by ID, manifest name or group slug.
-  for (const role of [MEMBER_ROLE, AMBASSADOR_ROLE, FLIGHT_SIM_ROLE, "Ambassador", "ambassador", "Flight Sim", "flight-sim"]) {
-    expect(body, role).not.toContain(role);
-  }
+  // Their own roles, by name, as Discord shows them (owner, 2026-11-24); never the IDs.
+  expect(body).toContain("Ambassador");
+  expect(body).toContain("Flight Sim");
+  for (const id of [MEMBER_ROLE, AMBASSADOR_ROLE, FLIGHT_SIM_ROLE]) expect(body, id).not.toContain(id);
 });
 
 test("the landing page still renders, signed out, when the session database cannot open", async () => {

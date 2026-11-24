@@ -194,7 +194,7 @@ A member's Discord role list is not a set of neutral labels. Regional roles, lif
 - **Store role IDs, never names.** Names change; IDs don't.
 - **Server-side only.** The cookie carries an opaque session token, not the array.
 - Role data falls under the same retention and opt-out rules as everything else about a member.
-- Never render a User's role list back to them or to anyone else, and never put roles in an LLM prompt.
+- Never render a User's role list to anyone else, and never put roles in an LLM prompt. A User may see their own roles, on `/account` only: Discord already shows them their own *(was "never back to them either"; owner, 2026-11-24)*.
 
 ### ⚠️ The prerender footgun
 

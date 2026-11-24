@@ -1,10 +1,17 @@
 ---
 // The signed-in User's account, read-only. Member-gated: the middleware
-// redirects anyone without a session. It shows no roles: a User's role list is
-// never rendered back to them (ASTRO-ARCHITECTURE.md, Role data is member data).
+// redirects anyone without a session. It shows the User their own roles, which
+// Discord already shows them, and nobody else's (ASTRO-ARCHITECTURE.md, Role
+// data is member data; owner, 2026-11-24).
+import bundled from "../../fixtures/roles.json";
+import { currentSnapshot } from "../catalog-snapshot.ts";
 import Base from "../layouts/Base.astro";
 
 const user = Astro.locals.signedIn!;
+// Names from the live role manifest when the Catalog snapshot has one, else the bundled one.
+const manifest = currentSnapshot()?.snapshot.roleManifest ?? bundled;
+const roles = manifest.filter((r) => r.ids.some((id) => Astro.locals.roles.includes(id)));
+const swatch = (color: number) => (color ? `#${color.toString(16).padStart(6, "0")}` : "var(--ink-soft)");
 const ends = user.expiresAt.toLocaleDateString("en-US", { dateStyle: "long", timeZone: "UTC" });
 ---
 <Base title="Your account">
@@ -25,6 +32,16 @@ const ends = user.expiresAt.toLocaleDateString("en-US", { dateStyle: "long", tim
       <button class="button button-quiet" type="submit">Sign out</button>
     </form>
 
+    {roles.length > 0 && (
+      <>
+        <h2>Your roles</h2>
+        <p>Your roles on the Discord server, as of the last check. Only you see this list.</p>
+        <ul class="roles">
+          {roles.map((r) => <li><span class="dot" style={`background:${swatch(r.color)}`} aria-hidden="true"></span>{r.name}</li>)}
+        </ul>
+      </>
+    )}
+
     <h2>Your data</h2>
     <ul>
       <li><a href="/privacy">Privacy policies</a>: what this site and Sherpa keep about you, and for how long.</li>
@@ -42,6 +59,22 @@ const ends = user.expiresAt.toLocaleDateString("en-US", { dateStyle: "long", tim
 <style>
   .account h2 {
     margin-top: 3rem;
+  }
+
+  .roles {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+  }
+
+  .roles .dot {
+    display: inline-block;
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 50%;
+    margin-right: 0.4rem;
   }
 
   .who {
