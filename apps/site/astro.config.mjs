@@ -14,8 +14,8 @@ const site = process.env.BETTER_AUTH_URL ? new URL(process.env.BETTER_AUTH_URL) 
 // database: SITE_EMDASH_DIR on Railway (/data). Read at build time.
 const data = process.env.SITE_EMDASH_DIR || "./.data";
 
-// Everything is server-rendered unless a page opts in with `prerender = true`,
-// and only the public landing page may (test/gate.test.ts holds that line).
+// Everything is server-rendered, so every page knows who is signed in. No page
+// may opt in with `prerender = true` (test/gate.test.ts holds that line).
 export default defineConfig({
   output: "server",
   // Absolute URLs for link-preview cards.

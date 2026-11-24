@@ -1,11 +1,11 @@
-**Papa Squad website privacy policy** · effective 2026-11-15
+**Papa Squad website privacy policy** · effective 2026-11-23
 
 The Papa Squad website is run by Staff, like Sherpa. Sherpa's own policy, `/privacy policy` in Discord, covers the server.
 
 **Signing in**
-• Only Members can sign in, with Discord. Discord gives the site only your ID and username, never your email.
-• It keeps your ID and username, updated each time you sign in, until you ask Staff to delete them. `delete-my-data` doesn't reach them yet.
-• While you're signed in, your session holds your server role IDs, rechecked with Discord every 5 minutes as you use the site. It ends when you sign out, when you're no longer a Member, or about a week after your last visit; expired sessions are deleted within a day.
+• Only Members can sign in, with Discord. Discord gives the site your ID, username, display name and avatar, not your email.
+• It keeps them, updated at each sign-in, until you ask Staff to delete them, and shows your name and avatar only to you. `delete-my-data` doesn't reach them yet.
+• Your session holds your server role IDs. The members' area rechecks them with Discord every 5 minutes and ends the session if you're not a Member. It also ends when you sign out, or about a week after your last visit there; expired sessions are deleted within a day.
 • The site keeps no IP address or browser details, and nothing that lets it act as you on Discord.
 
 **Editing the site**
@@ -15,7 +15,7 @@ The Papa Squad website is run by Staff, like Sherpa. Sherpa's own policy, `/priv
 • If a page held your personal data, ask Staff: they remove it and purge the page's past versions at once. An editor can ask for their username to be removed and their edits made anonymous.
 
 **Who sees it**
-• Discord, which signs you in and answers the role checks.
+• Discord, which signs you in, checks roles and serves your avatar.
 • Railway, which hosts the site.
 • Cloudflare, which carries the site's traffic.
 

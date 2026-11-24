@@ -17,9 +17,19 @@ export const BOT_TOKEN = "mock-bot-token";
 
 /** Guild roles by snowflake; absent means not in the guild. Tests edit it. */
 export const guild = new Map<string, string[]>();
-export const mock = { signInAs: "", memberLookups: 0 };
+// `down` makes every guild member lookup fail, as in a Discord outage;
+// `onLookup` runs while one is being answered.
+export const mock: { signInAs: string; memberLookups: number; down: boolean; onLookup?: () => void } = {
+  signInAs: "",
+  memberLookups: 0,
+  down: false,
+};
 // Discord usernames by snowflake, for a rename; `fixture-<id>` otherwise.
 export const usernames = new Map<string, string>();
+// Display names and avatar hashes by snowflake. Discord sends null for either
+// when the person has not set one.
+export const displayNames = new Map<string, string>();
+export const avatars = new Map<string, string>();
 
 /** PKCE challenge by issued code. */
 const challenges = new Map<string, string>();
@@ -63,11 +73,18 @@ export async function startMock() {
     }
     if (path === "/users/@me") {
       const id = req.headers.authorization?.replace(/^Bearer tok-/, "") ?? "";
-      return json(res, 200, { id, username: usernames.get(id) ?? `fixture-${id}`, global_name: null });
+      return json(res, 200, {
+        id,
+        username: usernames.get(id) ?? `fixture-${id}`,
+        global_name: displayNames.get(id) ?? null,
+        avatar: avatars.get(id) ?? null,
+      });
     }
     const m = path.match(/^\/guilds\/(\d+)\/members\/(\d+)$/);
     if (m) {
       mock.memberLookups++;
+      mock.onLookup?.();
+      if (mock.down) return json(res, 500, { message: "500: Internal Server Error" });
       if (req.headers.authorization !== `Bot ${BOT_TOKEN}`) return json(res, 401, { message: "401: Unauthorized" });
       const roles = m[1] === GUILD_ID ? guild.get(m[2]!) : undefined;
       if (!roles) return json(res, 404, { message: "Unknown Member", code: 10007 });

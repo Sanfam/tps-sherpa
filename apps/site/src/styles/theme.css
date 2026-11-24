@@ -255,6 +255,78 @@ a:hover {
   text-decoration-thickness: 2px;
 }
 
+/* Who is signed in, and the way out; or the way in. */
+.session {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1rem;
+  font-weight: 700;
+  min-width: 0;
+}
+
+.session form {
+  margin: 0;
+}
+
+.session > a:not(.session-user) {
+  text-decoration: none;
+}
+
+.session > a:not(.session-user):hover,
+.session > a:not(.session-user)[aria-current] {
+  text-decoration: underline;
+  text-decoration-color: var(--orange);
+  text-decoration-thickness: 2px;
+}
+
+.session-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  text-decoration: none;
+}
+
+.session-user span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 16ch;
+}
+
+.session-user img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.session-user:hover span,
+.session-user[aria-current] span {
+  text-decoration: underline;
+  text-decoration-color: var(--orange);
+  text-decoration-thickness: 2px;
+}
+
+/* A real button that reads as the header's other links. */
+.session-out {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--orange);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.session-out:hover {
+  color: var(--accent-text);
+}
+
 /* The theme switch: a 52x28 track with a thumb that slides to the active end.
    Both icons sit above the thumb; the active one takes the thumb's contrast.
    aria-checked is true in dark. */

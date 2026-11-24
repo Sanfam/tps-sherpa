@@ -1,5 +1,5 @@
 import { defineMiddleware } from "astro:middleware";
-import { groupsFor, memberRoles } from "./auth.ts";
+import { groupsFor, memberRoles, sessionUser } from "./auth.ts";
 import { ADMIN, editorRole } from "./emdash-auth.ts";
 import { bearerToken, place } from "./emdash-gate.ts";
 import { startRevisionPruner } from "./emdash-erasure.ts";
@@ -17,21 +17,42 @@ startRevisionPruner();
 startSnapshotPuller();
 
 export const onRequest = defineMiddleware(async (context, next) => {
-  // Prerendered pages are public by construction; this runs for them only at build.
-  if (context.isPrerendered || isPublic(context.url.pathname)) return next();
+  const path = context.url.pathname;
+  // Prerendered pages are public by construction; this runs for them only at
+  // build. The auth routes read the session themselves.
+  if (context.isPrerendered || path.startsWith("/auth/")) return next();
   // An EmDash API token's request carries no session. The gate, ahead of all
   // of EmDash, has already held it to its holder's live roles.
-  if (place(context.url.pathname) !== "site" && bearerToken(context.request.headers) !== null) return next();
-  const { roles, setCookie } = await memberRoles(context.request.headers);
+  if (place(path) !== "site" && bearerToken(context.request.headers) !== null) return next();
+  // A public page shows who is signed in from the session alone: it never
+  // waits on Discord, renders for a Viewer when auth is unavailable, gets no
+  // roles, and never renews the session. Only a gated page, which checks
+  // membership, does those.
+  const { roles, setCookie, user } = isPublic(path)
+    ? { roles: null, setCookie: [], user: (await sessionUser(context.request.headers).catch(() => undefined))?.user }
+    : await memberRoles(context.request.headers);
+  context.locals.roles = roles ?? [];
+  context.locals.groups = groupsFor(context.locals.roles);
+  if (user) {
+    context.locals.signedIn = {
+      displayName: user.displayName,
+      avatar: user.image,
+      username: user.name,
+      expiresAt: user.expiresAt,
+    };
+  }
   let res: Response;
-  if (roles && (!isAdminAction(context.url.pathname) || editorRole(roles) === ADMIN)) {
-    context.locals.groups = groupsFor(roles);
-    context.locals.roles = roles;
+  if (isPublic(path) || (roles && (!isAdminAction(path) || editorRole(roles) === ADMIN))) {
     res = await next();
   } else {
     res = context.redirect("/");
   }
   // Better Auth's renewal of the session cookie, when it extended the session.
   for (const cookie of setCookie) res.headers.append("Set-Cookie", cookie);
+  // A page may name who is signed in, so no shared cache may keep it.
+  if (res.headers.get("content-type")?.startsWith("text/html")) {
+    res.headers.set("Cache-Control", "private, no-store");
+    res.headers.append("Vary", "Cookie");
+  }
   return res;
 });

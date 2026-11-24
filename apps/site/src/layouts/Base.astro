@@ -20,6 +20,7 @@ const fullTitle = title ? `${title} · The Papa Squad` : "The Papa Squad";
 const ogImage = Astro.site && new URL("/og.png", Astro.site).href;
 const here = Astro.url.pathname;
 const pages = members ? await publishedPages() : new Map();
+const { signedIn: user } = Astro.locals;
 ---
 <html lang="en">
   <head>
@@ -83,7 +84,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 -->`} />
     <header class="site-header">
       <div class="wrap">
-        <a class="wordmark" href={members ? "/members" : "/"}>
+        <a class="wordmark" href={members || user ? "/members" : "/"}>
           <Image src={crest} alt="" width={88} height={88} />
           The Papa Squad
         </a>
@@ -100,8 +101,22 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
               <a href="/events" aria-current={here === "/events" ? "page" : undefined}>Events</a>
               <a href="/brand" aria-current={here === "/brand" ? "page" : undefined}>Brand kit</a>
             </nav>
+          ) : null
+        }
+        {
+          user ? (
+            <div class="session">
+              <a href="/members" aria-current={here === "/members" ? "page" : undefined}>Members' area</a>
+              <a class="session-user" href="/account" aria-label={`${user.displayName}, your account`} aria-current={here === "/account" ? "page" : undefined}>
+                {user.avatar && <img src={user.avatar} alt="" width="32" height="32" referrerpolicy="no-referrer" />}
+                <span>{user.displayName}</span>
+              </a>
+              <form method="post" action="/auth/sign-out">
+                <button class="session-out" type="submit">Sign out</button>
+              </form>
+            </div>
           ) : (
-            <a class="site-nav" href="/auth/discord/start">Member sign in</a>
+            <a class="session" href="/auth/discord/start">Sign in with Discord</a>
           )
         }
         <button id="theme-toggle" class="theme-toggle" type="button" role="switch" aria-label="Dark mode" aria-checked="false" hidden>

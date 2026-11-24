@@ -6,8 +6,9 @@ import { auth, memberRoles, signInStarts } from "../../../auth.ts";
 // keeping the state cookie it sets. The body is fixed: nothing from the
 // request can add a scope.
 export const GET: APIRoute = async ({ request }) => {
-  // The public landing page cannot tell a signed-in Member: its sign-in link
-  // takes them straight to /members, keeping Better Auth's session renewal.
+  // A signed-in Member who follows a sign-in link anyway, from a page opened
+  // before they signed in, goes straight to /members, keeping Better Auth's
+  // session renewal.
   const member = await memberRoles(request.headers);
   if (member.roles) {
     const headers = new Headers({ Location: "/members" });
