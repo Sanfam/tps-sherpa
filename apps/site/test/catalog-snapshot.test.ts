@@ -6,7 +6,9 @@ import { join } from "node:path";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { snapshotEnvelope } from "../../bot/src/snapshot.ts";
 import { buildCatalog } from "../../bot/src/sync/catalog.ts";
+import { readEvents } from "../../bot/src/sync/events.ts";
 import { fixtureDiscord } from "../../bot/src/sync/fixture-discord.ts";
+import type { RawScheduledEvent } from "../../bot/src/sync/ports.ts";
 import type { CatalogEntity } from "../src/catalog-snapshot.ts";
 
 const BOT_URL = "http://bot.railway.internal:8080/snapshot";
@@ -148,7 +150,112 @@ test("a snapshot the bot builds from the recorded guild is accepted", async () =
     discord: fixtureDiscord({ channels: recorded }),
     guildId: "1055290132250501135",
   });
-  const sent = snapshotEnvelope({ catalog, roleManifest, generatedAt: new Date().toISOString() });
+  // Two of the guild's real events as Discord sent them (2026-11-19), creator left out,
+  // and two a member might make: an external one by a member who opted out, which
+  // mentions people and a channel, and a voice one in a recorded lounge.
+  const OPTED_OUT = "731000000000000001";
+  const MENTIONED = "731000000000000002";
+  const HOST = "731000000000000003";
+  const HIDDEN = "1154240105817575446";
+  const made = (id: string, entity_type: number, extra: object) => ({
+    id, guild_id: "1055290132250501135", description: "Pull up a chair.", channel_id: null, creator_id: OPTED_OUT,
+    image: null, scheduled_start_time: "2026-12-01T02:00:00+00:00", scheduled_end_time: "2026-12-01T04:00:00+00:00", status: 1, entity_type,
+    entity_id: null, privacy_level: 2, entity_metadata: null, recurrence_rule: null, guild_scheduled_event_exceptions: [],
+    ...extra,
+  });
+  const scheduled = [
+    made("1300000000000000005", 3, {
+      name: "Garage sale at 12 Elm Street",
+      image: "abc123",
+      entity_metadata: { location: "12 Elm Street, Springfield" },
+    }),
+    // A status Discord may add one day: this event is left out, not the snapshot rejected.
+    made("1300000000000000008", 3, { creator_id: HOST, name: "Mystery night", status: 9 }),
+    // Weekly, two hours; Discord's next night was cut to one hour on its own.
+    made("1300000000000000006", 3, {
+      creator_id: HOST,
+      name: "Trivia",
+      scheduled_start_time: "2026-12-01T02:00:00+00:00",
+      scheduled_end_time: "2026-12-01T03:00:00+00:00",
+      recurrence_rule: { start: "2026-11-03T02:00:00+00:00", end: null, frequency: 2, interval: 1, by_weekday: [1],
+        by_n_weekday: null, by_month: null, by_month_day: null, by_year_day: null, count: null },
+      guild_scheduled_event_exceptions: [{
+        event_exception_id: (BigInt(Date.parse("2026-12-01T02:00:00Z") - 1420070400000) << 22n).toString(),
+        is_canceled: false, scheduled_start_time: null, scheduled_end_time: "2026-12-01T03:00:00+00:00",
+      }],
+    }),
+    // Weekly; Discord's next night was moved to 03:00 on its own, and its end lives on the event.
+    made("1300000000000000007", 3, {
+      creator_id: HOST,
+      name: "Quiz",
+      scheduled_start_time: "2026-12-02T03:00:00+00:00",
+      scheduled_end_time: "2026-12-02T06:00:00+00:00",
+      recurrence_rule: { start: "2026-11-04T02:00:00+00:00", end: null, frequency: 2, interval: 1, by_weekday: [2],
+        by_n_weekday: null, by_month: null, by_month_day: null, by_year_day: null, count: null },
+      guild_scheduled_event_exceptions: [{
+        event_exception_id: (BigInt(Date.parse("2026-12-02T02:00:00Z") - 1420070400000) << 22n).toString(),
+        is_canceled: false, scheduled_start_time: "2026-12-02T03:00:00+00:00", scheduled_end_time: null,
+      }],
+    }),
+    made("1300000000000000003", 3, {
+      creator_id: HOST,
+      name: `Coffee with <@${MENTIONED}>`,
+      entity_metadata: {
+        location:
+          `<#${HIDDEN}>, or ask ${MENTIONED} (https://discord.com/users/%3${MENTIONED}, example.org/discord.com/channels/${MENTIONED}, ` +
+          `https://discord.com/channels/1055290132250501135/${MENTIONED}, https://discord.com/channels/1055290132250501135/1185019630109085807)`,
+      },
+    }),
+    // Discord shows a voice event only to those who can see its channel: the site cannot check that.
+    made("1300000000000000004", 2, { creator_id: HOST, name: "Lounge night", channel_id: "1194065843789770782" }),
+    {
+      id: "1300000000000000001", guild_id: "1055290132250501135", name: "Book Club Discussion",
+      description: "Come and chat about last month's book if you read it!", channel_id: null, creator_id: "1",
+      image: null, scheduled_start_time: "2026-12-10T02:00:00+00:00", scheduled_end_time: "2026-12-10T03:00:00+00:00",
+      status: 1, entity_type: 3, entity_id: null, privacy_level: 2, entity_metadata: { location: "Voice Chat" },
+      recurrence_rule: { start: "2026-11-12T02:00:00+00:00", end: null, frequency: 1, interval: 1, by_weekday: null,
+        by_n_weekday: [{ n: 2, day: 3 }], by_month: null, by_month_day: null, by_year_day: null, count: null },
+      guild_scheduled_event_exceptions: [],
+    },
+    {
+      id: "1300000000000000002", guild_id: "1055290132250501135", name: "Papa Squad Video Chat Night",
+      description: "Low key and judgement free.", channel_id: null, creator_id: "1", image: "abc123",
+      scheduled_start_time: "2026-11-22T02:00:00+00:00", scheduled_end_time: "2026-11-22T04:00:00+00:00",
+      status: 1, entity_type: 3, entity_id: null, privacy_level: 2,
+      entity_metadata: { location: "https://discord.com/channels/1055290132250501135/1399120902490292394" },
+      recurrence_rule: { start: "2025-11-23T02:00:00+00:00", end: null, frequency: 2, interval: 2, by_weekday: [6],
+        by_n_weekday: null, by_month: null, by_month_day: null, by_year_day: null, count: null },
+      guild_scheduled_event_exceptions: [],
+    },
+  ] as unknown as RawScheduledEvent[];
+  const seen = await readEvents(
+    { ...fixtureDiscord({ channels: recorded }), listScheduledEvents: async () => scheduled },
+    () => new Set([OPTED_OUT]),
+    { channels: new Map(), roles: new Map() },
+    { guildId: "1055290132250501135", known: new Set(catalog.map((e) => e.id)) },
+  );
+  const sent = snapshotEnvelope({ catalog, roleManifest, generatedAt: new Date().toISOString() }, {}, seen);
+  // An opted-out organiser's event stays behind whole: its title, place and cover could say who they are.
+  expect(sent.events.map((e) => e.name)).toEqual(["Trivia", "Quiz", "Coffee with @member", "Book Club Discussion", "Papa Squad Video Chat Night"]);
+  // A night moved on its own keeps the end Discord gives it.
+  expect(sent.events[1]!.moved).toEqual([
+    { from: "2026-12-02T02:00:00.000Z", start: "2026-12-02T03:00:00.000Z", end: "2026-12-02T06:00:00.000Z" },
+  ]);
+  // One night's new end is that night's alone, not every night's.
+  expect(sent.events[0]).toMatchObject({
+    end: null,
+    moved: [{ from: "2026-12-01T02:00:00.000Z", start: "2026-12-01T02:00:00.000Z", end: "2026-12-01T03:00:00.000Z" }],
+  });
+  expect(JSON.stringify(sent.events)).not.toContain("Elm Street");
+  expect(sent.events[2]!.description).toBe("Pull up a chair.");
+  // No member's snowflake crosses, and no channel a Member may not see is named.
+  // A link to a place the Catalog holds survives whole (clubs are matched on it, and the
+  // site names its Channel); one carrying anything else in either slot does not.
+  expect(sent.events[2]!.location).toBe(
+    "#unknown-channel, or ask [id] (https://discord.com/users/[id], example.org/discord.com/channels/[id], " +
+      "[link], https://discord.com/channels/1055290132250501135/1185019630109085807)",
+  );
+  expect(JSON.stringify(sent.events)).not.toMatch(new RegExp(`${OPTED_OUT}|${MENTIONED}|${HOST}|${HIDDEN}|watch-together|creator`));
 
   const { validateSnapshot } = await site();
   // Through JSON, as it crosses the network.

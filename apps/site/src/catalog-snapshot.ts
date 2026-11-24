@@ -41,6 +41,43 @@ export interface RoleManifestEntry {
   ids: string[];
 }
 
+/**
+ * A Discord Scheduled Event, as the bot carries it. Discord returns only the
+ * next occurrence of a recurring event; the site expands the rest from
+ * `recurrence` (src/events.ts). Weekdays are Discord's: 0 is Monday.
+ */
+export interface SnapshotEvent {
+  id: string;
+  name: string;
+  description: string | null;
+  /** ISO 8601. For a recurring event, its first occurrence. */
+  start: string;
+  /** Discord's next occurrence, or the one running; every earlier occurrence is over. */
+  next: string;
+  end: string | null;
+  status: "scheduled" | "active" | "completed" | "canceled";
+  entity_type: "stage" | "voice" | "external";
+  /** The stage or voice channel; null for an external event. */
+  channel_id: string | null;
+  /** An external event's place: free text, or a discord.com/channels link. */
+  location: string | null;
+  image_url: string | null;
+  recurrence: null | {
+    frequency: "yearly" | "monthly" | "weekly" | "daily";
+    interval: number;
+    by_weekday: number[] | null;
+    by_n_weekday: Array<{ n: number; day: number }> | null;
+    by_month: number[] | null;
+    by_month_day: number[] | null;
+    end: string | null;
+    count: number | null;
+  };
+  /** Starts of occurrences canceled one at a time. */
+  canceled_starts: string[];
+  /** Occurrences moved one at a time: the rule's `from` happens at `start` instead. */
+  moved: Array<{ from: string; start: string; end: string | null }>;
+}
+
 /** The envelope the bot serves at `GET /snapshot`, version 1. */
 export interface SnapshotEnvelope {
   version: 1;
@@ -53,6 +90,8 @@ export interface SnapshotEnvelope {
   catalog: CatalogEntity[];
   /** Entity id → members' messages in about the last week. A place the bot does not read has none. */
   weeklyMessages?: Record<string, number>;
+  /** Discord's Scheduled Events. A bot older than events sends none, which is no events. */
+  events?: SnapshotEvent[];
 }
 
 /** The last snapshot the site accepted, and whether two scheduled syncs have since been missed. */
@@ -87,6 +126,13 @@ const oneOf =
   (...values: Array<string | null>): Check =>
   (v) =>
     values.includes(v as string | null) ? null : `not one of ${values.map(String).join("|")}`;
+const date: Check = (v) => (typeof v === "string" && !Number.isNaN(Date.parse(v)) ? null : "not a date");
+const ints =
+  (min: number, max: number): Check =>
+  (v) =>
+    v === null || (Array.isArray(v) && v.every((n) => Number.isInteger(n) && n >= min && n <= max))
+      ? null
+      : `not null or a list of integers ${min}-${max}`;
 const link: Check = (v) =>
   typeof v === "string" && v.startsWith("https://discord.com/channels/") ? null : "not a Discord channel link";
 
@@ -110,6 +156,41 @@ const ENTITY: Record<Exclude<keyof CatalogEntity, Optional>, Check> = {
   summary_override: strOrNull,
 };
 const OPTIONAL: Optional[] = ["allow_roles", "view_roles", "deny_roles"];
+
+// Every date is formatted on the events page, and an unparseable one would fail every render.
+const EVENT: Record<Exclude<keyof SnapshotEvent, "recurrence">, Check> = {
+  id: str,
+  name: str,
+  description: strOrNull,
+  start: date,
+  next: date,
+  end: dateOrNull,
+  status: oneOf("scheduled", "active", "completed", "canceled"),
+  entity_type: oneOf("stage", "voice", "external"),
+  channel_id: strOrNull,
+  location: strOrNull,
+  image_url: strOrNull,
+  canceled_starts: (v) => (Array.isArray(v) && v.every((s) => date(s) === null) ? null : "not a list of dates"),
+  moved: (v) =>
+    Array.isArray(v) &&
+    v.every((m) => isObject(m) && date(m["from"]) === null && date(m["start"]) === null && (m["end"] === null || date(m["end"]) === null))
+      ? null
+      : "not a list of { from, start, end } dates",
+};
+const RECURRENCE: Record<keyof NonNullable<SnapshotEvent["recurrence"]>, Check> = {
+  frequency: oneOf("yearly", "monthly", "weekly", "daily"),
+  interval: (v) => (Number.isInteger(v) && (v as number) > 0 ? null : "not a positive integer"),
+  by_weekday: ints(0, 6),
+  by_n_weekday: (v) =>
+    v === null ||
+    (Array.isArray(v) && v.every((x) => isObject(x) && ints(1, 5)([x["n"]]) === null && ints(0, 6)([x["day"]]) === null))
+      ? null
+      : "not null or a list of { n: 1-5, day: 0-6 }",
+  by_month: ints(1, 12),
+  by_month_day: ints(1, 31),
+  end: dateOrNull,
+  count: intOrNull,
+};
 
 /**
  * Whether `raw` is a snapshot the site may serve: version 1, complete, and
@@ -153,6 +234,20 @@ export function validateSnapshot(raw: unknown): { ok: true; snapshot: SnapshotEn
         ? null
         : "not a map of counts",
     );
+
+  const events = raw["events"];
+  if (events !== undefined) {
+    if (!Array.isArray(events)) at("events", "not a list");
+    else
+      events.forEach((event: unknown, i) => {
+        if (!isObject(event)) return at(`events[${i}]`, "not an object");
+        for (const [field, check] of Object.entries(EVENT)) at(`events[${i}].${field}`, check(event[field]));
+        const rule = event["recurrence"];
+        if (rule === null) return;
+        if (!isObject(rule)) return at(`events[${i}].recurrence`, "not an object or null");
+        for (const [field, check] of Object.entries(RECURRENCE)) at(`events[${i}].recurrence.${field}`, check(rule[field]));
+      });
+  }
 
   const catalog = raw["catalog"];
   if (!Array.isArray(catalog)) at("catalog", "not a list");

@@ -17,6 +17,7 @@ import { dirname, resolve } from "node:path";
 import { buildCatalog } from "./catalog.ts";
 import { discordRest } from "./discord-adapter.ts";
 import { DURABLE_STORE_PATH, openDurableStore } from "./durable-store.ts";
+import { readEvents } from "./events.ts";
 import { activityBucket, parseGazetteer } from "./facets.ts";
 
 const token = process.env["DISCORD_BOT_TOKEN"];
@@ -51,8 +52,38 @@ const regions = parseGazetteer(
   }),
 );
 const warn = (m: string) => console.warn(m);
+const discord = discordRest({ token, guildId, warn });
+// Events first, before the Catalog is built: a Catalog sync that fails or is
+// incomplete still refreshes them, and a snapshot never carries events older
+// than the generation it goes out with. Links are checked against the previous
+// Catalog; a link to a Channel made since shows as `[link]` until the next
+// sync. If Discord's events cannot be read, none are stored, so no event
+// Discord may have dropped, nor a description written before an opt-out,
+// outlives the read.
+let events: number | null = null;
+try {
+  const seen = await readEvents(
+    discord,
+    () => store.processingOptOuts(),
+    {
+      // No channel or role names: a Member may not see the channel an event
+      // mentions, nor know a role it names.
+      channels: new Map(),
+      roles: new Map(),
+    },
+    { guildId, known: new Set(previous.map((e) => e.id)) },
+  );
+  store.replaceEvents(seen);
+  events = seen.length;
+} catch (error) {
+  store.replaceEvents([]);
+  // Name and code only, as the snapshot logs: a message can quote what Discord returned.
+  const { name, code } = error as { name?: string; code?: string | number };
+  console.error(`[events] SCHEDULED EVENTS NOT SYNCED; the calendar is empty until the next read: ${name ?? "error"}${code ? ` (${code})` : ""}`);
+}
+
 const { catalog, roleManifest, exclusionsApplied, outcome, memberDenies } = await buildCatalog({
-  discord: discordRest({ token, guildId, warn }),
+  discord,
   guildId,
   previous,
   exclusions,
@@ -75,6 +106,7 @@ const unchanged =
   JSON.stringify(catalog) === JSON.stringify(previous) &&
   JSON.stringify(roleManifest) === JSON.stringify(current?.roleManifest ?? []);
 store.replaceCatalog({ catalog, roleManifest, outcome, memberDenies });
+
 store.close();
 
 const exportJson = async (path: string, value: unknown) => {
@@ -113,5 +145,6 @@ const activity = catalog.reduce<Record<string, number>>((acc, e) => {
 console.log(`  activity:  ${Object.entries(activity).map(([k, n]) => `${k} ${n}`).join(", ")}`);
 console.log(`  regions:   ${catalog.filter((e) => e.region.length).length} Entities matched`);
 console.log(`  platform:  ${catalog.filter((e) => e.applied_tags.length).length} Entities tagged`);
+console.log(`  events:    ${events ?? "not read"} from Discord`);
 console.log(`  overrides carried forward: ${catalog.filter((e) => e.summary_override).length}`);
 console.log(unchanged ? "  UNCHANGED from the previous generation" : "  changed");

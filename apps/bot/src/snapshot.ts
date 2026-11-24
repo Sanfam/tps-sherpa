@@ -8,6 +8,7 @@ import { createHash } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import { EVERY_MS } from "./serve.ts";
 import { withDurableStore, type Generation } from "./sync/durable-store.ts";
+import type { SnapshotEvent } from "./sync/events.ts";
 import { RETAIN_MS, TIER0_PATH, readActivity as readTier0Activity } from "./sync/tier0-store.ts";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -47,7 +48,11 @@ const readActivity = (): Record<string, number> => {
   }
 };
 
-export const snapshotEnvelope = (g: Generation, weekly: Record<string, number> = {}) => ({
+export const snapshotEnvelope = (
+  g: Generation,
+  weekly: Record<string, number> = {},
+  events: SnapshotEvent[] = [],
+) => ({
   version: 1 as const,
   generatedAt: g.generatedAt,
   syncEveryMs: EVERY_MS,
@@ -57,6 +62,8 @@ export const snapshotEnvelope = (g: Generation, weekly: Record<string, number> =
   catalog: g.catalog,
   /** Entity id → members' messages in about the last week (`weeklyMessages`). */
   weeklyMessages: weekly,
+  /** The guild's scheduled events as Discord last listed them. Absent from older snapshots. */
+  events,
 });
 
 export const startSnapshotServer = (): Server => {
@@ -66,12 +73,12 @@ export const startSnapshotServer = (): Server => {
       return;
     }
     try {
-      const generation = withDurableStore((s) => s.current());
+      const [generation, events] = withDurableStore((s) => [s.current(), s.events()] as const);
       if (!generation) {
         res.writeHead(503, { "Content-Type": "text/plain" }).end("No Catalog yet.");
         return;
       }
-      const body = JSON.stringify(snapshotEnvelope(generation, readActivity()));
+      const body = JSON.stringify(snapshotEnvelope(generation, readActivity(), events));
       // Keyed on the body, not generatedAt: enrichment patches Entities without moving it.
       const etag = `"${createHash("sha256").update(body).digest("hex")}"`;
       if (req.headers["if-none-match"] === etag) {

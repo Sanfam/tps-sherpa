@@ -1,3 +1,5 @@
+import type { APIGuildScheduledEvent } from "discord-api-types/v10";
+
 /**
  * Discord's numeric channel types, as returned by `GET /guilds/{id}/channels`.
  * Only the ones the Catalog cares about.
@@ -93,6 +95,21 @@ export interface RawCapturedMessage {
   window: "head" | "tail";
 }
 
+/**
+ * A Discord Scheduled Event as `GET /guilds/{id}/scheduled-events` returns it.
+ * Discord returns only a recurring event's next occurrence, and drops a
+ * one-off event once it is over. The exceptions are undocumented: each is one
+ * occurrence moved or cancelled, keyed on its original start.
+ */
+export type RawScheduledEvent = APIGuildScheduledEvent & {
+  guild_scheduled_event_exceptions?: Array<{
+    event_exception_id: string;
+    is_canceled: boolean;
+    scheduled_start_time?: string | null;
+    scheduled_end_time?: string | null;
+  }>;
+};
+
 /** A guild role as Discord returns it. */
 export interface RawRole {
   id: string;
@@ -145,6 +162,7 @@ export interface DiscordReadPort {
     parentIds: string[],
   ) => Promise<{ threads: RawThread[]; failed: FailedContainer[] }>;
   listRoles: () => Promise<RawRole[]>;
+  listScheduledEvents: () => Promise<RawScheduledEvent[]>;
   /**
    * Head and tail message windows for one Entity. Two calls. Only ever asked
    * for Entities whose content the bot may read — see Tier 0.

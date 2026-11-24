@@ -8,7 +8,9 @@ import { getRequestContext, runWithContext } from "emdash/request-context";
 import { PortableText } from "emdash/ui";
 import Heading from "../components/Heading.astro";
 import MediaImage from "../components/MediaImage.astro";
+import UpcomingEvents from "../components/UpcomingEvents.astro";
 import Works from "../components/Works.astro";
+import { clubs } from "../events.ts";
 import { withHeadingAnchors } from "../heading-ids.ts";
 import Base from "../layouts/Base.astro";
 import { childrenOf, placeOf, publishedPages, trail } from "../nav.ts";
@@ -29,6 +31,8 @@ const pages = await publishedPages();
 const place = entry ? placeOf(entry.id) : "";
 const up = entry ? trail(pages, place) : [];
 const below = entry ? childrenOf(pages, place) : [];
+// A club's page (content/config/clubs.json) lists its next events.
+const club = entry ? clubs.find((c) => c.page === place) : undefined;
 ---
 {
   entry ? (
@@ -45,6 +49,7 @@ const below = entry ? childrenOf(pages, place) : [];
         {/* In edit mode the content carries EmDash's marker for its inline editor, which a copy would drop.
             That editor renders headings itself, without anchors: a #fragment lands only outside edit mode. */}
         <PortableText value={(getEditMeta(entry.data["content"]) ? entry.data["content"] : withHeadingAnchors(entry.data["content"])) as never} components={{ block: Heading, type: { image: MediaImage, gallery: MediaImage } }} />
+        {club && <UpcomingEvents club={club} />}
         {works.length > 0 && <Works works={works} />}
         {below.length > 0 && (
           <nav aria-labelledby="in-this-section">
