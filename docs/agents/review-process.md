@@ -43,7 +43,7 @@ reviewer differ, not that any particular model is the authority.
    Do not send broken work to review; a reviewer's attention is for defects you
    did not already know about.
 2. **Run the adversarial review with the other vendor's model.**
-   - **Claude or a person wrote it** → GPT-5.6 Sol at High through the `skill-codex`
+   - **Claude or a person wrote it** → GPT-6.2 Sol at Medium through the `skill-codex`
      skill, `read-only` sandbox, prompted with
      `docs/agents/codex-briefs/final-reviewer.md` plus the intent. If Codex is
      at its usage limit, use the fallback under "When the cycle cannot run".

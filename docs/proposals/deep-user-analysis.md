@@ -227,7 +227,7 @@ owner's decisions and ADR-0003 is accepted.
    Luna Max.* Depends on 2 and 3, and on `/sherpa` and `isStaff` from the
    responder.
 
-Then the final review (GPT-5.6 Sol), as always.
+Then the final review (`docs/agents/review-process.md`), as always.
 
 ## 11. Tests
 
