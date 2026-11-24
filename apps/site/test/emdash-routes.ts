@@ -21,4 +21,4 @@ export const concrete = (pattern: string) => pattern.replace(/\[\.\.\.[^\]]+\]/g
  * Not API tokens and MCP: an Admin's session reaches the one, a token on its
  * holder's live role the other (owner, 2026-11-18); gate.test.ts holds both. */
 export const NEVER =
-  /oauth|well-known|preview-url|visual-editing|send-recovery|upload-url|setup\/admin|\/dev-|snapshot|backups|transfer|plugin|import\/|\/dev\/|typegen|themes|core-update/;
+  /oauth|well-known|preview-url|send-recovery|upload-url|setup\/admin|\/dev-|snapshot|backups|transfer|plugin|import\/|\/dev\/|typegen|themes|core-update/;
