@@ -167,6 +167,8 @@ docs/              This document, its companions, and docs/adr/
 5. Map role ids → group slugs from the role manifest carried in the Catalog snapshot (ADR-0001).
 6. Issue a session; store `{ discord_id, role_ids, roles_fetched_at }` **server-side**, with only an opaque token in the cookie.
 
+*(Owner, 2026-11-19: the user row also keeps the member's Discord display name and avatar URL from the `identify` response, refreshed at each sign-in, for the session bar and `/account`. This reverses the 2026-11-14 decision to keep only the snowflake and username, recorded in `apps/site/src/auth.ts`. The scope stays `identify`, and `name` stays the username, which names editors in the CMS. `content/privacy-policy-site.md` says what is kept and for how long.)*
+
 ### Why `identify` + bot token, not `guilds.members.read`
 
 `guilds.members.read` authorizes *your app acting as the user*, so re-checking membership later requires their access token — which expires in about a week, meaning refresh tokens at rest and a refresh flow to maintain.
@@ -196,7 +198,7 @@ A member's Discord role list is not a set of neutral labels. Regional roles, lif
 
 ### ⚠️ The prerender footgun
 
-In Astro, `prerender = true` routes are built to static HTML and served by the adapter **without middleware running**. A gated page that is prerendered leaks. SSR everything except the public landing page, and add a test asserting no route with an `access` field is prerendered.
+In Astro, `prerender = true` routes are built to static HTML and served by the adapter **without middleware running**. A gated page that is prerendered leaks. **Server-render every page, the public landing page included**: every page's session bar shows who is signed in, which a static page cannot know (2026-11-23; the landing page was prerendered until then). The gate test asserts that no page is prerendered.
 
 ---
 
@@ -613,7 +615,7 @@ See Ingestion and description sourcing. What remains, cheapest first:
 
 **Auth spike first, timeboxed to 1–2 days.** Better Auth with the Discord provider, the `getUserInfo` guild-membership rejection, `Member` role check, role manifest mapping, middleware gating a stub page. This is smaller than the previous revision budgeted for, because the rejection path is now a known API rather than an open risk.
 
-Then: Astro pulls and validates the Catalog snapshot (ADR-0001), renders the Index behind the gate, MiniSearch client-side, public landing page prerendered, Access honoured, redaction on the render path.
+Then: Astro pulls and validates the Catalog snapshot (ADR-0001), renders the Index behind the gate, MiniSearch client-side, a public landing page (server-rendered, like every page), Access honoured, redaction on the render path.
 
 **Mechanical gate:** a guild member with the `Member` role reaches the stub; a guild member *without* it is rejected; a non-member is rejected *and no user row is created for them*; a role change is reflected within the TTL; the leak test passes.
 

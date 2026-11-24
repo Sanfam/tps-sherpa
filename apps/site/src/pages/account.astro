@@ -1,0 +1,65 @@
+---
+// The signed-in User's account, read-only. Member-gated: the middleware
+// redirects anyone without a session. It shows no roles: a User's role list is
+// never rendered back to them (ASTRO-ARCHITECTURE.md, Role data is member data).
+import Base from "../layouts/Base.astro";
+
+const user = Astro.locals.signedIn!;
+const ends = user.expiresAt.toLocaleDateString("en-US", { dateStyle: "long", timeZone: "UTC" });
+---
+<Base title="Your account">
+  <div class="wrap prose account">
+    <h1>Your account</h1>
+    <div class="who">
+      {user.avatar && <img src={user.avatar} alt="" width="64" height="64" referrerpolicy="no-referrer" />}
+      <p>
+        <strong>{user.displayName}</strong><br />
+        @{user.username} on Discord
+      </p>
+    </div>
+    <p>
+      You're signed in until <time datetime={user.expiresAt.toISOString()}>{ends}</time>. Using the members' area
+      keeps you signed in, until about a week after your last visit there.
+    </p>
+    <form method="post" action="/auth/sign-out">
+      <button class="button button-quiet" type="submit">Sign out</button>
+    </form>
+
+    <h2>Your data</h2>
+    <ul>
+      <li><a href="/privacy">Privacy policies</a>: what this site and Sherpa keep about you, and for how long.</li>
+      <li>
+        To stop Sherpa keeping your messages and sending them to its AI model, use
+        <code>/privacy opt-out</code> with <code>setting</code> set to processing in Discord. <code>/privacy delete-my-data</code> with
+        <code>confirm</code> set to True also erases the messages Sherpa has kept from you. A Post you started is
+        still described by its opening message: delete the Post in Discord, or ask Staff to exclude it.
+      </li>
+      <li>To have this site delete your account, ask any Staff member.</li>
+    </ul>
+  </div>
+</Base>
+
+<style>
+  .account h2 {
+    margin-top: 3rem;
+  }
+
+  .who {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+
+  .who img {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    flex: none;
+  }
+
+  .who p {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+</style>

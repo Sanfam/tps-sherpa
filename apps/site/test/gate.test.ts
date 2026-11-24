@@ -12,16 +12,18 @@ import { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { editedSinceImport } from "../scripts/rewrite-guard.ts";
 import { NEVER, concrete, injected } from "./emdash-routes.ts";
-import { BOT_TOKEN, GUILD_ID, guild, mock, startMock, usernames } from "./mock-discord.ts";
+import { BOT_TOKEN, GUILD_ID, avatars, displayNames, guild, mock, startMock, usernames } from "./mock-discord.ts";
 
 const SITE_DIR = join(import.meta.dirname, "..");
 // A free port from the OS, so suites running at once (two worktrees) never collide.
-const PORT = await new Promise<number>((resolve) => {
-  const probe = createServer().listen(0, "127.0.0.1", () => {
-    const { port } = probe.address() as AddressInfo;
-    probe.close(() => resolve(port));
+const freePort = () =>
+  new Promise<number>((resolve) => {
+    const probe = createServer().listen(0, "127.0.0.1", () => {
+      const { port } = probe.address() as AddressInfo;
+      probe.close(() => resolve(port));
+    });
   });
-});
+const PORT = await freePort();
 const SITE = `http://127.0.0.1:${PORT}`;
 const TTL_MS = 1000;
 
@@ -39,6 +41,8 @@ const STAFF = "900000000000000005";
 const EVENT_MANAGER = "900000000000000006";
 const FLOODER = "900000000000000007"; // any Discord account, not in the guild
 const BURSTER = "900000000000000008"; // a signed-in Member firing many requests at once
+const DAD = "900000000000000014"; // a Member with a display name and avatar, who signs out
+const STRANDED = "900000000000000015"; // signed in when Discord goes down
 
 const tmp = mkdtempSync(join(tmpdir(), "site-gate-"));
 const DB = join(tmp, "sessions.db");
@@ -64,9 +68,10 @@ const ENV = {
 
 // Vitest's environment, less the import.meta.env values it mirrors into it.
 // Inherited, DEV=1 or NODE_ENV=test makes a dev build, in which EmDash skips
-// external auth for its own passkey sign-in.
+// external auth for its own passkey sign-in; and Vitest's TEST=true turns off
+// Better Auth's origin check.
 const prodEnv = Object.fromEntries(
-  Object.entries(process.env).filter(([k]) => !["NODE_ENV", "MODE", "DEV", "PROD", "SSR", "BASE_URL"].includes(k)),
+  Object.entries(process.env).filter(([k]) => !["NODE_ENV", "MODE", "DEV", "PROD", "SSR", "BASE_URL", "TEST"].includes(k)),
 );
 
 const db = () => new DatabaseSync(DB, { readOnly: true });
@@ -83,17 +88,22 @@ beforeAll(async () => {
   const started = await startMock();
   mockServer = started.server;
   mockOrigin = started.origin;
-  site = spawn(process.execPath, ["--import", "./test/redirect-discord.mjs", "./dist/server/entry.mjs"], {
+  site = await serve(PORT, ENV);
+}, 120_000);
+
+/** The built site on `port`, once it answers. */
+async function serve(port: number, env: Record<string, string>) {
+  const child = spawn(process.execPath, ["--import", "./test/redirect-discord.mjs", "./dist/server/entry.mjs"], {
     cwd: SITE_DIR,
     stdio: "ignore",
-    env: { ...prodEnv, ...ENV, HOST: "127.0.0.1", PORT: String(PORT), MOCK_DISCORD: started.origin },
+    env: { ...prodEnv, ...env, HOST: "127.0.0.1", PORT: String(port), MOCK_DISCORD: mockOrigin },
   });
   for (let i = 0; ; i++) {
-    if (await fetch(SITE).then(() => true, () => false)) break;
+    if (await fetch(`http://127.0.0.1:${port}`).then(() => true, () => false)) return child;
     if (i > 100) throw new Error("site did not start");
     await new Promise((r) => setTimeout(r, 100));
   }
-}, 120_000);
+}
 
 afterAll(() => {
   site?.kill();
@@ -150,6 +160,10 @@ async function signIn(id: string) {
 }
 
 const sessionCount = () => rows("select id from session").length;
+/** The token of an account's newest session. */
+const latestToken = (rw: DatabaseSync, id: string) =>
+  (rw.prepare("select s.token from session s join account a on a.userId = s.userId where a.accountId = ? order by s.createdAt desc limit 1")
+    .get(id) as { token: string }).token;
 
 const stub = (cookie?: string) =>
   fetch(`${SITE}/members`, { redirect: "manual", headers: cookie ? { cookie } : {} });
@@ -225,17 +239,156 @@ test("a role change in Discord is reflected once the TTL passes", async () => {
   expect(roleIds()).toEqual([]);
 }, 10_000);
 
-test("leak: no gated route is prerendered, and the stub is not served without a session", async () => {
+test("leak: no route is prerendered, and neither the stub nor the account page is served without a session", async () => {
   const html = readdirSync(join(SITE_DIR, "dist/client"), { recursive: true })
     .map(String)
     .filter((f) => f.endsWith(".html"));
-  // The public landing page is the only prerendered page.
-  expect(html).toEqual(["index.html"]);
+  // Every page shows who is signed in, so none is static, the landing page included.
+  expect(html).toEqual([]);
 
   const res = await stub();
   expect(res.status).toBe(302);
   expect(res.headers.get("location")).toBe("/");
   expect(await res.text()).not.toContain("Members only");
+
+  const account = await at("/account");
+  expect(account.status).toBe(302);
+  expect(account.headers.get("location")).toBe("/");
+});
+
+test("the landing page shows a signed-in Member their current Discord name and avatar, uncached and without asking Discord; a Viewer sees neither", async () => {
+  guild.set(DAD, [MEMBER_ROLE]);
+  displayNames.set(DAD, "Fixture Dad");
+  avatars.set(DAD, "a1b2c3");
+  await signIn(DAD);
+  // Renamed in Discord, with a new avatar: the next sign-in brings them.
+  displayNames.set(DAD, "Renamed Dad");
+  avatars.set(DAD, "d4e5f6");
+  const { cookie } = await signIn(DAD);
+  // Near its end, where any visit that renews would extend it.
+  const rw = new DatabaseSync(DB);
+  const token = latestToken(rw, DAD);
+  rw.prepare("update session set expiresAt = ? where token = ?").run(new Date(Date.now() + 60_000).toISOString(), token);
+  const expiry = () => rw.prepare("select expiresAt from session where token = ?").get(token);
+  const before = expiry();
+  // Past the roles TTL, a public page still asks Discord nothing, so an outage cannot stall it.
+  await new Promise((r) => setTimeout(r, TTL_MS + 100));
+  mock.memberLookups = 0;
+  const res = await at("/", cookie);
+  expect(mock.memberLookups).toBe(0);
+  // Nor does it renew the session: a former Member cannot keep one alive on public pages.
+  expect(res.headers.getSetCookie().filter((c) => c.startsWith("better-auth.session_token="))).toEqual([]);
+  expect(expiry()).toEqual(before);
+  rw.close();
+  // The page names one Member, so no shared cache may keep it.
+  expect(res.headers.get("cache-control")).toBe("private, no-store");
+  expect(res.headers.get("vary")?.split(/,\s*/)).toContain("Cookie");
+  const signedIn = await res.text();
+  expect(signedIn).toContain("Renamed Dad");
+  expect(signedIn).not.toContain("Fixture Dad");
+  expect(signedIn).toContain(`https://cdn.discordapp.com/avatars/${DAD}/d4e5f6.png`);
+
+  const viewer = await at("/");
+  expect(viewer.status).toBe(200);
+  const body = await viewer.text();
+  expect(body).toContain('href="/auth/discord/start"');
+  expect(body).not.toContain("Fixture Dad");
+  expect(body).not.toContain("Renamed Dad");
+  expect(body).not.toContain("cdn.discordapp.com");
+  displayNames.delete(DAD);
+  avatars.delete(DAD);
+});
+
+test("the account page shows a Member who they are signed in as, and none of their roles", async () => {
+  const FLIGHT_SIM_ROLE = "300000000000000004";
+  guild.set(DAD, [MEMBER_ROLE, AMBASSADOR_ROLE, FLIGHT_SIM_ROLE]);
+  displayNames.set(DAD, "Fixture Dad");
+  avatars.set(DAD, "a1b2c3");
+  const { cookie } = await signIn(DAD);
+  displayNames.delete(DAD);
+  avatars.delete(DAD);
+  // Near its end: opening the page renews the session, and the page says so.
+  const rw = new DatabaseSync(DB);
+  rw.prepare("update session set expiresAt = ? where token = ?").run(new Date(Date.now() + 60_000).toISOString(), latestToken(rw, DAD));
+  rw.close();
+  const res = await at("/account", cookie);
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  expect(body).toContain("Fixture Dad");
+  expect(body).toContain(`https://cdn.discordapp.com/avatars/${DAD}/a1b2c3.png`);
+  expect(body).toContain(`@fixture-${DAD}`);
+  const ends = new Date(body.match(/<time datetime="([^"]+)"/)![1]!);
+  expect(ends.getTime()).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60_000);
+  // Role data is member data: never rendered back, by ID, manifest name or group slug.
+  for (const role of [MEMBER_ROLE, AMBASSADOR_ROLE, FLIGHT_SIM_ROLE, "Ambassador", "ambassador", "Flight Sim", "flight-sim"]) {
+    expect(body, role).not.toContain(role);
+  }
+});
+
+test("the landing page still renders, signed out, when the session database cannot open", async () => {
+  const broken = mkdtempSync(join(tmpdir(), "site-gate-broken-"));
+  const port = await freePort();
+  // A directory where the session database should be.
+  const child = await serve(port, { ...ENV, SITE_SESSION_DB: broken, SITE_EMDASH_DIR: broken });
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/`, { redirect: "manual" });
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('href="/auth/discord/start"');
+    // A gated page still refuses.
+    const gated = await fetch(`http://127.0.0.1:${port}/members`, { redirect: "manual" });
+    expect(gated.status).not.toBe(200);
+  } finally {
+    child.kill();
+    rmSync(broken, { recursive: true, force: true });
+  }
+}, 20_000);
+
+test("sign out ends the session: the old cookie no longer opens a gated page, and another site cannot sign anyone out", async () => {
+  guild.set(DAD, [MEMBER_ROLE]);
+  const { cookie } = await signIn(DAD);
+  expect((await stub(cookie)).status).toBe(200);
+  // The session bar's form post, from this site or from another.
+  const signOut = (origin: string) =>
+    fetch(`${SITE}/auth/sign-out`, {
+      method: "POST",
+      redirect: "manual",
+      headers: { cookie, origin, "content-type": "application/x-www-form-urlencoded" },
+    });
+
+  expect((await signOut("https://elsewhere.example")).status).toBe(403);
+  expect((await stub(cookie)).status).toBe(200);
+  // Only the form's POST signs out: a link or a prefetch does not.
+  for (const method of ["GET", "PUT", "DELETE"]) {
+    const res = await fetch(`${SITE}/auth/sign-out`, { method, redirect: "manual", headers: { cookie, origin: SITE } });
+    expect(res.status, method).toBe(405);
+  }
+  expect((await stub(cookie)).status).toBe(200);
+
+  // When the session cannot be deleted, sign-out says so rather than sending
+  // the Member home believing a copied cookie is dead.
+  const rw = new DatabaseSync(DB);
+  const token = latestToken(rw, DAD);
+  // Near its end, so checking a sign-out that failed must not extend it either.
+  rw.prepare("update session set expiresAt = ? where token = ?").run(new Date(Date.now() + 60_000).toISOString(), token);
+  const expiry = () => rw.prepare("select expiresAt from session where token = ?").get(token);
+  const before = expiry();
+  rw.exec("create trigger keep_sessions before delete on session begin select raise(abort, 'disk full'); end");
+  try {
+    expect((await signOut(SITE)).status).toBe(500);
+    expect(expiry()).toEqual(before);
+  } finally {
+    rw.exec("drop trigger keep_sessions");
+    rw.close();
+  }
+
+  const res = await signOut(SITE);
+  expect(res.status).toBe(303);
+  expect(res.headers.get("location")).toBe("/");
+  expect(res.headers.getSetCookie().some((c) => /^better-auth\.session_token=;.*Max-Age=0/i.test(c))).toBe(true);
+  // A browser that kept the cookie anyway is a Viewer.
+  const after = await stub(cookie);
+  expect(after.status).toBe(302);
+  expect(after.headers.get("location")).toBe("/");
 });
 
 test("the privacy page is public and server-rendered, and shows both policies, bold kept", async () => {
@@ -348,6 +501,51 @@ test("a gated response carries Better Auth's renewal of the session cookie", asy
   const res = await stub(cookie);
   expect(res.status).toBe(200);
   expect(res.headers.getSetCookie().some((c) => c.startsWith("better-auth.session_token="))).toBe(true);
+});
+
+test("a gated page that cannot confirm membership does not renew the session", async () => {
+  guild.set(STRANDED, [MEMBER_ROLE]);
+  const { cookie } = await signIn(STRANDED);
+  expect((await stub(cookie)).status).toBe(200);
+  const rw = new DatabaseSync(DB);
+  const token = latestToken(rw, STRANDED);
+  rw.prepare("update session set expiresAt = ? where token = ?").run(new Date(Date.now() + 60_000).toISOString(), token);
+  const expiry = () => rw.prepare("select expiresAt from session where token = ?").get(token);
+  const before = expiry();
+
+  // Discord is down once the stored roles are stale: the page is refused, and
+  // the session must not be extended on a check that settled nothing.
+  await new Promise((r) => setTimeout(r, TTL_MS + 100));
+  mock.down = true;
+  try {
+    const res = await stub(cookie);
+    expect(res.status).toBe(302);
+    expect(res.headers.getSetCookie().filter((c) => c.startsWith("better-auth.session_token="))).toEqual([]);
+    expect(expiry()).toEqual(before);
+  } finally {
+    mock.down = false;
+    rw.close();
+  }
+});
+
+test("a session that ends while Discord rechecks its roles is refused", async () => {
+  guild.set(STRANDED, [MEMBER_ROLE]);
+  const { cookie } = await signIn(STRANDED);
+  expect((await stub(cookie)).status).toBe(200);
+  const rw = new DatabaseSync(DB);
+  const token = latestToken(rw, STRANDED);
+  await new Promise((r) => setTimeout(r, TTL_MS + 100));
+  // Discord confirms the Member, but the session has run out meanwhile.
+  mock.onLookup = () =>
+    rw.prepare("update session set expiresAt = ? where token = ?").run(new Date(Date.now() - 1000).toISOString(), token);
+  try {
+    const res = await stub(cookie);
+    expect(res.status).toBe(302);
+    expect(await res.text()).not.toContain("Members only");
+  } finally {
+    mock.onLookup = undefined;
+    rw.close();
+  }
 });
 
 test("the site stores the username, and no IP address or user agent", async () => {

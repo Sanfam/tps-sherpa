@@ -1,6 +1,6 @@
 ---
-// The public landing page: the one page built to static HTML.
-export const prerender = true;
+// The public landing page. Server-rendered, so the session bar knows who is
+// signed in: no page is built to static HTML.
 
 import { Image } from "astro:assets";
 import Base from "../layouts/Base.astro";

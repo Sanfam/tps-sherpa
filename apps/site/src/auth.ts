@@ -5,7 +5,10 @@
  *
  * The session database holds Better Auth's own tables and is disposable. A
  * session carries the Member's role IDs, never names, and when they were
- * fetched; the cookie carries only Better Auth's opaque token.
+ * fetched; the cookie carries only Better Auth's opaque token. The user row
+ * keeps the snowflake, the username, which names the editor in the CMS
+ * (owner, 2026-11-14), and the display name and avatar the session bar shows
+ * (owner, 2026-11-19).
  */
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
@@ -38,6 +41,16 @@ async function guildRoles(discordId: string): Promise<string[] | null> {
   if (!res.ok) throw new Error(`Guild member lookup failed: ${res.status}`);
   return ((await res.json()) as { roles: string[] }).roles;
 }
+
+/**
+ * The Discord CDN URL of a user's avatar, or of Discord's default avatar when
+ * they have none (index `(id >> 22) % 6`, Discord's rule for the unique
+ * usernames every person now has).
+ */
+const avatarUrl = (id: string, hash: string | null) =>
+  hash
+    ? `https://cdn.discordapp.com/avatars/${id}/${hash}.png?size=64`
+    : `https://cdn.discordapp.com/embed/avatars/${(BigInt(id) >> 22n) % 6n}.png`;
 
 /**
  * A fixed-window counter: true while `key` has been seen at most `max` times
@@ -114,8 +127,11 @@ function createAuth(database: DatabaseSync) {
             scopes: ["identify"],
             pkce: true,
             prompt: "none",
-            // A renamed Discord account gets its new username on next sign-in.
+            // A renamed Discord account gets its new username, display name
+            // and avatar on next sign-in.
             overrideUserInfo: true,
+            // The plugin passes on only the standard fields unless mapped.
+            mapProfileToUser: ({ displayName }) => ({ displayName }),
             // Awaited in the OAuth callback before any user row exists, so
             // returning null rejects the sign-in with nothing persisted.
             async getUserInfo(tokens) {
@@ -123,20 +139,40 @@ function createAuth(database: DatabaseSync) {
                 headers: { Authorization: `Bearer ${tokens.accessToken}` },
               });
               if (!me.ok) return null;
-              const { id, username } = (await me.json()) as { id: string; username: string };
+              const { id, username, global_name, avatar } = (await me.json()) as {
+                id: string;
+                username: string;
+                global_name: string | null;
+                avatar: string | null;
+              };
               if (!lookupsBy(id)) return null;
               const roles = await guildRoles(id).catch(() => null);
               if (!isMember(roles)) return null;
               // `identify` has no email, and the callback fails with
-              // EMAIL_NOT_FOUND without one, so it is synthesised. The site
-              // keeps the snowflake and the username, which names the editor
-              // in the CMS (owner, 2026-11-14): no display name, no avatar.
-              return { id, name: username, email: `${id}@discord.local`, emailVerified: false };
+              // EMAIL_NOT_FOUND without one, so it is synthesised. `name` stays
+              // the username, which names the editor in the CMS (owner,
+              // 2026-11-14); the display name and avatar are for the session
+              // bar only (owner, 2026-11-19, reversing "no display name, no
+              // avatar").
+              return {
+                id,
+                name: username,
+                displayName: global_name ?? username,
+                image: avatarUrl(id, avatar),
+                email: `${id}@discord.local`,
+                emailVerified: false,
+              };
             },
           },
         ],
       }),
     ],
+    user: {
+      // Read only from Discord's profile at sign-in: no endpoint that would
+      // take it from a caller is reachable (pages/auth/[...all].ts). Not
+      // `input: false`, which makes Better Auth drop it from the profile too.
+      additionalFields: { displayName: { type: "string", required: false } },
+    },
     session: {
       additionalFields: {
         // JSON array of role IDs. Empty and 0 until the first gated request
@@ -201,22 +237,52 @@ export function auth() {
 }
 
 /**
+ * The signed-in User from the session alone, with no role check, or no `user`
+ * for anyone else. A public page shows who is signed in from this, so a
+ * Discord outage never holds it up; nothing role-dependent may come from it.
+ * Only with `renew` does the visit extend the session: a lookup that checks
+ * no membership must not keep a former Member's session alive.
+ */
+export async function sessionUser(headers: Headers, renew = false): Promise<{
+  setCookie: string[];
+  session?: { token: string; userId: string };
+  user?: { email: string; name: string; displayName: string; image: string | null; expiresAt: Date };
+}> {
+  const { auth: a, ready } = auth();
+  await ready;
+  // `setCookie` carries Better Auth's sliding renewal of the session cookie.
+  const { headers: out, response: found } = await a.api.getSession({
+    headers,
+    query: { disableRefresh: !renew },
+    returnHeaders: true,
+  });
+  const setCookie = out.getSetCookie();
+  if (!found) return { setCookie };
+  const { email, name, displayName, image } = found.user;
+  return {
+    setCookie,
+    session: found.session,
+    // A user row from before 2026-11-19 has no display name until its next sign-in.
+    user: { email, name, displayName: displayName ?? name, image: image ?? null, expiresAt: found.session.expiresAt },
+  };
+}
+
+/**
  * The signed-in Member's role IDs, or null for anyone else. Roles older than
  * the TTL are fetched again with the bot token, so a promotion or demotion
  * takes effect without a new sign-in; someone who is no longer a Member loses
  * their session.
  */
-export async function memberRoles(
-  headers: Headers,
-): Promise<{ roles: string[] | null; setCookie: string[]; user?: { email: string; name: string } }> {
-  const { auth: a, ready } = auth();
-  await ready;
-  // `setCookie` carries Better Auth's sliding renewal of the session cookie.
-  const { headers: out, response: found } = await a.api.getSession({ headers, returnHeaders: true });
-  const setCookie = out.getSetCookie();
-  if (!found) return { roles: null, setCookie };
-  const { email, name } = found.user;
-  return { roles: await rolesFor(found.session), setCookie, user: { email, name } };
+export async function memberRoles(headers: Headers) {
+  const { setCookie, session, user } = await sessionUser(headers);
+  const roles = session ? await rolesFor(session) : null;
+  // Renewed only once membership is confirmed: a refused or failed check must
+  // not extend a former Member's session.
+  if (!roles) return { roles, setCookie, user };
+  // The renewing lookup is the authority: the session may have ended while
+  // Discord was asked, and its answer carries the renewed expiry.
+  const renewed = await sessionUser(headers, true);
+  return { roles: renewed.session ? roles : null, setCookie: renewed.setCookie, user: renewed.user };
 }
 
 // One re-check per Discord account at a time: requests that arrive while it is
