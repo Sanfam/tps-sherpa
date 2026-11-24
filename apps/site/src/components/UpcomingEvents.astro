@@ -1,0 +1,59 @@
+---
+// A club's next few events, from the accepted Catalog snapshot, as the User
+// can see them; nothing at all when it has none.
+import { currentSnapshot } from "../catalog-snapshot.ts";
+import { type Club, eventsView, horizon, upcoming } from "../events.ts";
+import LocalTime from "./LocalTime.astro";
+
+interface Props {
+  club: Club;
+}
+
+const { club } = Astro.props;
+const now = Date.now();
+const current = currentSnapshot();
+const next = current && !current.stale
+  ? eventsView(current.snapshot.events ?? [], horizon(now))
+      .filter((o) => o.club?.id === club.id && upcoming(o, now))
+      .slice(0, 3)
+  : [];
+---
+{
+  next.length > 0 && (
+    <section class="upcoming" aria-labelledby="club-upcoming">
+      <h2 id="club-upcoming">Upcoming</h2>
+      <ul>
+        {next.map((o) => (
+          <li>
+            <strong>{o.name}</strong> <LocalTime at={o.start} />
+          </li>
+        ))}
+      </ul>
+      <p><a href={`/events?club=${club.id}`}>All {club.name} events</a></p>
+    </section>
+  )
+}
+
+<style>
+  .upcoming {
+    margin-block: 1.5rem;
+    padding: 0.75em 1.25em;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: var(--radius);
+  }
+
+  ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  li + li {
+    margin-top: 0.35em;
+  }
+
+  li :global(time) {
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+</style>

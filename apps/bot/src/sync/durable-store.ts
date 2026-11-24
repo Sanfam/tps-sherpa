@@ -1,7 +1,8 @@
 /**
  * The bot's durable store: the current Catalog generation, its role manifest,
  * the exclusions, the monitored channels, and members' privacy preferences and
- * backfill requests (ADR-0001), and the introductions responder's state.
+ * backfill requests (ADR-0001), the introductions responder's state, and the
+ * guild's scheduled events.
  * Later, the rest of the durable state the handoff names.
  *
  * Separate from the Tier 0 cache on purpose. Litestream replicates whole
@@ -13,6 +14,7 @@ import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { parsePrevious, type Entity } from "./catalog.ts";
+import type { SnapshotEvent } from "./events.ts";
 import { parseExclusions, type ExclusionEntry } from "./exclusions.ts";
 import type { RoleManifestEntry, SyncOutcome } from "./ports.ts";
 
@@ -103,6 +105,11 @@ export interface Generation {
  * member's, kept when a watch ends or they leave (D52-6); and
  * `watch_followup`, the review owed for a watch that ended, ids and dates
  * only, deleted once it runs or at 14 days (owner, 2026-11-15).
+ *
+ * `scheduled_event`: the guild's Discord Scheduled Events as Discord lists them
+ * now, for the site's calendar (owner, 2026-11-19), stored whole as the snapshot
+ * carries them. A mirror, not an archive: each sync replaces it, so an event
+ * Discord drops leaves the store too. No creator or member id.
  */
 const MIGRATIONS = `
   CREATE TABLE IF NOT EXISTS heartbeat (
@@ -193,6 +200,10 @@ const MIGRATIONS = `
     set_by    TEXT NOT NULL,
     since     TEXT NOT NULL,
     queued_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS scheduled_event (
+    id   TEXT PRIMARY KEY,
+    body TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS alert_sent (
     member_id TEXT NOT NULL,
@@ -507,6 +518,21 @@ export const openDurableStore = (path: string = DURABLE_STORE_PATH) => {
     /** False if it was not monitored. */
     removeMonitored: (id: string): boolean =>
       db.prepare("DELETE FROM monitored_channel WHERE id = ?").run(id).changes > 0,
+
+    /** Replaces the stored events with the ones one sync read, all of them. */
+    replaceEvents: (events: SnapshotEvent[]) => {
+      transaction(db, () => {
+        db.exec("DELETE FROM scheduled_event");
+        const put = db.prepare("INSERT INTO scheduled_event (id, body) VALUES (?, ?)");
+        for (const e of events) put.run(e.id, JSON.stringify(e));
+      });
+    },
+
+
+    events: (): SnapshotEvent[] =>
+      (db.prepare("SELECT body FROM scheduled_event ORDER BY id").all() as Array<{ body: string }>).map(
+        (r) => JSON.parse(r.body) as SnapshotEvent,
+      ),
 
     /** Rewrites the heartbeat row, so the store changes and Litestream snapshots it. */
     beat: (at: Date = new Date()) => {
