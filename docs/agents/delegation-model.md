@@ -16,12 +16,12 @@ invoked. This document is why the roster is what it is.
 | Researcher | `.claude/agents/researcher-haiku.md` | Claude Haiku 5.5 | Low–High, per dispatch | read-only by instruction — holds Bash |
 | Implementer — worker | `docs/agents/codex-briefs/implementer-luna.md` | GPT-5.6 Luna | High | `workspace-write` |
 | Implementer — hard worker | `docs/agents/codex-briefs/implementer-luna-max.md` | GPT-5.6 Luna | Max | `workspace-write` |
-| Final review | `docs/agents/codex-briefs/final-reviewer.md` | GPT-5.6 Sol | High | `read-only` |
+| Final review | `docs/agents/codex-briefs/final-reviewer.md` | GPT-6.2 Sol (`gpt-6.2-sol`) | Medium | `read-only` |
 
 The four Claude roles are Claude Code subagents in `.claude/agents/`. Every GPT
 role is a Codex session, not a subagent: its brief lives in
-`docs/agents/codex-briefs/`. Astra roles may move Low–Medium and final review
-Medium–High; Codex effort is chosen per call.
+`docs/agents/codex-briefs/`. Astra roles may move Low–Medium; final review runs
+at Medium (owner, 2026-11-24). Codex effort is otherwise chosen per call.
 
 ### Choosing a Claude subagent's effort
 

@@ -1,9 +1,9 @@
 ---
 // A published `pages` entry at its slug, which keeps the old wiki path
 // (`parenting/child/home` at /parenting/child/home). Anything else is a 404,
-// drafts and the import's stub pages included. Member-gated by the middleware,
-// so it must stay server-rendered.
-import { getEmDashEntry } from "emdash";
+// drafts and the import's stub pages included, except to an editor in edit
+// mode. Member-gated by the middleware, so it must stay server-rendered.
+import { getEditMeta, getEmDashEntry } from "emdash";
 import { getRequestContext, runWithContext } from "emdash/request-context";
 import { PortableText } from "emdash/ui";
 import Heading from "../components/Heading.astro";
@@ -15,11 +15,12 @@ import { withHeadingAnchors } from "../heading-ids.ts";
 import Base from "../layouts/Base.astro";
 import { childrenOf, placeOf, publishedPages, trail } from "../nav.ts";
 
-// Published only, edit mode and preview tokens off. EmDash serves drafts to its
-// edit-mode cookie on the role its own session stored, which outlives a Discord
-// role loss (ADR-0002, item 1); editors read drafts in the CMS instead.
+// Edit mode is EmDash's: drafts and inline editing for an editor who turned it
+// on, judged on the role EmDash stored, which a Discord role loss leaves in
+// place (accepted, ADR-0002 item 1). Saves go through the gate on the live role.
+// Preview tokens stay off (issue #120).
 // ponytail: one page of up to 100 works, EmDash's most; follow nextCursor if a club lists more.
-const { entry, error } = await runWithContext({ ...getRequestContext(), editMode: false, preview: undefined }, () =>
+const { entry, error } = await runWithContext({ ...getRequestContext(), preview: undefined }, () =>
   getEmDashEntry("pages", Astro.params.slug ?? "", { references: { works: { limit: 100 } } }),
 );
 if (error) throw error;
@@ -44,8 +45,10 @@ const club = entry ? clubs.find((c) => c.page === place) : undefined;
             </ol>
           </nav>
         )}
-        <h1>{String(entry.data["title"])}</h1>
-        <PortableText value={withHeadingAnchors(entry.data["content"]) as never} components={{ block: Heading, type: { image: MediaImage, gallery: MediaImage } }} />
+        <h1 {...entry.edit.title}>{String(entry.data["title"])}</h1>
+        {/* In edit mode the content carries EmDash's marker for its inline editor, which a copy would drop.
+            That editor renders headings itself, without anchors: a #fragment lands only outside edit mode. */}
+        <PortableText value={(getEditMeta(entry.data["content"]) ? entry.data["content"] : withHeadingAnchors(entry.data["content"])) as never} components={{ block: Heading, type: { image: MediaImage, gallery: MediaImage } }} />
         {club && <UpcomingEvents club={club} />}
         {works.length > 0 && <Works works={works} />}
         {below.length > 0 && (
