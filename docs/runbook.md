@@ -32,7 +32,7 @@ Railway is recognised by `RAILWAY_ENVIRONMENT_ID`),
 so a start command that skips the script fails loudly.
 
 Only `bot.db` is replicated. `tier0.db`, `activity.json` and
-`find-usage.json` on the same volume are not.
+`find-member-usage.json` on the same volume are not.
 
 The erasure policy says a removed row leaves backups within 30 days. Three
 settings hold it, and all three must stay:

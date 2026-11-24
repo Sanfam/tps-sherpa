@@ -2,7 +2,7 @@
  * `/sherpa introductions`: Staff's controls for the introductions responder —
  * its mode, its clock and its thresholds (§7). Staff-only: the dispatcher
  * checks `isStaff` before this runs (interactions.ts). Every reply is
- * ephemeral, like every other.
+ * ephemeral, like every other (`/find`'s successful answers excepted).
  *
  * Setting `live` is what lets Sherpa post in `#introductions` (D6), so it is
  * logged loudly, with who did it. `/sherpa alerts on` is the same for
@@ -19,6 +19,10 @@ import type { ClockMode, TimingSettings } from "./responder-decide.ts";
 import { MODES, type Mode, type ResponderStore, type SettingKey } from "./responder-store.ts";
 
 const CLOCKS: readonly ClockMode[] = ["wall", "active"];
+
+/** `/find`'s allowance per member per day. Zero switches `/find` off. */
+export const FIND_CAP_MIN = 0;
+export const FIND_CAP_MAX = 100;
 
 /** Each threshold's key, its bounds, and its value with no row (§3). Recommend is also at least greet. */
 const TIMING = {
@@ -130,6 +134,21 @@ export const SHERPA_COMMAND: RESTPostAPIChatInputApplicationCommandsJSONBody = {
           options: [{ name: "member", type: ApplicationCommandOptionType.User, description: "Whose watch.", required: true }],
         },
         { name: "list", type: ApplicationCommandOptionType.Subcommand, description: "Show the watches running." },
+      ],
+    },
+    {
+      name: "find-cap",
+      type: ApplicationCommandOptionType.Subcommand,
+      description: "Staff role only: how many /find questions each member gets a day, 0 to turn /find off.",
+      options: [
+        {
+          name: "cap",
+          type: ApplicationCommandOptionType.Integer,
+          description: "Questions per member per day, 0–100.",
+          required: true,
+          min_value: FIND_CAP_MIN,
+          max_value: FIND_CAP_MAX,
+        },
       ],
     },
     {
@@ -257,6 +276,15 @@ export const answerSherpa = async (
     if (mode === "live") log(`${tag} MENTIONS MODE SET TO LIVE by ${by}: Sherpa now replies to @mentions where asked.`);
     else log(`${tag} mentions mode ${mode} by ${by}`);
     return `Done. Mentions mode is **${mode}**.` + (mode === "live" ? " Sherpa now replies to @mentions where asked." : "");
+  }
+  if (by && group?.type === ApplicationCommandOptionType.Subcommand && group.name === "find-cap") {
+    const cap = group.options?.find((o) => o.name === "cap")?.value;
+    if (typeof cap !== "number" || !Number.isSafeInteger(cap) || cap < FIND_CAP_MIN || cap > FIND_CAP_MAX) return null;
+    withSettings((s) => s.setSetting("find_daily_cap", String(cap), by));
+    log(`${tag} find cap ${cap} by ${by}`);
+    return cap === 0
+      ? "Done. `/find` is **off**."
+      : `Done. Each member can ask \`/find\` **${cap}** time${cap === 1 ? "" : "s"} a day (UTC).`;
   }
   if (by && group?.type === ApplicationCommandOptionType.Subcommand && group.name === "alerts") {
     const state = group.options?.find((o) => o.name === "state")?.value;

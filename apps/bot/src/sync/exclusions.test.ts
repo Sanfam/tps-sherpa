@@ -80,6 +80,24 @@ describe("exclusions applied to the Catalog", () => {
   });
 });
 
+describe("the excluded categories", () => {
+  it("keep their Channels and Forums, and their Posts, out of the Catalog, as Staff's are", async () => {
+    const { catalog } = await buildCatalog({
+      discord: fixtureDiscord({
+        channels: [
+          { id: "111", name: "general", type: ChannelType.GuildText, topic: "Chat here", categoryId: "900" },
+          { id: "222", name: "admin-desk", type: ChannelType.GuildText, topic: "Admin", categoryId: "1083605970829180978" },
+          { id: "333", name: "archive-forum", type: ChannelType.GuildForum, topic: "Old", categoryId: "1092495090238361760" },
+          { id: "444", name: "verify-here", type: ChannelType.GuildText, topic: "Verify", categoryId: "1237149452184064020" },
+        ],
+        threads: [{ id: "555", name: "An old post", parentId: "333", appliedTags: [], firstPost: "Notes" }],
+      }),
+      guildId: GUILD_ID,
+    });
+    expect(catalog.map((e) => e.id)).toEqual(["111"]);
+  });
+});
+
 describe("the Staff category", () => {
   it("keeps its Channels and Forums, and their Posts, out of the Catalog, whoever can see them", async () => {
     const { catalog } = await buildCatalog({

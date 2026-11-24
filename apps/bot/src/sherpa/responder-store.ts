@@ -52,7 +52,8 @@ export type SettingKey =
   | "shadow_notice_at"
   | "alerts"
   | "alerts_on_since"
-  | "mentions_mode";
+  | "mentions_mode"
+  | "find_daily_cap";
 
 /** A message that fed the watch. `imagesRead`: its images went to the vision call. */
 export interface ContributingMessage {

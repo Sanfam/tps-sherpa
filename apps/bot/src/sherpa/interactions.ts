@@ -2,9 +2,10 @@
  * The slash commands: their definitions, who may use them, and the one path
  * every answer takes back to Discord.
  *
- * Every reply is ephemeral. Sherpa has never posted publicly, and its first
- * public post is a decision for a person, not a side effect of a code path —
- * so there is exactly one reply builder here, and it always sets the flag.
+ * Every reply is ephemeral except a successful `/find` answer, which the owner
+ * decided is public. Refusals and failures stay ephemeral even then: `/find`
+ * defers publicly only once it has passed every refusal, and a private outcome
+ * after that removes the public placeholder first (`handleFind`).
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
@@ -96,10 +97,13 @@ export const reply = (content: string, embeds?: APIEmbed[]): EphemeralReply => (
 
 /** The interaction's calls back to Discord. A fake in tests. */
 export interface ReplyPort {
-  defer: (body: { flags: MessageFlags.Ephemeral }) => Promise<unknown>;
+  /** No flags: a public reply, which only a successful `/find` answer is. */
+  defer: (body: { flags?: MessageFlags.Ephemeral }) => Promise<unknown>;
   followUp: (body: EphemeralReply) => Promise<unknown>;
   /** Rewrites the deferred reply: progress on a long command, then its answer in the same place. */
-  edit?: (body: Omit<EphemeralReply, "flags">) => Promise<unknown>;
+  edit: (body: Omit<EphemeralReply, "flags">) => Promise<unknown>;
+  /** Deletes the deferred reply, so a private answer can replace a public one. */
+  remove: () => Promise<unknown>;
 }
 
 /**
@@ -159,7 +163,8 @@ const holdsRoleNamed = (
   return interaction.member.roles.some((id) => held.has(id));
 };
 
-export const DEFAULT_FIND_DAILY_CAP = 50;
+/** Questions per member per day, until Staff set another with `/sherpa find-cap`. */
+export const DEFAULT_FIND_DAILY_CAP = 8;
 
 /**
  * The cap's limit from the environment. Anything but a non-negative integer
@@ -217,6 +222,45 @@ export const dailyCap = (
 });
 
 export type DailyCap = ReturnType<typeof dailyCap>;
+
+/**
+ * `/find`'s allowance: each member's own questions a day (UTC), so one member
+ * cannot use up everyone's. `limit` is read on every call, so Staff's
+ * `/sherpa find-cap` takes effect at once. A store that cannot be read costs
+ * that member the day, and is rewritten, so the next call heals it.
+ */
+export const perMemberDailyCap = (
+  path: string,
+  limit: () => number,
+  warn: (m: string) => void,
+  now: () => Date = () => new Date(),
+) => ({
+  limit,
+  take: (memberId: string): boolean => {
+    const day = now().toISOString().slice(0, 10);
+    const max = limit();
+    let counts: Record<string, number> = {};
+    try {
+      const stored = JSON.parse(readFileSync(path, "utf8")) as { day?: unknown; counts?: unknown };
+      if (typeof stored.day !== "string" || typeof stored.counts !== "object" || stored.counts === null)
+        throw new Error("shape");
+      if (stored.day === day) counts = stored.counts as Record<string, number>;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        warn(`[sherpa] ${path} is unreadable; treating this member's allowance today as spent.`);
+        counts = { [memberId]: max };
+      }
+    }
+    const used = Number.isSafeInteger(counts[memberId]) && counts[memberId]! >= 0 ? counts[memberId]! : 0;
+    const allowed = used < max;
+    if (allowed) counts = { ...counts, [memberId]: used + 1 };
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, `${JSON.stringify({ day, counts })}\n`);
+    return allowed;
+  },
+});
+
+export type MemberDailyCap = ReturnType<typeof perMemberDailyCap>;
 
 export const NOT_A_MEMBER =
   "Sherpa is for Members of the server. Once you have the Member role, try again.";
@@ -279,7 +323,8 @@ export interface Sherpa {
   askFor: (catalog: Entity[]) => Boundary["ask"];
   /** One retry, as every other paid call gets. */
   retrying: <T>(work: () => Promise<T>) => Promise<T>;
-  cap: DailyCap;
+  /** `/find`'s allowance, per member per day. */
+  cap: MemberDailyCap;
   /** Ids and counts only. Never a query, a name or a summary. */
   log: (message: string) => void;
   now?: () => Date;
@@ -327,6 +372,13 @@ const answer = async (
       if (!sherpa.watch) return "Watches are unavailable right now.";
       return (await sherpa.watch(interaction, tag)) ?? UNKNOWN;
     }
+    // The per-member `/find` allowance is a cost control, so Staff role only, as analyse and watch.
+    if (interaction.data.name === "sherpa" && sub?.type === ApplicationCommandOptionType.Subcommand && sub.name === "find-cap") {
+      if (!holdsRoleNamed(interaction, sherpa.guildId, sherpa.loadRoleManifest(), STAFF_ROLE_ONLY)) {
+        sherpa.log(`${tag} find-cap refused: not the Staff role`);
+        return NOT_STAFF_ROLE;
+      }
+    }
     if (interaction.data.name === "sherpa" && sub?.type === ApplicationCommandOptionType.Subcommand && sub.name === "analyse") {
       if (!holdsRoleNamed(interaction, sherpa.guildId, sherpa.loadRoleManifest(), STAFF_ROLE_ONLY)) {
         sherpa.log(`${tag} analyse refused: not the Staff role`);
@@ -370,59 +422,12 @@ const answer = async (
     sherpa.log(`${tag} refused: not a Member`);
     return NOT_A_MEMBER;
   }
-  // Before anything is read: off means off, even with a broken Catalog.
-  if (interaction.data.name === "find" && sherpa.cap.limit === 0) {
-    sherpa.log(`${tag} refused: /find is off`);
-    return FIND_OFF;
-  }
-  // Also before the Catalog, and after "off": telling someone to opt back in
-  // for a command that is off for everyone would send them round in a circle.
-  if (interaction.data.name === "find" && !sherpa.privacy.settings(interaction.member!.user.id).processing) {
-    sherpa.log(`${tag} refused: processing is off`);
-    return FIND_OPTED_OUT;
-  }
   const catalog = sherpa.loadCatalog();
 
   const vocabulary = sherpa.loadVocabulary();
   const monitored = sherpa.loadMonitored(catalog);
   const roles = interaction.member!.roles;
   const denied = sherpa.loadDenied(interaction.member!.user.id);
-
-  if (interaction.data.name === "find") {
-    const query = stringOption(interaction, "interests") ?? "";
-    if (!query.trim()) {
-      sherpa.log(`${tag} empty query`);
-      return EMPTY_QUERY;
-    }
-    const ask = sherpa.askFor(catalog);
-    try {
-      const found = await sherpa.retrying(() => {
-        if (!sherpa.cap.take()) throw new CapReached();
-        return findPlaces({
-          query,
-          invokerId: interaction.member!.user.id,
-          catalog,
-          monitored,
-          roles,
-          denied,
-          vocabulary,
-          ask,
-          origin: { command: "find" },
-        });
-      });
-      sherpa.log(
-        `${tag} candidates=${found.candidates} matches=${found.matches.length} ` +
-          `topics=${found.topics.length} dropped=${found.dropped}`,
-      );
-      return renderFind(found);
-    } catch (error) {
-      if (error instanceof CapReached) {
-        sherpa.log(`${tag} refused: daily cap reached`);
-        return CAP_REACHED;
-      }
-      throw error;
-    }
-  }
 
   if (interaction.data.name === "lately") {
     const slug = stringOption(interaction, "topic");
@@ -441,6 +446,104 @@ const answer = async (
 };
 
 /**
+ * `/find`'s refusals, decided before anything is shown to the channel, so they
+ * stay private. "Off" comes before the opt-out: telling someone to opt back in
+ * for a command that is off for everyone would send them round in a circle.
+ */
+const findRefusal = (interaction: APIChatInputApplicationCommandInteraction, sherpa: Sherpa): string | null => {
+  const tag = `[sherpa] /find ${interaction.id}`;
+  if (!isMember(interaction, sherpa.guildId, sherpa.loadRoleManifest())) {
+    sherpa.log(`${tag} refused: not a Member`);
+    return NOT_A_MEMBER;
+  }
+  // Before anything is read: off means off, even with a broken Catalog.
+  if (sherpa.cap.limit() === 0) {
+    sherpa.log(`${tag} refused: /find is off`);
+    return FIND_OFF;
+  }
+  if (!sherpa.privacy.settings(interaction.member!.user.id).processing) {
+    sherpa.log(`${tag} refused: processing is off`);
+    return FIND_OPTED_OUT;
+  }
+  if (!(stringOption(interaction, "interests") ?? "").trim()) {
+    sherpa.log(`${tag} empty query`);
+    return EMPTY_QUERY;
+  }
+  return null;
+};
+
+/**
+ * `/find`'s answer, as the channel will see it. Throws `CapReached` when the
+ * member's day is spent. Matched against the Member view, not the asker's
+ * roles: a place only some Members can see is not named to everyone who can
+ * read the public reply.
+ */
+const answerFind = async (interaction: APIChatInputApplicationCommandInteraction, sherpa: Sherpa): Promise<string> => {
+  const tag = `[sherpa] /find ${interaction.id}`;
+  const invoker = interaction.member!.user.id;
+  const query = stringOption(interaction, "interests") ?? "";
+  const catalog = sherpa.loadCatalog();
+  const vocabulary = sherpa.loadVocabulary();
+  const monitored = sherpa.loadMonitored(catalog);
+  const denied = sherpa.loadDenied(invoker);
+  const ask = sherpa.askFor(catalog);
+  const found = await sherpa.retrying(() => {
+    if (!sherpa.cap.take(invoker)) throw new CapReached();
+    return findPlaces({
+      query,
+      invokerId: invoker,
+      catalog,
+      monitored,
+      roles: memberRoleIds(sherpa.loadRoleManifest()),
+      denied,
+      vocabulary,
+      ask,
+      origin: { command: "find" },
+    });
+  });
+  sherpa.log(
+    `${tag} candidates=${found.candidates} matches=${found.matches.length} ` +
+      `topics=${found.topics.length} dropped=${found.dropped}`,
+  );
+  return renderFind(found);
+};
+
+/**
+ * `/find`: refusals are private, as before. Anything else is deferred in public,
+ * so a successful answer reaches the channel. A private outcome after that
+ * (the day spent mid-command, a failure) removes the public placeholder first.
+ */
+const handleFind = async (
+  interaction: APIChatInputApplicationCommandInteraction,
+  sherpa: Sherpa,
+  discord: ReplyPort,
+): Promise<void> => {
+  const refused = findRefusal(interaction, sherpa);
+  if (refused !== null) {
+    await discord.defer({ flags: MessageFlags.Ephemeral });
+    await discord.followUp(reply(refused));
+    return;
+  }
+  await discord.defer({});
+  let text: string;
+  try {
+    text = await answerFind(interaction, sherpa);
+  } catch (error) {
+    if (error instanceof CapReached) {
+      sherpa.log(`[sherpa] /find ${interaction.id} refused: daily cap reached`);
+      text = CAP_REACHED;
+    } else {
+      sherpa.log(`[sherpa] /find ${interaction.id} failed: ${(error as Error).message.slice(0, 160)}`);
+      text = FAILED;
+    }
+    await discord.remove();
+    await discord.followUp(reply(text));
+    return;
+  }
+  await discord.edit({ content: text, allowed_mentions: { parse: [] } });
+};
+
+/**
  * One interaction, start to finish: defer (Discord allows three seconds, and a
  * `/find` takes longer), answer, follow up. Anything that is not a slash
  * command is ignored — Sherpa registers nothing else.
@@ -456,13 +559,13 @@ export const handleInteraction = async (
   )
     return;
   const command = interaction as APIChatInputApplicationCommandInteraction;
+  if (command.data.name === "find") return handleFind(command, sherpa, discord);
   await discord.defer({ flags: MessageFlags.Ephemeral });
   let answered: Answer;
   /** Once the deferred reply shows progress, a follow-up would be a second message beside it. */
   let progressed = false;
   try {
     answered = await answer(command, sherpa, async (text) => {
-      if (!discord.edit) return;
       progressed = true;
       // Progress is a courtesy: a failed edit never fails the command.
       await discord.edit({ content: text, allowed_mentions: { parse: [] } }).catch(() => {});
@@ -474,7 +577,7 @@ export const handleInteraction = async (
     answered = FAILED;
   }
   const body = typeof answered === "string" ? reply(answered) : reply(answered.content, answered.embeds);
-  if (progressed && discord.edit) {
+  if (progressed) {
     const { flags: _, ...edit } = body;
     await discord.edit(edit);
   } else await discord.followUp(body);
