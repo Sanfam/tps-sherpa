@@ -219,6 +219,18 @@ const DISCORD_EPOCH = 1420070400000;
 /** `👮 Staff`: its Channels and Forums are never in the Catalog. */
 export const STAFF_CATEGORY = "1088243110284365957";
 
+/**
+ * Categories whose Channels and Forums are never in the Catalog, so `/find`
+ * never recommends them (owner, 2026-11-24). `👮 Staff` is one of them; the
+ * others are `Admin`, `📂 Archive` and `Verification`.
+ */
+export const EXCLUDED_CATEGORIES: ReadonlySet<string> = new Set([
+  STAFF_CATEGORY,
+  "1083605970829180978", // Admin
+  "1092495090238361760", // 📂 Archive
+  "1237149452184064020", // Verification
+]);
+
 export const snowflakeTime = (id: string | null | undefined): string | null => {
   if (!id || !/^\d{17,20}$/.test(id)) return null;
   return new Date(Number(BigInt(id) >> 22n) + DISCORD_EPOCH).toISOString();
@@ -303,12 +315,13 @@ export const buildCatalog = async (deps: {
     ChannelType.GuildForum,
   ];
   const allChannels = await deps.discord.listChannels();
-  // Everything under the Staff category is excluded as a durable exclusion is,
-  // whatever its permissions, and so is anything added there later (owner, 2026-10-19).
+  // Everything under an excluded category is excluded as a durable exclusion is,
+  // whatever its permissions, and so is anything added there later (owner, 2026-10-19;
+  // the categories in EXCLUDED_CATEGORIES, 2026-11-24).
   const configured = deps.exclusions ?? new Set<string>();
   const excluded = new Set([
     ...configured,
-    ...allChannels.filter((c) => c.categoryId === STAFF_CATEGORY).map((c) => c.id),
+    ...allChannels.filter((c) => c.categoryId != null && EXCLUDED_CATEGORIES.has(c.categoryId)).map((c) => c.id),
   ]);
 
   // A Channel is a standing text channel that is not a Forum. Categories are
@@ -322,7 +335,12 @@ export const buildCatalog = async (deps: {
   // channels are never Entities, and warning about them buries the real gaps
   // in noise — which is how an alarm gets ignored.
   for (const c of allChannels)
-    if (containerTypes.includes(c.type) && c.memberVisible && !c.visible && c.categoryId !== STAFF_CATEGORY)
+    if (
+      containerTypes.includes(c.type) &&
+      c.memberVisible &&
+      !c.visible &&
+      !(c.categoryId != null && EXCLUDED_CATEGORIES.has(c.categoryId))
+    )
       deps.warn?.(
         `[visibility] "${c.name}" (${c.id}) is visible to Members but not to ` +
           `the bot, so it is missing from the Catalog.`,

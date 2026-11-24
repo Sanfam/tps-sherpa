@@ -41,6 +41,7 @@ import {
   dailyCap,
   findDailyCap,
   handleInteraction,
+  perMemberDailyCap,
 } from "./interactions.ts";
 import { openMonitored } from "./monitored.ts";
 import {
@@ -179,6 +180,11 @@ const tempCap = (limit: number, now?: () => Date) => {
   return { path, cap: dailyCap(path, limit, () => {}, now) };
 };
 
+const tempMemberCap = (limit: number, now?: () => Date) => {
+  const path = join(mkdtempSync(join(tmpdir(), "sherpa-cap-")), "find-member-usage.json");
+  return { path, cap: perMemberDailyCap(path, () => limit, () => {}, now) };
+};
+
 /** A Sherpa wired to fixtures: a real boundary over a fake wire, a real cap on a temp file. */
 const harness = (
   opts: {
@@ -202,7 +208,7 @@ const harness = (
       return typeof r === "function" ? r() : r;
     },
   };
-  const { cap, path } = tempCap(opts.limit ?? 10);
+  const { cap, path } = tempMemberCap(opts.limit ?? 10);
   const { privacy, paths } = tempPrivacy(opts.policy, opts.sitePolicy);
   if (opts.optedOut) privacy.set(INVOKER, "processing", false);
   // The real seed's Channel is not in these fixtures; a test that wants one
@@ -242,13 +248,30 @@ const harness = (
     cap,
     log: (m) => logs.push(m),
   };
-  const sent: { defers: unknown[]; replies: EphemeralReply[] } = { defers: [], replies: [] };
+  const sent: { defers: unknown[]; replies: EphemeralReply[]; edits: Array<{ content: string }>; removed: number } = {
+    defers: [],
+    replies: [],
+    edits: [],
+    removed: 0,
+  };
   const run = async (interaction: APIInteraction) => {
+    // What this command showed: its last reply, or its last edit (a public answer).
+    let shown: string | undefined;
     await handleInteraction(interaction, sherpa, {
       defer: async (body) => sent.defers.push(body),
-      followUp: async (body) => sent.replies.push(body),
+      followUp: async (body) => {
+        sent.replies.push(body);
+        shown = body.content;
+      },
+      edit: async (body) => {
+        sent.edits.push(body as { content: string });
+        shown = body.content;
+      },
+      remove: async () => {
+        sent.removed++;
+      },
     });
-    return sent.replies.at(-1)?.content;
+    return shown;
   };
   return { run, sent, calls, logs, capPath: path, privacy, paths, sherpa };
 };
@@ -256,13 +279,8 @@ const harness = (
 describe("every reply is ephemeral", () => {
   it("on every branch the handlers have", async () => {
     const branches: Array<[string, Parameters<typeof harness>[0], APIInteraction]> = [
-      ["find, matches", {}, command("find", { interests: QUERY })],
-      ["find, few", { reply: '{"matches":[]}' }, command("find", { interests: QUERY })],
       ["find, empty", {}, command("find", { interests: "  " })],
-      // The first call spends the only one; the retry finds the day spent.
-      ["find, capped", { limit: 1, reply: "not json" }, command("find", { interests: QUERY })],
       ["find, off", { limit: 0 }, command("find", { interests: QUERY })],
-      ["find, model broken", { reply: "not json" }, command("find", { interests: QUERY })],
       ["find, not a Member", {}, command("find", { interests: QUERY }, { roles: [OTHER_ROLE] })],
       ["lately", {}, command("lately")],
       ["lately, topic", {}, command("lately", { topic: "gaming" })],
@@ -286,9 +304,7 @@ describe("every reply is ephemeral", () => {
     }
     // Each branch reached a different answer, so none was skipped by accident.
     expect(contents.size).toBe(branches.length);
-    expect(contents).toContain(CAP_REACHED);
     expect(contents).toContain(FIND_OFF);
-    expect(contents).toContain(FAILED);
     expect(contents).toContain(NOT_A_MEMBER);
     expect(contents).toContain(EMPTY_QUERY);
     expect(contents).toContain(UNKNOWN);
@@ -464,6 +480,58 @@ describe("/privacy", () => {
   });
 });
 
+describe("/find answers are public; refusals stay private", () => {
+  it("shows a successful answer to the channel, with nothing private in it", async () => {
+    const { run, sent } = harness({});
+    const text = await run(command("find", { interests: QUERY }));
+    expect(sent.defers).toEqual([{}]);
+    expect(sent.replies).toEqual([]);
+    expect(text).toContain("<#100000000000000001>");
+  });
+
+  it("keeps the opt-out private, and says how to opt back in", async () => {
+    const { run, sent } = harness({ optedOut: true });
+    const text = await run(command("find", { interests: QUERY }));
+    expect(sent.defers).toEqual([{ flags: MessageFlags.Ephemeral }]);
+    expect(sent.replies[0]!.flags).toBe(MessageFlags.Ephemeral);
+    expect(sent.edits).toEqual([]);
+    expect(text).toContain("/privacy opt-in processing");
+    expect(text).toContain("/privacy backfill");
+  });
+
+  it("never names a place a Member cannot see, to the channel or in the model's prompt", async () => {
+    const staffOnly = entity({
+      id: "100000000000000003",
+      name: "Staff Corner",
+      summary_generated: "Staff only.",
+      allow_roles: [STAFF_ROLE],
+      view_roles: [],
+    });
+    const { run, calls, sent } = harness({ loadCatalog: () => [...catalog, staffOnly] });
+    await run(command("find", { interests: QUERY }));
+    expect(calls.join("\n")).not.toContain("Staff Corner");
+    expect(JSON.stringify(sent.edits)).not.toContain("100000000000000003");
+  });
+
+  it("removes the public placeholder, then sends a spent day privately", async () => {
+    // The first call spends the only one; the retry finds the day spent.
+    const { run, sent } = harness({ limit: 1, reply: "not json" });
+    const text = await run(command("find", { interests: QUERY }));
+    expect(sent.removed).toBe(1);
+    expect(sent.edits).toEqual([]);
+    expect(sent.replies[0]!.flags).toBe(MessageFlags.Ephemeral);
+    expect(text).toBe(CAP_REACHED);
+  });
+
+  it("removes the public placeholder, then sends a failure privately", async () => {
+    const { run, sent } = harness({ reply: "not json" });
+    const text = await run(command("find", { interests: QUERY }));
+    expect(sent.removed).toBe(1);
+    expect(sent.replies[0]!.flags).toBe(MessageFlags.Ephemeral);
+    expect(text).toBe(FAILED);
+  });
+});
+
 describe("/find with processing off", () => {
   const broken = () => {
     throw new Error("unreadable");
@@ -530,7 +598,7 @@ describe("the Member gate", () => {
   });
 });
 
-describe("the invoker's own roles decide what is named (#53)", () => {
+describe("the invoker's own roles decide what /lately names (#53); /find names the Member view", () => {
   const gated = entity({ id: "100000000000000003", name: "Moderators' corner", view_roles: [OTHER_ROLE] });
   const link = `<#${gated.id}>`;
 
@@ -540,7 +608,8 @@ describe("the invoker's own roles decide what is named (#53)", () => {
   ])("a role-gated place, to a Member who %s", async (_, roles, shown) => {
     const { run, calls } = harness({ loadCatalog: () => [...catalog, gated] });
     await run(command("find", { interests: QUERY }, { roles }));
-    expect(calls[0]!.includes("Moderators' corner")).toBe(shown);
+    // /find is public, so it names only what every Member can see, whatever the asker holds.
+    expect(calls[0]!.includes("Moderators' corner")).toBe(false);
     expect((await run(command("lately", {}, { roles })))!.includes(link)).toBe(shown);
   });
 });
@@ -578,11 +647,19 @@ describe("/find through the dispatcher", () => {
   });
 });
 
-describe("the daily /find cap", () => {
-  it("stops model calls at the limit", async () => {
+describe("the daily /find cap, per member", () => {
+  it("stops a member's model calls at the limit", async () => {
     const { run, calls } = harness({ limit: 2 });
     for (let i = 0; i < 2; i++) expect(await run(command("find", { interests: QUERY }))).not.toBe(CAP_REACHED);
     expect(await run(command("find", { interests: QUERY }))).toBe(CAP_REACHED);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("one member spending their questions leaves everyone else's alone", async () => {
+    const { run, calls } = harness({ limit: 1 });
+    expect(await run(command("find", { interests: QUERY }, { userId: "500000000000000001" }))).not.toBe(CAP_REACHED);
+    expect(await run(command("find", { interests: QUERY }, { userId: "500000000000000001" }))).toBe(CAP_REACHED);
+    expect(await run(command("find", { interests: QUERY }, { userId: "500000000000000009" }))).not.toBe(CAP_REACHED);
     expect(calls).toHaveLength(2);
   });
 
@@ -592,6 +669,27 @@ describe("the daily /find cap", () => {
     await run(command("find", { interests: QUERY }));
     expect(calls).toHaveLength(2);
     expect(await run(command("find", { interests: QUERY }))).toBe(CAP_REACHED);
+  });
+
+  it("reads the limit on every call, so a Staff change applies at once", () => {
+    let max = 1;
+    const cap = perMemberDailyCap(tempMemberCap(1).path, () => max, () => {});
+    expect(cap.take(INVOKER)).toBe(true);
+    expect(cap.take(INVOKER)).toBe(false);
+    max = 2;
+    expect(cap.take(INVOKER)).toBe(true);
+  });
+
+  it("gives a member whose store is unreadable no questions that day, then heals it", () => {
+    const { path } = tempMemberCap(3);
+    writeFileSync(path, "{ not json");
+    const warnings: string[] = [];
+    const cap = perMemberDailyCap(path, () => 3, (m) => warnings.push(m));
+    expect(cap.take(INVOKER)).toBe(false);
+    expect(warnings).toHaveLength(1);
+    expect(cap.take(INVOKER)).toBe(false);
+    expect(warnings).toHaveLength(1);
+    expect(cap.take("500000000000000009")).toBe(true);
   });
 
   it("says /find is off, rather than spent, when the cap is 0 — reading nothing", async () => {
@@ -1014,6 +1112,7 @@ describe("/sherpa analyse", () => {
       defer: async () => {},
       followUp: async (body) => followUps.push(body.content),
       edit: async (body) => edits.push(body.content),
+      remove: async () => {},
     });
     expect([edits, followUps]).toEqual([["Reading…", "REVIEW"], []]);
   });

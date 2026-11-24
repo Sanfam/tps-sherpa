@@ -69,6 +69,7 @@ import {
   findDailyCap,
   handleInteraction,
   memberRoleIds,
+  perMemberDailyCap,
   type Sherpa,
 } from "./interactions.ts";
 import { openMonitored } from "./monitored.ts";
@@ -88,7 +89,14 @@ if (!token || !guildId) {
 }
 
 const log = (m: string) => console.log(m);
-const limit = findDailyCap(process.env["SHERPA_FIND_DAILY_CAP"]);
+/** The env default for `/find`; Staff's `/sherpa find-cap` value, once set, wins. */
+const findEnvLimit = findDailyCap(process.env["SHERPA_FIND_DAILY_CAP"]);
+const findLimit = (): number => {
+  const stored = withResponderStore((s) => s.setting("find_daily_cap"), DURABLE_STORE_PATH);
+  // A damaged stored value falls back to the env default, rather than reading as NaN, which would refuse every question.
+  const value = stored === null ? NaN : Number(stored);
+  return Number.isSafeInteger(value) && value >= 0 ? value : findEnvLimit;
+};
 const introductions = process.env["SHERPA_INTRODUCTIONS"] === "1";
 /** Paid calls a day across the responder's paths (D29). */
 const RESPONDER_DAILY_CAP = 60;
@@ -480,7 +488,7 @@ const sherpa: Sherpa = {
   loadDenied: (memberId) => readDeniedPlaces(memberId),
   askFor: (catalog) => openBoundary(catalog, {}, FIND_TIMEOUT_MS).boundary.ask,
   retrying: (work) => retrying(work, log),
-  cap: dailyCap(resolve(DATA_DIR, "find-usage.json"), limit, log),
+  cap: perMemberDailyCap(resolve(DATA_DIR, "find-member-usage.json"), findLimit, log),
   log,
 };
 
@@ -524,6 +532,7 @@ client.on(GatewayDispatchEvents.InteractionCreate, ({ data: interaction, api }) 
     defer: (body) => api.interactions.defer(interaction.id, interaction.token, body),
     followUp: (body) => api.interactions.followUp(interaction.application_id, interaction.token, body),
     edit: (body) => api.interactions.editReply(interaction.application_id, interaction.token, body),
+    remove: () => api.interactions.deleteReply(interaction.application_id, interaction.token),
   }).catch((error: Error) =>
     // Defer or follow-up itself failed — Discord, not Sherpa. Nothing to send.
     log(`[sherpa] interaction ${interaction.id} undelivered: ${error.message.slice(0, 160)}`),
@@ -531,7 +540,7 @@ client.on(GatewayDispatchEvents.InteractionCreate, ({ data: interaction, api }) 
 });
 
 client.once(GatewayDispatchEvents.Ready, ({ data }) =>
-  log(`[sherpa] ready as ${data.user.username}; /find cap ${limit}/day`),
+  log(`[sherpa] ready as ${data.user.username}; /find cap ${findLimit()}/member/day`),
 );
 
 await gateway.connect();
