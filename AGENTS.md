@@ -52,7 +52,7 @@ dispatched and how its work comes back.
 
 **Every change set is challenged by an adversarial review from a different model
 before commit, and valid in-scope findings are fixed first.** Not optional.
-GPT-5.6 Sol reviews Claude's work through the `skill-codex` skill; Claude
+GPT-6.2 Sol (Medium) reviews Claude's work through the `skill-codex` skill; Claude
 reviews Codex's. When Codex is at its usage limit, a Claude model that did not
 write the change stands in automatically. See
 `docs/agents/review-process.md` for the cycle, the fallback, the triage rules,

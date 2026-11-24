@@ -41,11 +41,9 @@ export const REFUSED = [
   "/_emdash/api/admin/oauth-clients",
   "/_emdash/api/admin/oauth-clients/[id]",
   "/_emdash/api/admin/plugins/[id]/mcp",
-  // Signed URLs and tokens that outlive the role (ADR-0002, item 1).
+  // Signed URLs that outlive the role, honoured without a session (ADR-0002,
+  // item 1; whether editors get preview links is issue #120).
   "/_emdash/api/content/[collection]/[id]/preview-url",
-  "/_emdash/api/visual-editing/action-token",
-  "/_emdash/api/visual-editing/content/[collection]/[id]/publish",
-  "/_emdash/api/visual-editing/toolbar-labels",
   "/_emdash/api/admin/users/[id]/send-recovery",
   // With R2 it mints a signed upload URL valid for an hour, past a role loss.
   // Refused with 501, the answer on which EmDash's admin uploads through the
@@ -238,6 +236,12 @@ export const EDITORS = [
   "/_emdash/api/taxonomies/[name]/terms/[slug]/translations",
   "/_emdash/api/taxonomies/[name]/translations",
   "/_emdash/api/taxonomies/bulk-tag",
+  // Editing on the site's pages (owner, 2026-11-24). The action token EmDash
+  // mints lasts five minutes, but these routes are behind the live role like
+  // the rest, so it acts for no one who has lost it.
+  "/_emdash/api/visual-editing/action-token",
+  "/_emdash/api/visual-editing/content/[collection]/[id]/publish",
+  "/_emdash/api/visual-editing/toolbar-labels",
   "/_emdash/api/widget-areas",
   "/_emdash/api/widget-areas/[name]",
   "/_emdash/api/widget-areas/[name]/reorder",

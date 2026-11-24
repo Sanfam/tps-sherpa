@@ -684,13 +684,11 @@ test("EmDash permanently deletes content through the site's configured SQLite di
   expect(emdashBytes()).not.toContain(token);
 });
 
-// The site's CMS pages (src/pages/[...slug].astro) show published content only.
-// EmDash serves drafts to a request carrying its edit-mode cookie when the
-// EmDash session's stored role is an editor's, and that stored role outlives a
-// Discord role loss (ADR-0002, item 1): an ex-editor, still a Member, would read
-// every draft on the site.
-test("CMS pages: a former editor's edit-mode cookie shows no draft", async () => {
-  const FORMER = "900000000000000009";
+// The site's CMS pages (src/pages/[...slug].astro) show Members published
+// content. Edit mode is EmDash's, on the role it stored (ADR-0002, 2026-11-24):
+// a Member who was never an editor and sets its cookie must read no draft. An
+// editor demoted in Discord keeps the stored role and its drafts: accepted.
+test("CMS pages: drafts and inline editing reach an editor in edit mode, not a Member who sets its cookie", async () => {
   guild.set(STAFF, [MEMBER_ROLE, STAFF_ROLE]);
   const staff = (await signIn(STAFF)).cookie;
   const api = async (method: string, path: string, body?: unknown) => {
@@ -715,37 +713,43 @@ test("CMS pages: a former editor's edit-mode cookie shows no draft", async () =>
   await api("POST", `/content/pages/${section.id}/publish`);
   await api("PUT", `/content/pages/${section.id}`, { data: { title: "zqxpendingtitleqz", content: [] } });
 
-  // An Author who opened the CMS, then lost the role in Discord but stayed a Member.
-  guild.set(FORMER, [MEMBER_ROLE, EVENT_MANAGERS_ROLE]);
-  const { cookie } = await signIn(FORMER);
-  const emdashSession = browser();
-  const me = await fetch(`${SITE}/_emdash/api/auth/me`, { headers: { cookie } });
-  expect(me.status).toBe(200);
-  emdashSession.keep(me);
-  guild.set(FORMER, [MEMBER_ROLE]);
-  await new Promise((r) => setTimeout(r, TTL_MS + 100));
-  const former = [cookie, emdashSession.cookie(), "emdash-edit-mode=true"].filter(Boolean).join("; ");
-
+  // Staff, signed in to the CMS once (EmDash's own session cookie), with edit mode on.
+  const editorSession = browser();
+  editorSession.keep(await fetch(`${SITE}/_emdash/api/auth/me`, { headers: { cookie: staff } }));
+  const editor = [staff, editorSession.cookie(), "emdash-edit-mode=true"].filter(Boolean).join("; ");
+  // A Member who sets the edit-mode cookie by hand.
   guild.set(MEMBER, [MEMBER_ROLE]);
-  const member = (await signIn(MEMBER)).cookie;
-  for (const [who, c] of [["member", member], ["former editor", former]] as const) {
-    const draft = await at("/club/unwritten", c);
-    expect(draft.status, who).toBe(404);
-    expect(await draft.text(), who).not.toContain("zqxstubdraftqz");
-    const live = await at("/club/live", c);
-    expect(live.status, who).toBe(200);
-    const body = await live.text();
-    expect(body, who).toContain("zqxlivetextqz");
-    expect(body, who).not.toContain("zqxpendingeditqz");
-    // Navigation names only published pages, by their published titles.
-    for (const path of ["/club/live", "/club/home", "/members"]) {
+  const member = [(await signIn(MEMBER)).cookie, "emdash-edit-mode=true"].join("; ");
+
+  const draft = await at("/club/unwritten", member);
+  expect(draft.status).toBe(404);
+  expect(await draft.text()).not.toContain("zqxstubdraftqz");
+  const live = await (await at("/club/live", member)).text();
+  expect(live).toContain("zqxlivetextqz");
+  expect(live).not.toContain("zqxpendingeditqz");
+
+  // The editor gets the draft, in EmDash's inline editor (it needs the content
+  // as EmDash returned it, marker and all), and an editable title.
+  expect(await (await at("/club/unwritten", editor)).text()).toContain("zqxstubdraftqz");
+  const editing = await (await at("/club/live", editor)).text();
+  expect(editing).toContain("zqxpendingeditqz");
+  expect(editing).toContain('component-export="InlinePortableTextEditor"');
+  expect(editing).toMatch(/<h1 data-emdash-ref="[^"]*&quot;field&quot;:&quot;title&quot;/);
+
+  // Navigation names only published pages, by their published titles, for both.
+  for (const [who, c, paths] of [
+    ["member", member, ["/club/live", "/club/home", "/members"]],
+    ["editor", editor, ["/members"]],
+  ] as const) {
+    for (const path of paths) {
       const page = await (await at(path, c)).text();
       expect(page, `${who} ${path}`).toContain("zqxsectionqz");
       expect(page, `${who} ${path}`).not.toContain("zqxpendingtitleqz");
       expect(page, `${who} ${path}`).not.toContain("zqxdrafttitleqz");
     }
-    expect(await (await at("/club/home", c)).text(), who).toContain('href="/club/live"');
-  }}, 15_000);
+  }
+  expect(await (await at("/club/home", member)).text()).toContain('href="/club/live"');
+}, 15_000);
 
 // EmDash completes a room's WebSocket on the raw HTTP server, past every
 // middleware, and keeps it until it closes; the gate's watch must close it.
