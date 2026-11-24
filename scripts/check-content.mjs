@@ -120,12 +120,39 @@ try {
   problems.push(`content/config/persona.json: ${error.message}`);
 }
 
+// Committed and required: the site puts events with clubs by it. A channel in
+// two clubs would go to whichever is listed first.
+const clubs = read("content/config/clubs.json")?.clubs;
+if (Array.isArray(clubs)) {
+  const ids = new Set();
+  const channels = new Set();
+  for (const c of clubs) {
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(c?.id ?? "")) problems.push(`Club with a bad id: ${JSON.stringify(c?.id)}`);
+    if (ids.has(c.id)) problems.push(`Duplicate club id: ${c.id}`);
+    ids.add(c.id);
+    if (typeof c.name !== "string" || !c.name) problems.push(`${c.id}: no name`);
+    // A CMS page slug, as src/pages/[...slug].astro reads it: no leading slash, no trailing /home.
+    if (typeof c.page !== "string" || !/^[^/]+(\/[^/]+)*$/.test(c.page) || c.page.endsWith("/home"))
+      problems.push(`${c.id}: page is not a CMS page slug`);
+    if (!Array.isArray(c.channels) || c.channels.some((id) => !/^\d{17,20}$/.test(id)))
+      problems.push(`${c.id}: channels is not a list of Discord ids`);
+    for (const id of Array.isArray(c.channels) ? c.channels : []) {
+      if (channels.has(id)) problems.push(`${c.id}: channel ${id} is in another club too`);
+      channels.add(id);
+    }
+    if (!Array.isArray(c.patterns) || c.patterns.some((p) => typeof p !== "string" || !p.trim()))
+      problems.push(`${c.id}: patterns is not a list of names`);
+  }
+} else if (!problems.some((p) => p.startsWith("content/config/clubs.json"))) {
+  problems.push("content/config/clubs.json has no clubs list");
+}
+
 if (problems.length) {
   console.error(`Content check failed (${problems.length}):`);
   for (const p of problems.slice(0, 40)) console.error(`  ${p}`);
   process.exit(1);
 }
 console.log(
-  `Content OK: ${knownTopics.size} Topics, ${catalog ? `${catalog.length} Entities` : "no Catalog on disk"}, ` +
+  `Content OK: ${knownTopics.size} Topics, ${clubs.length} clubs, ${catalog ? `${catalog.length} Entities` : "no Catalog on disk"}, ` +
     `${roles ? `${roles.length} role manifest entries` : "no role manifest on disk"}.`,
 );

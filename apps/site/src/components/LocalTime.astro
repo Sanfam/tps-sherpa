@@ -1,0 +1,32 @@
+---
+// A moment, in UTC on the server, then in the viewer's own timezone once the
+// script runs. `after` is the start an end sits beside: the end shows its clock
+// alone, unless it falls on another day (an overnight event), when it shows its date too.
+interface Props {
+  at: string;
+  after?: string;
+}
+
+const { at, after } = Astro.props;
+const day = (iso: string) => iso.slice(0, 10);
+const time = after !== undefined && day(after) === day(at);
+const format = new Intl.DateTimeFormat("en-US", {
+  ...(time ? {} : { weekday: "short", month: "short", day: "numeric" }),
+  hour: "numeric",
+  minute: "2-digit",
+  timeZone: "UTC",
+});
+---
+<time datetime={at} data-local data-after={after}>{format.format(new Date(at))}{!time && " UTC"}</time>
+
+<script>
+  for (const t of document.querySelectorAll<HTMLTimeElement>("time[data-local]")) {
+    const after = t.dataset.after;
+    const full = !after || new Date(after).toDateString() !== new Date(t.dateTime).toDateString();
+    t.textContent = new Date(t.dateTime).toLocaleString(undefined, {
+      ...(full && { weekday: "short", month: "short", day: "numeric", timeZoneName: "short" }),
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+</script>

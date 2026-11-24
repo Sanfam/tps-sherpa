@@ -1,0 +1,205 @@
+---
+// Events, at /events: Discord's Scheduled Events from the Catalog snapshot the
+// site pulls from the bot (ADR-0001), each recurring one expanded into its
+// occurrences, grouped by month. Filtered by club and by upcoming or past
+// through the query string, so the form works without JavaScript.
+// Member-gated; must stay server-rendered. Everything shown comes from
+// `eventsView`, which keeps only what the User can see in Discord.
+import { currentSnapshot } from "../catalog-snapshot.ts";
+import { clubs, eventsView, horizon, upcoming, type Occurrence } from "../events.ts";
+import LocalTime from "../components/LocalTime.astro";
+import Base from "../layouts/Base.astro";
+
+const now = Date.now();
+const current = currentSnapshot();
+const club = Astro.url.searchParams.get("club") ?? "";
+const past = Astro.url.searchParams.get("when") === "past";
+const shown = (
+  // A stale snapshot's events are not shown: one its organiser withdrew could linger through an outage.
+  current && !current.stale ? eventsView(current.snapshot.events ?? [], horizon(now)) : []
+).filter(
+  (o) =>
+    upcoming(o, now) !== past &&
+    // Past goes back a year: a weekly series running for years is not one page of rows.
+    (!past || Date.parse(o.start) >= now - 365 * 86_400_000) &&
+    (!club || (club === "independent" ? o.club === null : o.club?.id === club)),
+);
+// Past ones newest first.
+if (past) shown.reverse();
+// ponytail: grouped by UTC month, so an occurrence late on a month's last day
+// can sit under the next month for viewers west of UTC. Group client-side if it bites.
+const monthOf = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+const months = new Map<string, Occurrence[]>();
+for (const o of shown) {
+  const m = monthOf.format(new Date(o.start));
+  months.set(m, [...(months.get(m) ?? []), o]);
+}
+const clubName = clubs.find((c) => c.id === club)?.name ?? (club === "independent" ? "Independent" : "");
+---
+<Base title="Events" members>
+  <div class="wrap events">
+    <h1>Events</h1>
+    {
+      !current ? (
+        <p>Events are not available yet. Discord's Events list, at the top of the channel list, has them all.</p>
+      ) : (
+        <>
+          <form class="events-filter" method="get" action="/events">
+            <label>
+              Club
+              <select name="club">
+                <option value="">All events</option>
+                {clubs.map((c) => <option value={c.id} selected={c.id === club}>{c.name}</option>)}
+                <option value="independent" selected={club === "independent"}>Independent</option>
+              </select>
+            </label>
+            <label>
+              When
+              <select name="when">
+                <option value="">Upcoming</option>
+                <option value="past" selected={past}>Past</option>
+              </select>
+            </label>
+            <button class="button button-quiet" type="submit">Show</button>
+          </form>
+          {current?.stale ? (
+            <p class="none">Events are hidden for now: the site has missed recent syncs from Discord, so it can't vouch for them.</p>
+          ) : shown.length === 0 && (
+            <p class="none">
+              No {past ? "past" : "upcoming"} {clubName && `${clubName} `}events{past ? "" : " in the next three months"}.
+            </p>
+          )}
+          {[...months].map(([month, list]) => (
+            <section>
+              <h2>{month}</h2>
+              <ul>
+                {list.map((o) => (
+                  <li>
+                    {o.image && <img src={o.image} alt="" loading="lazy" />}
+                    <h3>{o.name}</h3>
+                    <p class="when">
+                      <LocalTime at={o.start} />
+                      {o.end && <> – <LocalTime at={o.end} after={o.start} /></>}
+                      {o.live && <span class="now">Happening now</span>}
+                    </p>
+                    <p class="facts">
+                      {o.club ? <a href={`/${o.club.page}`}>{o.club.name}</a> : "Independent"}
+                      {o.place && <> · {o.place.href ? <a href={o.place.href}>{o.place.text}</a> : o.place.text}</>}
+                    </p>
+                    {o.description && <p class="text">{o.description}</p>}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </>
+      )
+    }
+  </div>
+</Base>
+
+<style>
+  .events {
+    max-width: var(--measure);
+    padding-block: 2rem 4rem;
+  }
+
+  h1 {
+    font-size: var(--step-3);
+  }
+
+  .events-filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 0.75rem 1.25rem;
+    margin-block: 1.25rem;
+    font-weight: 700;
+  }
+
+  .events-filter label {
+    display: grid;
+    gap: 0.25rem;
+  }
+
+  .events-filter select {
+    font: inherit;
+    font-weight: 400;
+    color: inherit;
+    background: var(--surface);
+    border: 2px solid var(--line);
+    border-radius: 8px;
+    padding: 0.4em 0.6em;
+  }
+
+  .events-filter .button {
+    min-height: 0;
+    padding: 0.45em 1.2em;
+  }
+
+  .none {
+    color: var(--ink-soft);
+  }
+
+  section {
+    padding-block: 1.25rem;
+    border-top: 2px dashed var(--line);
+  }
+
+  h2 {
+    font-size: clamp(1.25rem, 1rem + 1.5vw, 1.625rem);
+  }
+
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0 0;
+  }
+
+  li {
+    padding: 0.75rem 0;
+  }
+
+  li + li {
+    border-top: 1px solid var(--line);
+  }
+
+  img {
+    width: 100%;
+    max-height: 14rem;
+    object-fit: cover;
+    border-radius: var(--radius);
+    margin-bottom: 0.6rem;
+  }
+
+  h3 {
+    font-size: var(--step-1);
+  }
+
+  .when,
+  .facts {
+    margin: 0.25em 0 0;
+  }
+
+  .when {
+    font-weight: 700;
+  }
+
+  .facts {
+    color: var(--ink-soft);
+    font-size: 0.9375rem;
+  }
+
+  .now {
+    margin-left: 0.5rem;
+    font-size: 0.8125rem;
+    padding: 0 0.5em;
+    border-radius: 999px;
+    border: 1.5px solid currentColor;
+  }
+
+  .text {
+    margin: 0.35em 0 0;
+    white-space: pre-line;
+  }
+</style>

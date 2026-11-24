@@ -114,6 +114,8 @@ describe("defects found only against real guild data", () => {
       "Raid Night 2023-05-19 be there",
     );
     expect(n("Starts <t:1717794000> sharp")).toBe("Starts 2024-06-07 sharp");
+    // Anyone can type a timestamp no Date can hold; it must not stop the sync.
+    expect(n("Party <t:99999999999999:F> forever")).toBe("Party [date] forever");
   });
 
   it("strips single-marker emphasis", () => {

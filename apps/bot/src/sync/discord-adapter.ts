@@ -7,6 +7,7 @@ import {
   type RawChannel,
   type RawCapturedMessage,
   type RawRole,
+  type RawScheduledEvent,
   type RawThread,
 } from "./ports.ts";
 
@@ -380,6 +381,10 @@ export const discordRest = (config: {
         color: r.color ?? 0,
       }));
     },
+
+    // Without `with_user_count`: how many are interested is never read.
+    listScheduledEvents: async () =>
+      (await rest.get(Routes.guildScheduledEvents(config.guildId))) as RawScheduledEvent[],
 
     captureWindows: async (entityId: string): Promise<RawCapturedMessage[]> => {
       type Msg = {

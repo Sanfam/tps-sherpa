@@ -1,0 +1,25 @@
+{
+  "clubs": [
+    {
+      "id": "need-4-read",
+      "name": "Need 4 Read",
+      "page": "entertainment/Need4ReadBookClub",
+      "channels": ["1185019630109085807", "1185019891904946176"],
+      "patterns": ["book club"]
+    },
+    {
+      "id": "movie-club",
+      "name": "Movie Club",
+      "page": "entertainment/MovieClub",
+      "channels": ["1185019766776279040"],
+      "patterns": ["movie club"]
+    },
+    {
+      "id": "video-game-boom-club",
+      "name": "Video Game Boom Club",
+      "page": "entertainment/VideoGameBoomClub",
+      "channels": ["1163593647485362237"],
+      "patterns": ["boom club"]
+    }
+  ]
+}

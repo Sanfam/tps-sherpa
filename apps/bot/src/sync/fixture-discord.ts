@@ -31,6 +31,7 @@ export const fixtureDiscord = (data: {
     failed: [],
   }),
   listRoles: async () => data.roles ?? [],
+  listScheduledEvents: async () => [],
   captureWindows: async (entityId) => data.windows?.[entityId] ?? [],
   hasMessageContentIntent: async () => data.messageContentIntent ?? true,
 });

@@ -12,8 +12,9 @@ export const placeOf = (slug: string) => (slug === "home" ? "" : slug.replace(/\
 
 /** Every published page by its place. */
 export async function publishedPages(): Promise<Pages> {
-  // Published only, as src/pages/[...slug].astro reads: in edit mode EmDash
-  // would title a published page with its pending draft (ADR-0002, item 1).
+  // Published only, even in edit mode, where EmDash would title a published
+  // page with its pending draft and list draft-only pages: menus show what
+  // Members see.
   const { entries, error } = await runWithContext({ ...getRequestContext(), editMode: false, preview: undefined }, () =>
     getEmDashCollection("pages"),
   );
