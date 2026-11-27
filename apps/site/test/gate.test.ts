@@ -83,8 +83,33 @@ const emdashBytes = () =>
 const usersFor = (id: string) =>
   rows('select u.id from "user" u join account a on a.userId = u.id where a.accountId = ?', id);
 
+// The Catalog snapshot the site serves from, as the bot sends it: one Channel,
+// and one Need 4 Read meeting two days out.
+const DAY = 86_400_000;
+const BOOK_NIGHT = "Book club: zqxnovelnightqz";
+const snapshot = (generatedAt: number) => {
+  const start = new Date(Date.now() + 2 * DAY).toISOString();
+  return JSON.stringify({
+    version: 1,
+    generatedAt: new Date(generatedAt).toISOString(),
+    syncEveryMs: 6 * 60 * 60_000,
+    outcome: { complete: true },
+    roleManifest: JSON.parse(readFileSync(join(SITE_DIR, "fixtures/roles.json"), "utf8")),
+    catalog: [{
+      id: "500000000000000001", type: "channel", name: "general", url: `https://discord.com/channels/${GUILD_ID}/500000000000000001`,
+      parent_id: null, description_status: "absent", topic: null, applied_tags: [], region: [], topics: [], topics_version: null,
+      thread_state: null, last_message_id: null, last_activity_at: null, summary_generated: null, summary_override: null,
+    }],
+    events: [{
+      id: "600000000000000001", name: BOOK_NIGHT, description: null, start, next: start, end: null, status: "scheduled",
+      entity_type: "external", channel_id: null, location: "Voice chat", image_url: null, recurrence: null, canceled_starts: [], moved: [],
+    }],
+  });
+};
+
 beforeAll(async () => {
   execFileSync("npx", ["astro", "build"], { cwd: SITE_DIR, stdio: "ignore", env: { ...prodEnv, ...ENV } });
+  writeFileSync(join(tmp, "catalog-snapshot.json"), snapshot(Date.now()));
   const started = await startMock();
   mockServer = started.server;
   mockOrigin = started.origin;
@@ -174,7 +199,7 @@ test("a guild member with the Member role reaches the stub", async () => {
   expect(location).toMatch(/\/members$/);
   const res = await stub(cookie);
   expect(res.status).toBe(200);
-  expect(await res.text()).toContain("Members only");
+  expect(await res.text()).toContain("Coming up");
   // The user's tokens are not kept.
   expect(rows("select accessToken, refreshToken from account where accountId = ?", MEMBER)).toEqual([
     { accessToken: null, refreshToken: null },
@@ -235,7 +260,7 @@ test("a role change in Discord is reflected once the TTL passes", async () => {
   await new Promise((r) => setTimeout(r, TTL_MS + 100));
   const res = await stub(cookie);
   expect(res.status).toBe(302);
-  expect(await res.text()).not.toContain("Members only");
+  expect(await res.text()).not.toContain("Coming up");
   expect(roleIds()).toEqual([]);
 }, 10_000);
 
@@ -249,7 +274,7 @@ test("leak: no route is prerendered, and neither the stub nor the account page i
   const res = await stub();
   expect(res.status).toBe(302);
   expect(res.headers.get("location")).toBe("/");
-  expect(await res.text()).not.toContain("Members only");
+  expect(await res.text()).not.toContain("Coming up");
 
   const account = await at("/account");
   expect(account.status).toBe(302);
@@ -541,7 +566,7 @@ test("a session that ends while Discord rechecks its roles is refused", async ()
   try {
     const res = await stub(cookie);
     expect(res.status).toBe(302);
-    expect(await res.text()).not.toContain("Members only");
+    expect(await res.text()).not.toContain("Coming up");
   } finally {
     mock.onLookup = undefined;
     rw.close();
@@ -1121,3 +1146,56 @@ test("wiki stage: the importer publishes no page, leaves the live one as it was,
   const { terms } = await api<{ terms: { label: string }[] }>("GET", `/content/works/${film.id}/terms/work_kind`);
   expect(terms.map((t) => t.label)).toEqual(["Movie"]);
 }, 60_000);
+
+// `/` is public, so the middleware never rechecks membership there: a signed-in
+// former Member reaches it with a live session, as a Viewer does without one.
+test("the landing page shows no members-only content to a Viewer or to a signed-in former Member", async () => {
+  const FORMER = "900000000000000016";
+  const api = await staffApi();
+  const { item } = await api<{ item: { id: string } }>("POST", "/content/pages", { slug: "zqxguides/home", data: { title: "zqxguidesectionqz", content: [] } });
+  await api("POST", `/content/pages/${item.id}/publish`);
+  guild.set(FORMER, [MEMBER_ROLE]);
+  displayNames.set(FORMER, "Former Dad");
+  const { cookie } = await signIn(FORMER);
+  displayNames.delete(FORMER);
+  // While a Member, their home has both.
+  const home = await (await at("/members", cookie)).text();
+  expect(home).toContain(BOOK_NIGHT);
+  expect(home).toContain("zqxguidesectionqz");
+
+  guild.set(FORMER, []);
+  await new Promise((r) => setTimeout(r, TTL_MS + 100));
+  for (const [who, c] of [["former Member", cookie], ["Viewer", ""]]) {
+    const res = await at("/", c);
+    expect(res.status, who).toBe(200);
+    const body = await res.text();
+    expect(body, who).not.toContain(BOOK_NIGHT);
+    expect(body, who).not.toContain("zqxguidesectionqz");
+    // Signed in all the same: the page names them.
+    expect(body.includes("Former Dad"), who).toBe(who === "former Member");
+  }
+});
+
+test("a Member's home shows what's coming up from the snapshot, and none of it once the snapshot is stale", async () => {
+  guild.set(MEMBER, [MEMBER_ROLE]);
+  const { cookie } = await signIn(MEMBER);
+  expect(await (await at("/members", cookie)).text()).toContain(BOOK_NIGHT);
+
+  // The same snapshot, two scheduled syncs and more behind: an event its
+  // organiser withdrew since could still be in it.
+  const stale = mkdtempSync(join(tmpdir(), "site-gate-stale-"));
+  writeFileSync(join(stale, "catalog-snapshot.json"), snapshot(Date.now() - 2 * DAY));
+  const port = await freePort();
+  const child = await serve(port, { ...ENV, SITE_SNAPSHOT_PATH: join(stale, "catalog-snapshot.json") });
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/members`, { redirect: "manual", headers: { cookie } });
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    // The snapshot was accepted, as stale: not merely missing.
+    expect(body).toContain("Events are hidden for now");
+    expect(body).not.toContain(BOOK_NIGHT);
+  } finally {
+    child.kill();
+    rmSync(stale, { recursive: true, force: true });
+  }
+}, 20_000);

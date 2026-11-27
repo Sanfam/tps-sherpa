@@ -8,14 +8,17 @@ import Badge from "../components/Badge.astro";
 import crest from "../assets/brand/icon.png";
 import splash from "../assets/brand/splash.png";
 import { topics } from "../../../../content/config/topics.json";
+import { clubs } from "../events.ts";
 
 // The server invite, read at build. Joining is the page's one orange action;
-// without an invite there is nothing to join, so sign-in stays quiet.
+// without an invite there is nothing to join, so sign-in stays quiet. A signed-in
+// User's one action is the members' area instead.
 const invite = import.meta.env.PUBLIC_DISCORD_INVITE;
 const discord = `<svg viewBox="0 0 256 256" aria-hidden="true" fill="currentColor"><path d="M247.51,174.39,218,58a16.08,16.08,0,0,0-13-11.88l-36.06-5.92a16.22,16.22,0,0,0-18.26,11.88l-.21.85a4,4,0,0,0,3.27,4.93,155.62,155.62,0,0,1,24.41,5.62,8.2,8.2,0,0,1,5.62,9.7,8,8,0,0,1-10.19,5.64,155.4,155.4,0,0,0-90.8-.1,8.22,8.22,0,0,1-10.28-4.81,8,8,0,0,1,5.08-10.33,156.85,156.85,0,0,1,24.72-5.72,4,4,0,0,0,3.27-4.93l-.21-.85A16.21,16.21,0,0,0,87.08,40.21L51,46.13A16.08,16.08,0,0,0,38,58L8.49,174.39a15.94,15.94,0,0,0,9.06,18.51l67,29.71a16.17,16.17,0,0,0,21.71-9.1l3.49-9.45a4,4,0,0,0-3.27-5.35,158.13,158.13,0,0,1-28.63-6.2,8.2,8.2,0,0,1-5.61-9.67,8,8,0,0,1,10.2-5.66,155.59,155.59,0,0,0,91.12,0,8,8,0,0,1,10.19,5.65,8.19,8.19,0,0,1-5.61,9.68,157.84,157.84,0,0,1-28.62,6.2,4,4,0,0,0-3.27,5.35l3.49,9.45a16.18,16.18,0,0,0,21.71,9.1l67-29.71A15.94,15.94,0,0,0,247.51,174.39ZM92,152a12,12,0,1,1,12-12A12,12,0,0,1,92,152Zm72,0a12,12,0,1,1,12-12A12,12,0,0,1,164,152Z"/></svg>`; // Phosphor Icons, MIT
-const join = invite
-  ? `<a class="button button-primary" href="${invite}">${discord} Join us on Discord</a>`
-  : `<a class="button button-quiet" href="/auth/discord/start">${discord} Member sign in</a>`;
+// A public page: the middleware never rechecks membership here, so a former
+// Member can be signed in. Nothing members-only renders, even for a User:
+// only their name, from the session, and the way to the gated pages.
+const user = Astro.locals.signedIn;
 ---
 <Base>
   <section class="hero wrap">
@@ -24,8 +27,17 @@ const join = invite
       <p class="lede">
         Gamer dads, gathered. We swap stories, help each other out, and play games, when time allows.
       </p>
+      {user && <p class="welcome">Welcome back, {user.displayName}.</p>}
       <div class="actions">
-        <Fragment set:html={join} />
+        {
+          user ? (
+            <a class="button button-primary" href="/members">Go to the members' area</a>
+          ) : invite ? (
+            <a class="button button-primary" href={invite}><Fragment set:html={discord} /> Join us on Discord</a>
+          ) : (
+            <a class="button button-quiet" href="/auth/discord/start"><Fragment set:html={discord} /> Member sign in</a>
+          )
+        }
       </div>
     </div>
     <Image class="hero-crest" src={crest} alt="The Papa Squad crest: a bearded dad in orange headphones" width={560} height={560} loading="eager" />
@@ -41,6 +53,31 @@ const join = invite
     </div>
     <ul class="badge-grid">
       {topics.map((t, i) => <li><Badge slug={t.slug} label={t.label} index={i} /></li>)}
+    </ul>
+  </section>
+
+  <section class="inside wrap" aria-labelledby="inside">
+    <div class="section-head">
+      <h2 id="inside">What Members get</h2>
+      <p>Sign in with Discord and this site opens up into the squad's own corner of the web.</p>
+    </div>
+    <ul class="perks">
+      <li>
+        <h3>Guides for every stage</h3>
+        <p>From expecting your first to raising teens: the squad's guides, kept in one place.</p>
+      </li>
+      <li>
+        <h3>An events calendar</h3>
+        <p>Club meet-ups and get-togethers from Discord's Events, on one calendar, in your own time zone.</p>
+      </li>
+      <li>
+        <h3>The Index</h3>
+        <p>The server's Channels, Forums, Posts and Threads, in one list you can search.</p>
+      </li>
+    </ul>
+    <h3 class="clubs-head">And the clubs</h3>
+    <ul class="clubs">
+      {clubs.map((c, i) => <li><Badge slug={c.topic} label={c.name} index={i} /><p>{c.tagline}</p></li>)}
     </ul>
   </section>
 
@@ -62,8 +99,28 @@ const join = invite
   <section class="close" aria-labelledby="close">
     <div class="wrap">
       <h2 id="close">Pull up a chair.</h2>
-      <p>There's always room for one more on the couch.</p>
-      <Fragment set:html={join} />
+      {
+        user ? (
+          <>
+            <p>Good to see you again.</p>
+            <a class="button button-primary" href="/members">Go to the members' area</a>
+          </>
+        ) : (
+          <>
+            <p>There's always room for one more on the couch.</p>
+            {invite && (
+              <ol class="steps">
+                <li>Join us on Discord and say hello in #introductions.</li>
+                <li>Once you're a Member, come back and sign in with Discord.</li>
+              </ol>
+            )}
+            <div class="actions">
+              {invite && <a class="button button-primary" href={invite}><Fragment set:html={discord} /> Join us on Discord</a>}
+              <a class="button button-quiet" href="/auth/discord/start"><Fragment set:html={discord} /> Member sign in</a>
+            </div>
+          </>
+        )
+      }
     </div>
   </section>
 </Base>
@@ -93,6 +150,11 @@ const join = invite
     display: flex;
     flex-wrap: wrap;
     gap: 0.75rem;
+  }
+
+  .welcome {
+    font-weight: 700;
+    margin: -1rem 0 1.25rem;
   }
 
   .hero-crest {
@@ -125,6 +187,54 @@ const join = invite
     color: var(--ink-soft);
   }
 
+  .inside {
+    padding-top: clamp(5rem, 12vw, 9rem);
+  }
+
+  .perks,
+  .clubs {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 1.25rem;
+  }
+
+  .perks li {
+    padding: 1.25rem 1.5rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--lift);
+  }
+
+  .perks h3,
+  .clubs-head {
+    font-size: var(--step-2);
+    font-weight: 600;
+  }
+
+  .perks p {
+    margin: 0.5rem 0 0;
+    color: var(--ink-soft);
+  }
+
+  .clubs-head {
+    margin: 3.5rem 0 2rem;
+    text-align: center;
+  }
+
+  .clubs li {
+    text-align: center;
+  }
+
+  .clubs p {
+    margin: 0.4rem auto 0;
+    max-width: 30ch;
+    color: var(--ink-soft);
+  }
+
   .dads {
     display: grid;
     grid-template-columns: 0.9fr 1.1fr;
@@ -154,10 +264,33 @@ const join = invite
     text-align: center;
   }
 
+  /* The band is dark in both themes: the orange focus ring would vanish on it. */
+  .close :focus-visible {
+    outline-color: var(--paper);
+  }
+
   .close p {
     font-size: var(--step-1);
     margin: 0.75rem 0 2rem;
     color: var(--band-soft);
+  }
+
+  .steps {
+    display: inline-grid;
+    gap: 0.35rem;
+    margin: -0.75rem 0 2rem;
+    padding-left: 1.25em;
+    text-align: left;
+    color: var(--band-soft);
+  }
+
+  .steps li::marker {
+    color: var(--sand);
+    font-weight: 700;
+  }
+
+  .close .actions {
+    justify-content: center;
   }
 
   .close :global(.button) {
