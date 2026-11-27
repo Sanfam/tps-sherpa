@@ -131,6 +131,9 @@ if (Array.isArray(clubs)) {
     if (ids.has(c.id)) problems.push(`Duplicate club id: ${c.id}`);
     ids.add(c.id);
     if (typeof c.name !== "string" || !c.name) problems.push(`${c.id}: no name`);
+    // The landing page and the member home show both, to everyone.
+    if (typeof c.tagline !== "string" || !c.tagline.trim()) problems.push(`${c.id}: no tagline`);
+    if (knownTopics && !knownTopics.has(c.topic)) problems.push(`${c.id}: topic is not a Topic slug, so it has no badge`);
     // A CMS page slug, as src/pages/[...slug].astro reads it: no leading slash, no trailing /home.
     if (typeof c.page !== "string" || !/^[^/]+(\/[^/]+)*$/.test(c.page) || c.page.endsWith("/home"))
       problems.push(`${c.id}: page is not a CMS page slug`);

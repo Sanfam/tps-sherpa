@@ -1,17 +1,154 @@
 ---
-// Where sign-in lands: the way into the CMS's sections and the Index. Must stay
-// server-rendered: the middleware is the gate.
+// The member home, where sign-in lands: what's coming up, the clubs, the
+// CMS's sections and the Index. Must stay server-rendered: the middleware is
+// the gate.
+import { currentSnapshot } from "../catalog-snapshot.ts";
+import { clubs, eventsView, horizon, upcoming } from "../events.ts";
+import Badge from "../components/Badge.astro";
+import LocalTime from "../components/LocalTime.astro";
 import Base from "../layouts/Base.astro";
 import { publishedPages, sections } from "../nav.ts";
 
+const user = Astro.locals.signedIn!;
 const pages = await publishedPages();
+const guides = sections(pages);
+const now = Date.now();
+const current = currentSnapshot();
+// As on the events page: a stale snapshot's events are not shown, since one its
+// organiser withdrew could linger through an outage.
+const next = current && !current.stale
+  ? eventsView(current.snapshot.events ?? [], horizon(now)).filter((o) => upcoming(o, now)).slice(0, 4)
+  : [];
 ---
 <Base title="Members" members>
-  <div class="wrap prose">
-    <h1>Members only</h1>
-    <ul>
-      {sections(pages).map((p) => <li><a href={pages.get(p)!.href}>{pages.get(p)!.title}</a></li>)}
-      <li><a href="/index">Index</a>: the Channels, Forums and Posts on the server</li>
-    </ul>
+  <div class="wrap home">
+    <h1>Welcome back, {user.displayName}</h1>
+
+    <section aria-labelledby="coming-up">
+      <h2 id="coming-up">Coming up</h2>
+      {
+        next.length > 0 ? (
+          <ul class="events">
+            {next.map((o) => (
+              <li>
+                <a href="/events">{o.name}</a>
+                <span class="when"><LocalTime at={o.start} />{o.live && " · Happening now"}</span>
+                <span class="club">{o.club?.name ?? "Independent"}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p class="none">
+            {!current
+              ? "Events are not available here yet. Discord's Events list, at the top of the channel list, has them all."
+              : current.stale
+                ? "Events are hidden for now: the site has missed recent syncs from Discord, so it can't vouch for them."
+                : "Nothing on the calendar in the next three months."}
+          </p>
+        )
+      }
+      <p><a href="/events">The events calendar</a></p>
+    </section>
+
+    <section aria-labelledby="clubs">
+      <h2 id="clubs">The clubs</h2>
+      <ul class="clubs">
+        {/* A club whose page is not published gets no link: it would land on "Not here yet". */}
+        {clubs.map((c, i) => <li><Badge slug={c.topic} label={c.name} index={i} href={pages.get(c.page)?.href} /><p>{c.tagline}</p></li>)}
+      </ul>
+    </section>
+
+    {guides.length > 0 && (
+      <section aria-labelledby="guides">
+        <h2 id="guides">Guides</h2>
+        <ul class="links">
+          {guides.map((p) => <li><a href={pages.get(p)!.href}>{pages.get(p)!.title}</a></li>)}
+        </ul>
+      </section>
+    )}
+
+    <section aria-labelledby="find">
+      <h2 id="find">Find your way around</h2>
+      <p>
+        <a href="/index">The Index</a>: the server's Channels, Forums and Posts, searchable by name and Topic.
+      </p>
+    </section>
   </div>
 </Base>
+
+<style>
+  .home {
+    max-width: var(--measure);
+    padding-block: 2rem 4rem;
+  }
+
+  h1 {
+    font-size: var(--step-3);
+  }
+
+  section {
+    margin-top: 2rem;
+    padding-top: 1.25rem;
+    border-top: 2px dashed var(--line);
+  }
+
+  h2 {
+    font-size: var(--step-2);
+    font-weight: 600;
+  }
+
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0.75rem 0 0;
+  }
+
+  .events li {
+    display: grid;
+    padding: 0.6rem 0;
+  }
+
+  .events li + li {
+    border-top: 1px solid var(--line);
+  }
+
+  .events a {
+    font-weight: 700;
+    /* A long unbroken word in a member-written title must not push the page sideways. */
+    overflow-wrap: anywhere;
+  }
+
+  .when {
+    color: var(--ink-soft);
+  }
+
+  .club {
+    color: var(--ink-soft);
+    font-size: 0.9375rem;
+  }
+
+  .none {
+    color: var(--ink-soft);
+  }
+
+  .clubs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 1.5rem 1.25rem;
+    margin-top: 1.25rem;
+  }
+
+  .clubs li {
+    text-align: center;
+  }
+
+  .clubs p {
+    margin: 0.4rem 0 0;
+    color: var(--ink-soft);
+    font-size: 0.9375rem;
+  }
+
+  .links li + li {
+    margin-top: 0.35em;
+  }
+</style>

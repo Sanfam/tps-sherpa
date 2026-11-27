@@ -4,6 +4,8 @@
       "id": "need-4-read",
       "name": "Need 4 Read",
       "page": "entertainment/Need4ReadBookClub",
+      "tagline": "Our book club, for the discerning Papa who likes to read in a group.",
+      "topic": "books-and-reading",
       "channels": ["1185019630109085807", "1185019891904946176"],
       "patterns": ["book club"]
     },
@@ -11,6 +13,8 @@
       "id": "movie-club",
       "name": "Movie Club",
       "page": "entertainment/MovieClub",
+      "tagline": "For the Papas who like to analyse a movie to death while watching it together.",
+      "topic": "movies-and-tv",
       "channels": ["1185019766776279040"],
       "patterns": ["movie club"]
     },
@@ -18,6 +22,8 @@
       "id": "video-game-boom-club",
       "name": "Video Game Boom Club",
       "page": "entertainment/VideoGameBoomClub",
+      "tagline": "A book club for video games: one game a month, played and talked over together.",
+      "topic": "video-games",
       "channels": ["1163593647485362237"],
       "patterns": ["boom club"]
     }
